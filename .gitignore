@@ -1,0 +1,46 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Local runtime data
+.runtime/
+*.sqlite3
+media/uploads/
+
+# Django generated files
+staticfiles/
+
+# Packaging
+build/
+dist/
+*.spec
+.buildtmp/
+
+# Generated studies, exports, and local audit artifacts
+ESTUDOCASO TEMP/
+Estudo_caso*/
+ESCQ_*_mismatch_runtime_*/
+ESCQ_*_mismatch_runtime_*.zip
+tmp_mismatch_audit/
+*.zip
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

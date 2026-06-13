@@ -1,0 +1,3054 @@
+{# templates/fdd/mismatch.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}FDD — Mismatch{% endblock %}
+
+{% block extra_head %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    .dash, .dash *{ box-sizing: border-box; }
+    .dash{
+      display:grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 1rem;
+      align-items:start;
+      align-content:start;
+      grid-auto-rows: min-content;
+    }
+    .span-12{ grid-column: span 12; }
+    .span-6{ grid-column: span 6; }
+    .span-4{ grid-column: span 4; }
+    .span-3{ grid-column: span 3; }
+    @media (max-width: 1100px){
+      .span-6, .span-4, .span-3{ grid-column: span 12; }
+    }
+
+    .page-head{
+      display:flex; gap: 1rem; align-items:flex-start; justify-content:space-between;
+      flex-wrap: wrap;
+    }
+    .page-head h1{ margin:0; font-size: 1.25rem; }
+    .page-head .sub{ margin:.15rem 0 0; opacity:.8; line-height:1.35; }
+
+    .ctl-row{
+      display:flex; flex-wrap:wrap; gap:.8rem; align-items:flex-end;
+      width:100%;
+    }
+    .ctl{ display:flex; flex-direction:column; gap:.35rem; min-width: 220px; }
+    .ctl.sm{ min-width: 160px; }
+    .ctl label{ font-size:.85rem; opacity:.85 }
+    .ctl select, .ctl input[type="date"], .ctl input[type="number"]{
+      padding:.55rem .7rem;
+      border-radius:12px;
+      background: rgba(10,20,40,.35);
+      border:1px solid rgba(255,255,255,.18);
+      color:#e9f6ff;
+      outline:none;
+      backdrop-filter: blur(6px);
+    }
+    .ctl select option{ color:#111; }
+
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+    .btn-glow{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:.55rem;
+      padding: .70rem .95rem;
+      border-radius: 14px;
+      border: 1px solid rgba(110,210,255,.35);
+      background: linear-gradient(180deg, rgba(110,210,255,.22), rgba(90,200,255,.08));
+      color: rgba(233,246,255,.96);
+      text-decoration:none;
+      font-weight: 750;
+      letter-spacing: .2px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      outline: none;
+      user-select:none;
+      white-space: nowrap;
+    }
+    .btn-glow:hover{
+      transform: translateY(-1px);
+      border-color: rgba(110,210,255,.55);
+      box-shadow: 0 14px 34px rgba(0,0,0,.28);
+      background: linear-gradient(180deg, rgba(110,210,255,.28), rgba(90,200,255,.10));
+    }
+    .btn-glow:active{
+      transform: translateY(0px);
+      box-shadow: 0 8px 18px rgba(0,0,0,.22);
+    }
+    .btn-glow:disabled{
+      opacity: .65;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: 0 8px 18px rgba(0,0,0,.18);
+    }
+    .btn-glow.secondary{
+      border-color: rgba(255,255,255,.18);
+      background: rgba(255,255,255,.06);
+      box-shadow: 0 10px 24px rgba(0,0,0,.18);
+    }
+    .btn-glow.secondary:hover{
+      border-color: rgba(255,255,255,.28);
+      background: rgba(255,255,255,.10);
+      box-shadow: 0 14px 34px rgba(0,0,0,.22);
+    }
+    .btn-glow.danger{
+      border-color: rgba(255,110,140,.35);
+      background: linear-gradient(180deg, rgba(255,110,140,.20), rgba(255,110,140,.06));
+    }
+    .btn-glow.danger:hover{
+      border-color: rgba(255,110,140,.55);
+      background: linear-gradient(180deg, rgba(255,110,140,.26), rgba(255,110,140,.08));
+    }
+    .btn-glow .icon{
+      width: 18px;
+      height: 18px;
+      opacity:.95;
+      flex: 0 0 auto;
+    }
+    .btn-glow .label{ line-height: 1; }
+
+    .ctl-actions{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+    .ctl-actions .btn-glow{ padding: .62rem .85rem; border-radius: 14px; }
+
+    .kpi{
+      display:grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: .75rem;
+    }
+    .kpi .tile{
+      padding: .85rem .9rem;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.05);
+      min-width:0;
+    }
+    .kpi .t{ font-size:.82rem; opacity:.78; margin:0 0 .15rem; }
+    .kpi .v{ font-size: 1.15rem; font-weight: 900; margin:0; }
+    .kpi .s{ margin:.2rem 0 0; font-size:.82rem; opacity:.78; overflow-wrap:anywhere; }
+    @media (max-width: 1100px){
+      .kpi{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+
+    .chart-wrap{ position: relative; height: 330px; width: 100%; }
+    .chart-wrap.sm{ height: 280px; }
+
+    .hm-wrap{
+      width:100%;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 16px;
+      padding: 10px;
+      margin-top:.8rem;
+      background: rgba(255,255,255,.03);
+      overflow-x: hidden;
+      overflow-y: auto;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+    }
+    .hm-canvas{
+      display:block;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(10,20,40,.22);
+      cursor: pointer;
+      max-width: 100%;
+      height: auto;
+    }
+    .hm-head{ display:flex; align-items:flex-start; justify-content:space-between; gap: 12px; width:100%; }
+    .hm-sub{ margin:.2rem 0 0; opacity:.78; line-height:1.35; }
+    .hm-tip{ margin-top:.55rem; min-height: 1.2em; opacity:.85; }
+
+    .legend{ display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; justify-content:flex-end; }
+    .badge{
+      display:inline-flex; align-items:center; gap:.5rem;
+      padding:.28rem .65rem; border-radius: 999px;
+      border:1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06);
+      font-size:.90rem; white-space: nowrap; user-select:none;
+    }
+    .dot{ width:11px; height:11px; border-radius:99px; box-shadow: 0 0 0 1px rgba(0,0,0,.18) inset; }
+
+    /* cinza=sem dados operativos do inversor no bin, verde=normal, amarelo=warn, vermelho=falha */
+    :root{
+      --hm-none: #a0a2a786;
+      --hm-ok:   #46e68c;
+      --hm-softok: #8fe57a;
+      --hm-softwarn: #dff06a;
+      --hm-warn: #ffd25a;
+      --hm-crit: #ff5a6e;
+      --hm-sel:  rgba(90,200,255,.95);
+    }
+
+    .status{
+      display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
+      padding:.55rem .7rem;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      border-radius: 14px;
+      color: rgba(233,246,255,.9);
+    }
+    .spin{
+      width: 14px; height: 14px; border-radius: 999px;
+      border: 2px solid rgba(255,255,255,.25);
+      border-top-color: rgba(233,246,255,.9);
+      animation: sp 1s linear infinite;
+    }
+    @keyframes sp{ to{ transform: rotate(360deg); } }
+
+    .detail-drawer{
+      position: fixed;
+      top: 0; right: 0;
+      height: 100vh;
+      width: 440px;
+      max-width: 92vw;
+      z-index: 50;
+      border-left: 1px solid rgba(255,255,255,.12);
+      background: rgba(12,18,32,.96);
+      box-shadow: -24px 0 48px rgba(0,0,0,.38);
+      transform: translateX(110%);
+      transition: transform .18s ease;
+      display:flex;
+      flex-direction: column;
+      pointer-events: none;
+    }
+    .detail-drawer.open{ transform: translateX(0%); pointer-events: auto; }
+
+    .detail-drawer .hd{
+      padding: 14px 14px 12px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      display:flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .detail-drawer .title{ margin:0; font-size: 1.02rem; font-weight: 800; }
+    .detail-drawer .meta{
+      margin:.25rem 0 0;
+      opacity:.82;
+      line-height:1.35;
+      font-size: .88rem;
+      overflow-wrap:anywhere;
+    }
+    .detail-drawer .actions{
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      justify-content:flex-end;
+      flex-wrap: wrap;
+      width: 100%;
+    }
+    .detail-drawer .actions .btn-glow{ padding: .60rem .82rem; }
+
+    .detail-drawer .body{ padding: 12px 14px 14px; overflow: auto; flex: 1 1 auto; }
+
+    table.kv{
+      width:100%;
+      border-collapse: collapse;
+      border-radius: 14px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.03);
+    }
+    table.kv td{
+      padding: .55rem .65rem;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      vertical-align: top;
+      overflow-wrap:anywhere;
+    }
+    table.kv tr:last-child td{ border-bottom: 0; }
+    td.k{ width: 52%; opacity:.85; }
+    td.v{ font-weight: 800; }
+
+    .meteo-health{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      background: rgba(255,255,255,.035);
+      padding:.85rem .9rem;
+      display:grid;
+      gap:.75rem;
+    }
+    .meteo-health-main{
+      display:flex;
+      gap:.8rem;
+      align-items:flex-start;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+    .meteo-health-title{ margin:0; font-size:.96rem; font-weight:800; }
+    .meteo-health-sub{ margin:.18rem 0 0; opacity:.82; line-height:1.35; }
+    .meteo-health-score{
+      min-width:110px;
+      text-align:right;
+    }
+    .meteo-health-score .v{ font-size:1.15rem; font-weight:900; }
+    .meteo-health-score .k{ opacity:.75; font-size:.78rem; }
+    .meteo-chips{ display:flex; flex-wrap:wrap; gap:.45rem; }
+    .meteo-chip{
+      display:inline-flex; align-items:center; gap:.4rem;
+      padding:.26rem .6rem; border-radius:999px;
+      font-size:.84rem; font-weight:700;
+      border:1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06);
+    }
+    .meteo-chip.ok{ border-color: rgba(70,230,140,.35); background: rgba(70,230,140,.10); }
+    .meteo-chip.warn{ border-color: rgba(255,210,90,.35); background: rgba(255,210,90,.10); }
+    .meteo-chip.crit{ border-color: rgba(255,90,110,.35); background: rgba(255,90,110,.10); }
+    .meteo-chip.neutral{ border-color: rgba(255,255,255,.14); background: rgba(255,255,255,.06); }
+    .meteo-facts{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap:.6rem;
+    }
+    .meteo-fact{
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      background: rgba(10,20,40,.22);
+      padding:.55rem .65rem;
+      min-width:0;
+    }
+    .meteo-fact .k{ display:block; opacity:.75; font-size:.78rem; }
+    .meteo-fact .v{ display:block; font-weight:800; margin-top:.12rem; overflow-wrap:anywhere; }
+    @media (max-width: 640px){
+      .meteo-facts{ grid-template-columns: 1fr; }
+      .meteo-health-score{ text-align:left; }
+    }
+
+    pre.dump{
+      margin:0;
+      padding:.75rem;
+      border-radius: 14px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(10,20,40,.25);
+      max-height: 46vh;
+      overflow:auto;
+      color: rgba(233,246,255,.92);
+      font-size: .88rem;
+      line-height: 1.35;
+      white-space: pre;
+    }
+
+    .drawer-tabs{ display:flex; gap:.4rem; flex-wrap:wrap; margin:.15rem 0 .8rem; }
+    .drawer-tab-btn{
+      padding:.38rem .68rem; border-radius:999px; cursor:pointer;
+      border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.05); color:rgba(233,246,255,.92);
+      font-size:.84rem; font-weight:700;
+    }
+    .drawer-tab-btn.active{ border-color: rgba(90,200,255,.55); background: rgba(90,200,255,.16); }
+    .drawer-tab-panel{ display:none; }
+    .drawer-tab-panel.active{ display:block; }
+    table.compare-kv{ width:100%; border-collapse: collapse; border:1px solid rgba(255,255,255,.12); border-radius: 14px; overflow:hidden; background: rgba(255,255,255,.03); }
+    table.compare-kv th, table.compare-kv td{ padding: .55rem .65rem; border-bottom:1px solid rgba(255,255,255,.08); }
+    table.compare-kv tr:last-child td{ border-bottom:0; }
+    table.compare-kv th{ text-align:left; opacity:.85; font-size:.84rem; background: rgba(10,20,40,.25); }
+
+
+    .validation-grid{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap:.8rem;
+    }
+    .validation-block{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      background: rgba(255,255,255,.035);
+      padding:.85rem .9rem;
+      min-width:0;
+    }
+    .validation-block h4{ margin:.1rem 0 .6rem; font-size:.95rem; }
+    .validation-empty{ opacity:.75; }
+    .validation-events-list{
+      display:grid;
+      gap:.55rem;
+      max-height: 340px;
+      overflow:auto;
+    }
+    .validation-event-item{
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      background: rgba(10,20,40,.22);
+      padding:.65rem .7rem;
+      display:grid;
+      gap:.35rem;
+    }
+    .validation-row{ display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+    .validation-row.tight{ gap:.45rem; }
+    .pill{
+      display:inline-flex; align-items:center; gap:.35rem;
+      padding:.22rem .55rem; border-radius:999px;
+      font-size:.79rem; font-weight:800;
+      border:1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06);
+    }
+    .pill.ok{ border-color: rgba(70,230,140,.35); background: rgba(70,230,140,.10); }
+    .pill.warn{ border-color: rgba(255,210,90,.35); background: rgba(255,210,90,.10); }
+    .pill.crit{ border-color: rgba(255,90,110,.35); background: rgba(255,90,110,.10); }
+    .pill.neutral{ border-color: rgba(255,255,255,.14); background: rgba(255,255,255,.06); }
+    .pill.info{ border-color: rgba(90,200,255,.35); background: rgba(90,200,255,.10); }
+    .form-grid{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap:.7rem;
+    }
+    .form-grid .full{ grid-column: 1 / -1; }
+    .form-field{ display:flex; flex-direction:column; gap:.3rem; min-width:0; }
+    .form-field label{ font-size:.82rem; opacity:.82; }
+    .input-glass, .textarea-glass, .select-glass{
+      width:100%;
+      padding:.55rem .7rem;
+      border-radius:12px;
+      background: rgba(10,20,40,.35);
+      border:1px solid rgba(255,255,255,.16);
+      color:#e9f6ff;
+      outline:none;
+    }
+    .textarea-glass{ min-height: 84px; resize: vertical; }
+    .select-glass option{ color:#111; }
+    .validation-actions{ display:flex; gap:.55rem; flex-wrap:wrap; }
+    .validation-help{ margin:.25rem 0 0; opacity:.76; font-size:.83rem; line-height:1.35; }
+    .validation-banner{
+      margin-top:.7rem;
+      padding:.6rem .75rem;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.05);
+    }
+    .validation-banner.ok{ border-color: rgba(70,230,140,.35); background: rgba(70,230,140,.08); }
+    .validation-banner.warn{ border-color: rgba(255,210,90,.35); background: rgba(255,210,90,.08); }
+    .validation-banner.crit{ border-color: rgba(255,90,110,.35); background: rgba(255,90,110,.08); }
+    .validation-matrix{
+      width:100%;
+      border-collapse: collapse;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      overflow:hidden;
+      background: rgba(255,255,255,.03);
+      font-size:.86rem;
+    }
+    .validation-matrix th, .validation-matrix td{
+      padding:.45rem .55rem;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      border-right:1px solid rgba(255,255,255,.06);
+      text-align:left;
+      vertical-align:top;
+    }
+    .validation-matrix tr:last-child td{ border-bottom:0; }
+    .validation-matrix th:last-child, .validation-matrix td:last-child{ border-right:0; }
+    .validation-matrix th{ background: rgba(10,20,40,.25); opacity:.88; }
+    @media (max-width: 900px){
+      .validation-grid, .form-grid{ grid-template-columns: 1fr; }
+    }
+
+  </style>
+{% endblock %}
+
+{% block content %}
+<div id="fddPage" class="dash" data-api="{% url 'mismatch_fdd_api' %}" data-export="{{ export_pdf_url|default:'' }}" data-random-search="{{ random_search_url|default:'' }}" data-review-api="{% url 'mismatch_fdd_review_event_api' %}" data-truth-api="{% url 'mismatch_fdd_create_truth_event_api' %}" data-validation-api="{% url 'mismatch_fdd_validation_api' %}">
+  <div class="card glass span-12">
+    <div class="page-head">
+      <div style="min-width:0;">
+        <h1>FDD — Mismatch</h1>
+        <div class="sub">Clique num quadrado para ver os dados daquele instante (mesmo se não houver dados operativos do inversor).</div>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <a class="btn-glow secondary" href="{% url 'pv_dashboard' %}" title="Voltar ao Dashboard PV">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"
+                  stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M14 4h6v6" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M20 4 10 14" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span class="label">Dashboard PV</span>
+        </a>
+      </div>
+    </div>
+
+    <div style="height:.8rem"></div>
+
+    <div class="ctl-row">
+      <div class="ctl">
+        <label>Planta</label>
+        <select id="plant_id">
+          {% for p in plants %}
+            <option value="{{ p.id }}"
+              {% if plant_id and plant_id|stringformat:"s" == p.id|stringformat:"s" %}selected{% endif %}>
+              {% firstof p.nome p.name %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="ctl sm">
+        <label for="start">Início</label>
+        <input id="start" type="date" value="{{ start|default:'' }}">
+      </div>
+
+      <div class="ctl sm">
+        <label for="end">Fim</label>
+        <input id="end" type="date" value="{{ end|default:'' }}">
+      </div>
+
+      <div class="ctl sm">
+        <label for="dt_minutes">Bin do heatmap (min)</label>
+        <select id="dt_minutes">
+          <option value="5"  {% if dt_minutes == 5 %}selected{% endif %}>5</option>
+          <option value="10" {% if dt_minutes == 10 %}selected{% endif %}>10</option>
+          <option value="15" {% if dt_minutes|default:15 == 15 %}selected{% endif %}>15</option>
+          <option value="30" {% if dt_minutes == 30 %}selected{% endif %}>30</option>
+          <option value="60" {% if dt_minutes == 60 %}selected{% endif %}>60</option>
+        </select>
+      </div>
+
+      <div class="ctl sm">
+        <label for="warn_abs">Limiar WARN (|mismatch|)</label>
+        <input id="warn_abs" type="number" step="0.01" min="0" value="{{ warn_abs|default_if_none:0.35 }}">
+      </div>
+
+      <div class="ctl sm">
+        <label for="display_mode">Exibir bins por</label>
+        <select id="display_mode">
+          <option value="mismatch" {% if display_mode|default:'mismatch' == 'mismatch' %}selected{% endif %}>Mismatch</option>
+          <option value="tipologia" {% if display_mode == 'tipologia' %}selected{% endif %}>Tipologia de falha</option>
+        </select>
+      </div>
+
+
+
+      <div class="ctl sm">
+        <label for="fault_abs">Limiar FALHA (mismatch ≤ −)</label>
+        <input id="fault_abs" type="number" step="0.01" min="0" value="{{ fault_abs|default_if_none:0.90 }}">
+      </div>
+
+      <div class="ctl sm">
+        <label for="gpoa_min">GPOA gate (W/m²)</label>
+        <input id="gpoa_min" type="number" step="1" min="0" value="{{ gpoa_min|default_if_none:50 }}">
+      </div>
+
+      <div class="ctl sm">
+        <label for="pmin_w">Potência mínima (W)</label>
+        <input id="pmin_w" type="number" step="1" min="0" value="{{ pmin_w|default_if_none:0 }}">
+      </div>
+
+      <div class="ctl" style="min-width: 320px;">
+        <label>&nbsp;</label>
+        <div class="ctl-actions">
+          <button class="btn-glow" id="btnRun" type="button" title="Executar FDD (detecção + RCA)">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M8 5v14l11-7-11-7Z" fill="rgba(233,246,255,.92)"/>
+            </svg>
+            <span class="label">Executar</span>
+          </button>
+
+          <button class="btn-glow" id="btnRunSave" type="button" title="Executar e salvar resultados no banco">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M7 3h10l3 3v15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"
+                    stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M8 3v6h8V3" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M9 14h6" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="label">Executar + Salvar</span>
+          </button>
+
+          <button class="btn-glow secondary" id="btnExportPdf" type="button" title="Exportar relatório PDF do FDD Mismatch">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 3v12" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+              <path d="m7 10 5 5 5-5" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M5 19h14" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="label">Exportar PDF</span>
+          </button>
+
+          <button class="btn-glow danger" id="btnReset" type="button" title="Limpar gráficos/seleção">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M21 4v6h-6" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="label">Reset</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:.8rem"></div>
+
+    <div class="status" id="statusBox" style="display:none;">
+      <span class="spin" aria-hidden="true"></span>
+      <span id="statusTxt">Executando…</span>
+    </div>
+  </div>
+
+  <div class="card glass span-12" id="advancedParamsCard">
+    <div class="page-head">
+      <div style="min-width:0;">
+        <h2 style="margin:0; font-size:1.1rem;">Parâmetros avançados</h2>
+        <div class="sub">Em branco = usa o padrão do backend. O random search atua no fluxo por <b>Tipologia de Falha</b>, carrega a melhor configuração encontrada nos campos abaixo e deixa a execução final sob controle do usuário.</div>
+      </div>
+    </div>
+
+    {% for grp in advanced_param_groups %}
+      <div style="height:.35rem"></div>
+      <h3 style="margin:.2rem 0 .4rem; font-size:1rem;">{{ grp.title }}</h3>
+      <div class="ctl-row">
+        {% for ctl in grp.controls %}
+          <div class="ctl sm">
+            <label for="{{ ctl.key }}">{{ ctl.label }}</label>
+            <input
+              id="{{ ctl.key }}"
+              type="number"
+              step="{{ ctl.step }}"
+              {% if ctl.min %}min="{{ ctl.min }}"{% endif %}
+              {% if ctl.max %}max="{{ ctl.max }}"{% endif %}
+              placeholder="Automático: {{ ctl.auto_text }}"
+              data-auto="{{ ctl.auto_text }}"
+            >
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+
+    <div style="height:.8rem"></div>
+    <div class="ctl-row">
+      <div class="ctl sm">
+        <label for="rs_trials">Random search — tentativas</label>
+        <input id="rs_trials" type="number" step="1" min="1" max="120" value="{{ random_search_defaults.trials }}">
+      </div>
+      <div class="ctl sm">
+        <label for="rs_seed">Random search — semente</label>
+        <input id="rs_seed" type="number" step="1" value="{{ random_search_defaults.seed }}">
+      </div>
+      <div class="ctl" style="min-width:320px;">
+        <label>&nbsp;</label>
+        <div class="ctl-actions">
+          <button class="btn-glow secondary" id="btnRandomSearch" type="button" title="Buscar a melhor configuração de parâmetros para o fluxo por Tipologia de Falha">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 6h16M7 12h10M10 18h4" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="17" cy="6" r="2" fill="rgba(233,246,255,.92)"/>
+              <circle cx="9" cy="12" r="2" fill="rgba(233,246,255,.92)"/>
+              <circle cx="13" cy="18" r="2" fill="rgba(233,246,255,.92)"/>
+            </svg>
+            <span class="label">Executar Random Search</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:.6rem"></div>
+    <div class="status" id="randomSearchResultBox" style="display:none;">
+      <span id="randomSearchResultTxt">—</span>
+    </div>
+  </div>
+
+  <div class="card glass span-12">
+    <div class="kpi" id="kpiGrid">
+      <div class="tile"><p class="t">Pontos</p><p class="v" id="kpiPts">—</p><p class="s">na série</p></div>
+      <div class="tile"><p class="t">Normal</p><p class="v" id="kpiOk">—</p><p class="s">verde</p></div>
+      <div class="tile"><p class="t">Warn</p><p class="v" id="kpiWarn">—</p><p class="s">amarelo</p></div>
+      <div class="tile"><p class="t">Falha</p><p class="v" id="kpiCrit">—</p><p class="s">vermelho</p></div>
+      <div class="tile"><p class="t">Sem operativos</p><p class="v" id="kpiNoData">—</p><p class="s">cinza</p></div>
+      <div class="tile"><p class="t">Intervalo</p><p class="v" id="kpiRange">—</p><p class="s">start → end</p></div>
+    </div>
+  </div>
+
+  <div class="card glass span-12" id="validationSummaryCard">
+    <div class="page-head">
+      <div style="min-width:0;">
+        <h3 style="margin:0">Validação do FDD mismatch</h3>
+        <div class="sub">Métricas por evento e por amostra a partir da camada de revisão/ground truth. Após revisar ou criar um evento real, execute ou atualize novamente o FDD para refletir os novos números.</div>
+      </div>
+    </div>
+
+    <div style="height:.8rem"></div>
+
+    <div class="kpi" id="validationKpiGrid">
+      <div class="tile"><p class="t">Precisão evento</p><p class="v" id="valEventPrecision">—</p><p class="s">TP / (TP + FP)</p></div>
+      <div class="tile"><p class="t">Recall evento</p><p class="v" id="valEventRecall">—</p><p class="s">TP / (TP + FN)</p></div>
+      <div class="tile"><p class="t">F1 evento</p><p class="v" id="valEventF1">—</p><p class="s">campanha por evento</p></div>
+      <div class="tile"><p class="t">Falso alarme evento</p><p class="v" id="valEventFarDay">—</p><p class="s">eventos FP / dia</p></div>
+      <div class="tile"><p class="t">Precisão amostra</p><p class="v" id="valSamplePrecision">—</p><p class="s">bins rotulados</p></div>
+      <div class="tile"><p class="t">Recall amostra</p><p class="v" id="valSampleRecall">—</p><p class="s">bins de falha</p></div>
+    </div>
+
+    <div style="height:.8rem"></div>
+
+    <div class="validation-grid">
+      <div class="validation-block">
+        <h4>Cobertura da campanha</h4>
+        <div id="validationCoverageText" class="validation-empty">Execute o FDD para carregar o resumo da validação.</div>
+      </div>
+      <div class="validation-block">
+        <h4>Atraso e taxas de falso alarme</h4>
+        <div id="validationDelayText" class="validation-empty">—</div>
+      </div>
+      <div class="validation-block">
+        <h4>Matriz de confusão diagnóstica</h4>
+        <div id="validationConfusionWrap" class="validation-empty">—</div>
+      </div>
+      <div class="validation-block">
+        <h4>Análise por faixa de irradiância</h4>
+        <div id="validationIrradianceWrap" class="validation-empty">—</div>
+      </div>
+      <div class="validation-block">
+        <h4>Análise por qualidade meteorológica</h4>
+        <div id="validationMeteoWrap" class="validation-empty">—</div>
+      </div>
+      <div class="validation-block">
+        <h4>Eventos previstos no intervalo</h4>
+        <div id="validationEventsList" class="validation-events-list"><div class="validation-empty">Sem eventos carregados.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card glass span-12">
+    <h3 style="margin-top:0">Potência (Real vs Modelo)</h3>
+    <div class="chart-wrap sm"><canvas id="chartPower"></canvas></div>
+  </div>
+
+  <div class="card glass span-12">
+    <div class="hm-head">
+      <div style="min-width:0;">
+        <h3 style="margin-top:0">Heatmap — dia × bin (canvas)</h3>
+        <div class="hm-sub">
+          Linhas = dias • Colunas = bins de <b id="hmBinLbl">15</b> min •
+          cinza=sem dados operativos do inversor, verde=normal, amarelo=warn, vermelho=falha.
+        </div>
+      </div>
+
+      <div class="legend">
+        <span class="badge"><span class="dot" style="background:var(--hm-none)"></span>sem operativos</span>
+        <span class="badge"><span class="dot" style="background:var(--hm-ok)"></span>normal</span>
+        <span class="badge"><span class="dot" style="background:var(--hm-softok)"></span>perda parcial provável</span>
+        <span class="badge"><span class="dot" style="background:var(--hm-softwarn)"></span>desempenho persistentemente baixo</span>
+        <span class="badge"><span class="dot" style="background:var(--hm-warn)"></span>warn</span>
+        <span class="badge"><span class="dot" style="background:var(--hm-crit)"></span>falha</span>
+        <span class="badge"><span class="mono" id="hmBadgeTxt">—</span></span>
+      </div>
+    </div>
+
+    <div class="hm-wrap" id="hmWrap">
+      <canvas id="hmCanvas" class="hm-canvas" width="800" height="420" title="Clique para selecionar um ponto"></canvas>
+    </div>
+    <div id="hmTip" class="hm-tip"></div>
+  </div>
+
+  <div class="card glass span-12">
+    <div class="kpi">
+      <div class="tile"><p class="t">Detector</p><p class="v mono">{{ version_summary.detector_version|default:"—" }}</p><p class="s">EWMA + CUSUM sobre sinal residual canônico multicanal</p></div>
+      <div class="tile"><p class="t">Classificação</p><p class="v mono">RCA explicável</p><p class="s">regras físico-estatísticas + alarmes + estado operacional</p></div>
+      <div class="tile"><p class="t">Síntese da implementação</p><p class="v mono">produto técnico</p><p class="s">A detecção usa a evidência combinada dos resíduos disponíveis de potência AC/DC, tensão DC e corrente DC, com ponderação por confiabilidade dos canais; o diagnóstico separa evidência observada de inferência causal e mantém rastreabilidade do evento no bin selecionado.</p></div>
+    </div>
+  </div>
+</div>
+
+<aside id="detailDrawer" class="detail-drawer" aria-hidden="true">
+  <div class="hd">
+    <div style="min-width:0;">
+      <h3 class="title">Detalhe do ponto selecionado</h3>
+      <div class="meta" id="detailMeta">—</div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-glow secondary" type="button" id="btnCopySel" title="Copiar JSON do ponto">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M9 9h11v12H9V9Z" stroke="rgba(233,246,255,.92)" stroke-width="2" />
+          <path d="M4 15H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v1"
+                stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="label">Copiar</span>
+      </button>
+
+      <button class="btn-glow secondary" type="button" id="btnClearSel" title="Limpar seleção">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="label">Limpar</span>
+      </button>
+
+      <button class="btn-glow danger" type="button" id="btnCloseDetail" title="Fechar aba lateral">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="label">Fechar</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="drawer-tabs" id="drawerTabs">
+      <button type="button" class="drawer-tab-btn active" data-tab="mppt">Dados por MPPT</button>
+      <button type="button" class="drawer-tab-btn" data-tab="meteo">Meteorologia</button>
+      <button type="button" class="drawer-tab-btn" data-tab="diagnostic">Detecção/diagnóstico</button>
+      <button type="button" class="drawer-tab-btn" data-tab="ac">Saída do inversor (AC)</button>
+      <button type="button" class="drawer-tab-btn" data-tab="compare">Modelo × medido</button>
+      <button type="button" class="drawer-tab-btn" data-tab="curve">Curva do dia</button>
+      <button type="button" class="drawer-tab-btn" data-tab="validation">Validação</button>
+      <button type="button" class="drawer-tab-btn" data-tab="dump">Dump</button>
+    </div>
+
+    <div class="drawer-tab-panel active" data-panel="mppt">
+      <h4 style="margin:.2rem 0 .6rem;">Dados por MPPT</h4>
+      <table class="kv" id="detailMppt"></table>
+    </div>
+
+    <div class="drawer-tab-panel" data-panel="meteo">
+      <h4 style="margin:.2rem 0 .6rem;">Confiabilidade meteo</h4>
+      <div id="detailMeteoHealth" class="meteo-health"></div>
+      <div style="height:.8rem"></div>
+      <h4 style="margin:.2rem 0 .6rem;">Dados meteorológicos</h4>
+      <table class="kv" id="detailMeteo"></table>
+    </div>
+
+    <div class="drawer-tab-panel" data-panel="diagnostic">
+      <h4 style="margin:.2rem 0 .6rem;">Precisão e diagnóstico</h4>
+      <table class="kv" id="detailConfidence"></table>
+      <div style="height:.8rem"></div>
+      <table class="kv" id="detailDetection"></table>
+    </div>
+
+    <div class="drawer-tab-panel" data-panel="ac">
+      <h4 style="margin:.2rem 0 .6rem;">Saída do inversor (AC)</h4>
+      <table class="kv" id="detailAC"></table>
+    </div>
+
+    <div class="drawer-tab-panel" data-panel="compare">
+      <h4 style="margin:.2rem 0 .6rem;">Modelo × medido</h4>
+      <table class="compare-kv" id="detailCompare"></table>
+    </div>
+
+    <div class="drawer-tab-panel" data-panel="curve">
+      <h4 style="margin:.2rem 0 .6rem;">Curva do dia</h4>
+      <div class="chart-wrap sm"><canvas id="chartDetailDay"></canvas></div>
+      <div style="height:.9rem"></div>
+      <h4 style="margin:.2rem 0 .6rem;">Irradiância do dia</h4>
+      <div class="chart-wrap sm"><canvas id="chartDetailIrrDay"></canvas></div>
+    </div>
+
+    <div class="drawer-tab-panel" data-panel="validation">
+      <h4 style="margin:.2rem 0 .6rem;">Validação do ponto / evento</h4>
+      <div id="detailValidation"></div>
+    </div>
+
+    <div class="drawer-tab-panel" data-panel="dump">
+      <h4 style="margin:.2rem 0 .6rem;">Principais variáveis</h4>
+      <table class="kv" id="detailAll"></table>
+      <div style="height:.8rem"></div>
+      <h4 style="margin:.2rem 0 .6rem;">Dump</h4>
+      <pre class="dump" id="detailDump">{}</pre>
+    </div>
+  </div>
+</aside>
+
+{{ advanced_param_keys|json_script:"advancedParamKeysData" }}
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const ADVANCED_PARAM_KEYS = JSON.parse(document.getElementById("advancedParamKeysData")?.textContent || "[]");
+
+
+  function setStatus(on, txt){
+    const box = $("statusBox");
+    const t = $("statusTxt");
+    if (!box || !t) return;
+    if (!on){
+      box.style.display = "none";
+      t.textContent = "";
+      return;
+    }
+    box.style.display = "";
+    t.textContent = txt || "Executando…";
+  }
+
+  function setBtnLoading(btn, isLoading, labelIdle, labelLoading){
+    if (!btn) return;
+    btn.disabled = !!isLoading;
+    const lbl = btn.querySelector(".label");
+    if (lbl){
+      lbl.textContent = isLoading ? (labelLoading || "Carregando...") : (labelIdle || lbl.textContent);
+    }
+  }
+
+  function getNum(id, fallback=NaN){
+    const el = $(id);
+    if (!el) return fallback;
+    let raw = String(el.value ?? "").trim();
+    if (!raw) return fallback;
+    raw = raw.replace(",", ".");
+    const v = Number(raw);
+    return Number.isFinite(v) ? v : fallback;
+  }
+
+  function getOptionalNum(id){
+    const el = $(id);
+    if (!el) return null;
+    let raw = String(el.value ?? "").trim();
+    if (!raw) return null;
+    raw = raw.replace(",", ".");
+    const v = Number(raw);
+    return Number.isFinite(v) ? v : null;
+  }
+
+  function collectAdvancedPayload(){
+    const payload = {};
+    for (const key of ADVANCED_PARAM_KEYS){
+      const v = getOptionalNum(key);
+      if (v !== null) payload[key] = v;
+    }
+    return payload;
+  }
+
+  function applyParamsToForm(params){
+    if (!params || typeof params !== "object") return;
+    for (const [k, v] of Object.entries(params)){
+      const el = $(k);
+      if (!el || v === undefined || v === null) continue;
+      el.value = String(v);
+    }
+  }
+
+  function renderRandomSearchResult(data){
+    const box = $("randomSearchResultBox");
+    const txt = $("randomSearchResultTxt");
+    if (!box || !txt) return;
+    if (!data || !data.best_metrics){
+      box.style.display = "none";
+      txt.textContent = "";
+      return;
+    }
+    const m = data.best_metrics || {};
+    txt.textContent = `Melhor score=${fmtN(m.score, 2)} • valid=${m.valid_n ?? "—"} • warn=${m.warn ?? "—"} • falha=${m.crit ?? "—"} • conf.det=${fmtPct(m.detection_confidence_mean ?? null, 1)} • conf.diag=${fmtPct(m.diagnosis_confidence_mean ?? null, 1)} • unknown_shutdown=${m.unknown_shutdown_with_sun ?? "—"}`;
+    box.style.display = "";
+  }
+
+  function fmtN(x, nd=2){
+    const n = Number(x);
+    if (!Number.isFinite(n)) return "—";
+    return n.toFixed(nd).replace(/\.?0+$/,'');
+  }
+
+  function fmtPct(x, nd=1){
+    const n = Number(x);
+    if (!Number.isFinite(n)) return "—";
+    return (n*100).toFixed(nd) + "%";
+  }
+
+  function fmtAny(v){
+    if (v === null || v === undefined) return "—";
+    if (typeof v === "number"){
+      if (!Number.isFinite(v)) return "—";
+      return Number.isInteger(v) ? String(v) : fmtN(v, 6);
+    }
+    if (typeof v === "boolean") return v ? "true" : "false";
+    if (typeof v === "string") return v === "" ? "—" : v;
+    try{ return JSON.stringify(v); }catch(_e){ return String(v); }
+  }
+
+  function normalizeNumberInput(id, def){
+    const el = $(id);
+    if (!el) return;
+    let v = String(el.value ?? "").trim();
+    if (!v){ el.value = String(def); return; }
+    v = v.replace(",", ".");
+    const n = Number(v);
+    el.value = Number.isFinite(n) ? String(n) : String(def);
+  }
+
+  function prefillDefaultsIfEmpty(){
+    const s = $("start");
+    const e = $("end");
+    if (!s || !e) return;
+
+    const hasS = !!String(s.value || "").trim();
+    const hasE = !!String(e.value || "").trim();
+    if (!hasS || !hasE){
+      const today = new Date();
+      const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const start = new Date(end.getTime() - 7 * 86400000);
+
+      const toYMD = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth()+1).padStart(2,"0");
+        const dd = String(d.getDate()).padStart(2,"0");
+        return `${y}-${m}-${dd}`;
+      };
+
+      if (!hasE) e.value = toYMD(end);
+      if (!hasS) s.value = toYMD(start);
+    }
+
+    normalizeNumberInput("warn_abs", 0.35);
+    normalizeNumberInput("fault_abs", 0.90);
+    normalizeNumberInput("gpoa_min", 50);
+    normalizeNumberInput("pmin_w", 0);
+  }
+
+  const FIELD_LABELS = {
+    mismatch_rel: "Mismatch relativo (P_real−P_model)/P_model",
+    p_ac_real_w:  "Potência AC (real) [W]",
+    p_ac_model_w: "Potência AC (modelo) [W]",
+    p_dc_w:       "Potência DC [W]",
+    v_dc_v:       "Vdc [V]",
+    i_dc_a:       "Idc [A]",
+    v_ac_v:       "Vac [V]",
+    i_ac_a:       "Iac [A]",
+    inv_coverage: "Cobertura inversor",
+    anomaly:      "Anomalia (detecção/IV)",
+    rca_code:     "Código diagnóstico (RCA)",
+    rca_label:    "Rótulo diagnóstico (RCA)",
+    g_poa:        "GPOA (POA) [W/m²]",
+    gpoa_used:    "GPOA usado [W/m²]",
+    ghi:          "GHI [W/m²]",
+    gti:          "GTI [W/m²]",
+    dni:          "DNI [W/m²]",
+    dhi:          "DHI [W/m²]",
+    temp_air:     "Temp. ar [°C]",
+    wind_speed:   "Vento [m/s]",
+    rh:           "UR [%]",
+    meteo_qc_score: "Score de QC meteo",
+    data_reliability_score: "Confiabilidade dos dados",
+    data_reliability_level: "Nível de confiabilidade dos dados",
+    detection_confidence_score: "Confiança da detecção",
+    detection_confidence_level: "Nível de confiança da detecção",
+    diagnosis_confidence_score: "Confiança do diagnóstico",
+    diagnosis_confidence_level: "Nível de confiança do diagnóstico",
+    ewma_z: "EWMA z",
+    cusum_score: "CUSUM score",
+    residual_event_score: "Residual event score",
+    combined_event_score: "Combined event score",
+    state_label: "Estado operativo",
+    domain_label: "Domínio provável",
+    diagnosis_label: "Diagnóstico final",
+    direct_grid_evidence: "Evidência direta de rede",
+    zero_injection_flag: "Sem injeção sob sol",
+    irradiance_tier: "Tier de irradiância",
+    flag_meteo_low_confidence: "Meteo baixa confiança",
+    flag_meteo_interpolated: "Fonte meteo interpolada",
+    flag_meteo_outlier: "Outlier meteo",
+    flag_meteo_artifact: "Artefato meteo",
+    flag_meteo_missing: "Flag meteo missing",
+    flag_inv_missing:   "Flag inversor missing",
+
+    // Mantém se existir no teu backend
+    mppt1_vdc_v: "MPPT1 Vdc [V]",
+    mppt2_vdc_v: "MPPT2 Vdc [V]",
+    mppt3_vdc_v: "MPPT3 Vdc [V]",
+    mppt4_vdc_v: "MPPT4 Vdc [V]",
+    mppt1_idc_a: "MPPT1 Idc [A]",
+    mppt2_idc_a: "MPPT2 Idc [A]",
+    mppt3_idc_a: "MPPT3 Idc [A]",
+    mppt4_idc_a: "MPPT4 Idc [A]",
+  };
+
+  function humanizeKey(s){
+    const k = String(s || "");
+    if (!k) return "—";
+    const base = k.replace(/[_\-]+/g, " ").trim();
+    if (!base) return k;
+    return base.charAt(0).toUpperCase() + base.slice(1);
+  }
+
+  function prettyKeyCompact(k){
+    const s = String(k || "");
+    return FIELD_LABELS[s] || humanizeKey(s);
+  }
+
+  function boolish(v){
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return Number.isFinite(v) && v !== 0;
+    const s = String(v ?? "").trim().toLowerCase();
+    return ["1","true","yes","sim","on"].includes(s);
+  }
+
+  function numOrNull(v){
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function meteoHealthSummary(data, sourceHint="—"){
+    const score = numOrNull(data?.meteo_qc_score);
+    const low = boolish(data?.flag_meteo_low_confidence);
+    const interp = boolish(data?.flag_meteo_interpolated);
+    const outlier = boolish(data?.flag_meteo_outlier);
+    const artifact = boolish(data?.flag_meteo_artifact);
+    const missing = boolish(data?.flag_meteo_missing);
+    const source = String(sourceHint || data?.source_meteo || "—") || "—";
+
+    let tone = "ok";
+    let title = "Alta confiança meteorológica";
+    let note = "Sem indícios relevantes de baixa confiabilidade para este bin.";
+
+    if (missing){
+      tone = "crit";
+      title = "Sem meteorologia utilizável";
+      note = "O bin está sem variáveis meteorológicas suficientes para suportar o diagnóstico.";
+    } else if (interp && low){
+      tone = "crit";
+      title = "Baixa confiança meteorológica";
+      note = "A fonte de 15 min parece interpolada para a região e o QC marcou o bin como baixa confiança.";
+    } else if (interp){
+      tone = "warn";
+      title = "Fonte interpolada em 15 min";
+      note = "Use cautela: a série solar de 15 min provavelmente não é nativa para esta região.";
+    } else if (low){
+      tone = "warn";
+      title = "Baixa confiança meteorológica";
+      note = "O QC sinalizou que este bin não é suficientemente confiável para diagnóstico fino.";
+    } else if (outlier || artifact){
+      tone = "warn";
+      title = "Confiabilidade moderada";
+      note = "O QC encontrou indícios de outlier ou artefato na meteorologia deste bin.";
+    } else if (score !== null && score < 0.60){
+      tone = "warn";
+      title = "Confiabilidade reduzida";
+      note = "O score consolidado de QC ficou abaixo do intervalo recomendado.";
+    } else if (score !== null && score < 0.85){
+      tone = "warn";
+      title = "Confiabilidade moderada";
+      note = "O bin é utilizável, mas com cautela para interpretação diagnóstica.";
+    }
+
+    const chips = [
+      { cls: tone, txt: title },
+      { cls: "neutral", txt: `Fonte: ${source}` },
+    ];
+    if (interp) chips.push({ cls: "warn", txt: "15 min interpolado" });
+    if (low) chips.push({ cls: tone === "crit" ? "crit" : "warn", txt: "Baixa confiança" });
+    if (outlier) chips.push({ cls: "warn", txt: "Outlier tratado" });
+    if (artifact) chips.push({ cls: "warn", txt: "Artefato temporal" });
+    if (missing) chips.push({ cls: "crit", txt: "Sem meteo" });
+    if (!interp && !low && !outlier && !artifact && !missing) chips.push({ cls: "ok", txt: "QC favorável" });
+
+    return {
+      tone, title, note, score, source,
+      facts: {
+        source,
+        score: score,
+        interpolation: interp ? "Provável" : "Não sinalizada",
+        low_confidence: low ? "Sim" : "Não",
+        outlier: outlier ? "Sim" : "Não",
+        artifact: artifact ? "Sim" : "Não",
+      },
+      chips,
+    };
+  }
+
+  function renderMeteoHealth(el, summary){
+    if (!el) return;
+    if (!summary){
+      el.innerHTML = `<div class="meteo-health-sub">Selecione um bin para inspecionar a confiabilidade da meteorologia.</div>`;
+      return;
+    }
+    const scoreTxt = summary.score === null ? "—" : fmtN(summary.score, 2);
+    const chipsHtml = (summary.chips || []).map(c => `<span class="meteo-chip ${c.cls}">${c.txt}</span>`).join("");
+    const facts = [
+      ["Fonte meteorológica", summary.facts.source],
+      ["QC score", scoreTxt],
+      ["Fonte 15 min interpolada", summary.facts.interpolation],
+      ["Baixa confiança", summary.facts.low_confidence],
+      ["Outlier detectado", summary.facts.outlier],
+      ["Artefato temporal", summary.facts.artifact],
+    ];
+    const factsHtml = facts.map(([k,v]) => `<div class="meteo-fact"><span class="k">${k}</span><span class="v mono">${fmtAny(v)}</span></div>`).join("");
+    el.innerHTML = `
+      <div class="meteo-health-main">
+        <div>
+          <div class="meteo-health-title">${summary.title}</div>
+          <div class="meteo-health-sub">${summary.note}</div>
+        </div>
+        <div class="meteo-health-score">
+          <div class="k">QC score</div>
+          <div class="v mono">${scoreTxt}</div>
+        </div>
+      </div>
+      <div class="meteo-chips">${chipsHtml}</div>
+      <div class="meteo-facts">${factsHtml}</div>
+    `;
+  }
+
+  function prettyKeyVerbose(k){
+    const s = String(k || "");
+    const human = FIELD_LABELS[s] || humanizeKey(s);
+    return human ? `${human} (${s})` : s;
+  }
+
+
+  function escHtml(value){
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function escAttr(value){
+    return escHtml(value).replace(/`/g, "&#96;");
+  }
+
+  function getCookie(name){
+    const cookies = String(document.cookie || "").split(";");
+    for (const part of cookies){
+      const [k, ...rest] = part.trim().split("=");
+      if (k === name) return decodeURIComponent(rest.join("="));
+    }
+    return "";
+  }
+
+  async function postJson(url, body){
+    const csrftoken = getCookie("csrftoken");
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        ...(csrftoken ? { "X-CSRFToken": csrftoken } : {}),
+      },
+      credentials: "same-origin",
+      body: JSON.stringify(body || {}),
+    });
+    const txt = await res.text();
+    let data = null;
+    try{ data = JSON.parse(txt); }catch(_e){}
+    if (!res.ok || !data || data.ok === false){
+      const msg = (data && (data.error || data.detail)) ? (data.error || data.detail) : (txt || `HTTP ${res.status}`);
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  function pillClassForState(state){
+    const s = String(state || "").toLowerCase();
+    if (["confirmed","tp","ok","normal"].includes(s)) return "ok";
+    if (["pending","uncertain","partial","warn"].includes(s)) return "warn";
+    if (["dismissed","fp","fn","crit"].includes(s)) return "crit";
+    return "neutral";
+  }
+
+  function renderMetricRows(obj, mode){
+    const entries = Object.entries(obj || {});
+    if (!entries.length) return `<div class="validation-empty">Sem dados.</div>`;
+    const rows = entries.map(([key, vals]) => {
+      const precision = fmtPct(vals?.precision ?? null, 1);
+      const recall = fmtPct(vals?.recall ?? null, 1);
+      const f1 = fmtPct(vals?.f1 ?? null, 1);
+      const support = (vals?.tp ?? 0) + (vals?.fn ?? 0);
+      const fp = vals?.fp ?? 0;
+      const label = mode === "meteo" ? (key === "meteo_ok" ? "Meteo OK" : key === "meteo_low_quality" ? "Meteo baixa qualidade" : key) : key;
+      return `<tr><td class="mono">${escHtml(label)}</td><td class="mono">${precision}</td><td class="mono">${recall}</td><td class="mono">${f1}</td><td class="mono">${support}</td><td class="mono">${fp}</td></tr>`;
+    }).join("");
+    return `<table class="validation-matrix"><thead><tr><th>Bucket</th><th>Precisão</th><th>Recall</th><th>F1</th><th>Support</th><th>FP</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function renderMatrixTable(matrix){
+    const rows = Object.keys(matrix || {});
+    if (!rows.length) return `<div class="validation-empty">Sem observações suficientes.</div>`;
+    const colsSet = new Set();
+    rows.forEach((r)=>Object.keys(matrix[r] || {}).forEach((c)=>colsSet.add(c)));
+    const cols = Array.from(colsSet);
+    const head = cols.map((c)=>`<th class="mono">${escHtml(c)}</th>`).join("");
+    const body = rows.map((r)=>{
+      const cells = cols.map((c)=>`<td class="mono">${fmtAny((matrix[r] || {})[c] ?? 0)}</td>`).join("");
+      return `<tr><th class="mono">${escHtml(r)}</th>${cells}</tr>`;
+    }).join("");
+    return `<table class="validation-matrix"><thead><tr><th>Verdade</th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  }
+
+  function getPredEventList(payload){
+    return Array.isArray(payload?.summary?.events) ? payload.summary.events : [];
+  }
+
+  function findPredEvent(payload, eventId){
+    const eid = Number(eventId);
+    if (!Number.isFinite(eid)) return null;
+    return getPredEventList(payload).find((ev)=>Number(ev?.id) === eid) || null;
+  }
+
+  function isoToMillis(isoText){
+    const d = new Date(String(isoText || ""));
+    const ms = d.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+
+  function parsePositiveInt(value){
+    const raw = (value === null || value === undefined) ? "" : String(value).trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }
+
+  const VALIDATION_LABEL_OPTIONS = [
+    "grid_overvoltage_trip",
+    "grid_overvoltage_derating",
+    "grid_undervoltage_trip",
+    "grid_undervoltage_derating",
+    "grid_overfrequency_trip",
+    "grid_underfrequency_trip",
+    "inverter_off_under_sun",
+    "unknown_shutdown_with_sun",
+    "dc_side_partial_loss_probable",
+    "dc_side_voltage_anomaly_probable",
+    "partial_generation_loss_probable",
+    "persistent_underperformance",
+    "curtailment_clipping",
+    "normal",
+    "unknown",
+  ];
+
+  function buildLabelOptions(selectedValue, { allowBlank=false, preferred=[] } = {}){
+    const values = [];
+    const pushValue = (v)=>{
+      const s = String(v || "").trim();
+      if (!s) return;
+      if (!values.includes(s)) values.push(s);
+    };
+    preferred.forEach(pushValue);
+    VALIDATION_LABEL_OPTIONS.forEach(pushValue);
+    pushValue(selectedValue);
+    let html = allowBlank ? `<option value="">— selecionar —</option>` : "";
+    html += values.map((v)=>`<option value="${escAttr(v)}" ${String(selectedValue || "") === v ? "selected" : ""}>${escHtml(v)}</option>`).join("");
+    return html;
+  }
+
+  function resolvePredEventContext(payload, cellObj, validationBlock){
+    const directId = parsePositiveInt(validationBlock?.pred_event_id);
+    const directEvent = directId ? findPredEvent(payload, directId) : null;
+    if (directEvent || directId){
+      return { predEventId: directId || null, predEvent: directEvent, source: "overlay" };
+    }
+
+    const selectedTsUtc = String(
+      validationBlock?.selected_ts_utc
+      || cellObj?.dumpPoint?.ts_utc
+      || payload?.dump_by_tkey?.[cellObj?.tkey]?.ts_utc
+      || ""
+    );
+    const selectedMs = isoToMillis(selectedTsUtc);
+    if (!Number.isFinite(selectedMs)) return { predEventId: null, predEvent: null, source: null };
+
+    const selectedReason = String(
+      validationBlock?.pred_event_label_prelim
+      || cellObj?.reason
+      || cellObj?.dumpPoint?.reason
+      || ""
+    ).trim().toLowerCase();
+
+    const candidates = getPredEventList(payload).filter((ev)=>{
+      const startMs = isoToMillis(ev?.ts_start_utc);
+      const endMs = isoToMillis(ev?.ts_end_utc);
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return false;
+      return startMs <= selectedMs && selectedMs <= endMs;
+    });
+    if (!candidates.length) return { predEventId: null, predEvent: null, source: null };
+
+    candidates.sort((a,b)=>{
+      const aLabel = String(a?.event_label_prelim || a?.pred_label || "").trim().toLowerCase();
+      const bLabel = String(b?.event_label_prelim || b?.pred_label || "").trim().toLowerCase();
+      const aScore = (selectedReason && aLabel === selectedReason ? 10 : 0) + (a?.match_type === 'TP' ? 1 : 0);
+      const bScore = (selectedReason && bLabel === selectedReason ? 10 : 0) + (b?.match_type === 'TP' ? 1 : 0);
+      if (bScore !== aScore) return bScore - aScore;
+      return (isoToMillis(a?.ts_start_utc) || 0) - (isoToMillis(b?.ts_start_utc) || 0);
+    });
+
+    const best = candidates[0] || null;
+    return { predEventId: parsePositiveInt(best?.id), predEvent: best, source: best ? "summary_inference" : null };
+  }
+
+  function addMinutesIso(isoText, minutes){
+    const d = new Date(String(isoText || ""));
+    if (!Number.isFinite(d.getTime())) return "";
+    return new Date(d.getTime() + Number(minutes || 0) * 60000).toISOString();
+  }
+
+  function buildTruthDefaults(payload, cellObj, validationBlock){
+    const predCtx = resolvePredEventContext(payload, cellObj, validationBlock);
+    const predEvent = predCtx?.predEvent || null;
+    const dtm = Math.max(1, Number($("dt_minutes")?.value || hmState.dtm || 15));
+    const selectedTsUtc = String(cellObj?.dumpPoint?.ts_utc || validationBlock?.selected_ts_utc || payload?.dump_by_tkey?.[cellObj?.tkey]?.ts_utc || "");
+    return {
+      startUtc: String(predEvent?.ts_start_utc || selectedTsUtc || ""),
+      endUtc: String(predEvent?.ts_end_utc || addMinutesIso(selectedTsUtc, dtm) || ""),
+    };
+  }
+
+  function refreshValidationBanner(message, tone="ok"){
+    const box = $("validationCoverageText");
+    if (!box || !message) return;
+    box.innerHTML = `<div class="validation-banner ${tone}">${escHtml(message)}</div>` + box.innerHTML;
+  }
+
+  /* Charts */
+  let chartPower = null;
+  let chartDetailDay = null;
+  let chartDetailIrrDay = null;
+
+  function chartCommonOptions(){
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            color: "rgba(233,246,255,.95)",
+            font: { size: 14, weight: "700" },
+            boxWidth: 14, boxHeight: 14, padding: 18
+          }
+        },
+        tooltip: { titleColor: "rgba(233,246,255,.98)", bodyColor: "rgba(233,246,255,.95)" }
+      },
+      scales: {
+        x: { ticks: { color: "rgba(233,246,255,.85)", maxTicksLimit: 10, font: { size: 12 } },
+             grid: { color: "rgba(255,255,255,.06)" } },
+        y: { ticks: { color: "rgba(233,246,255,.85)", font: { size: 12 } },
+             grid: { color: "rgba(255,255,255,.06)" } }
+      }
+    };
+  }
+
+  function destroyCharts(){
+    if(chartPower){ chartPower.destroy(); chartPower = null; }
+    if(chartDetailDay){ chartDetailDay.destroy(); chartDetailDay = null; }
+    if(chartDetailIrrDay){ chartDetailIrrDay.destroy(); chartDetailIrrDay = null; }
+  }
+
+  function buildCharts(payload){
+    destroyCharts();
+    if (!window.Chart) return;
+
+    const s = payload?.series || {};
+    const t  = s.t_local || s.x_local || payload?.x_local || [];
+    const pr = s.p_ac_real_w  || s.p_ac_w || s.pac_w || [];
+    const pm = s.p_ac_model_w || s.p_model_w || [];
+
+    chartPower = new Chart($("chartPower"), {
+      type: "line",
+      data: { labels: t, datasets: [
+        { label: "Potência AC real (W)",  data: pr, borderWidth: 2, pointRadius: 0, tension: 0.15 },
+        { label: "Potência AC modelo (W)", data: pm, borderWidth: 2, pointRadius: 0, tension: 0.15 },
+      ]},
+      options: chartCommonOptions()
+    });
+  }
+
+  /* Séries / Aliases */
+  function seriesAt(payload, key, idx){
+    const s = payload?.series || {};
+    const ALIASES = {
+      t_local:      ["x_local","t","x"],
+
+      mismatch_rel: [
+        "mismatch","mm_rel","mm",
+        "mismatch_relativo","mismatch_relative","mismatch_ratio","rel_mismatch","mismatch_rel_pct"
+      ],
+
+      code:         ["rca_code","codes","diag_code","diagnostic_code"],
+      label:        ["rca_label","label_t","labels","diag_label","diagnostic_label"],
+
+      anomaly:      ["anomaly_iv","iv_anomaly","iv_ran_anomaly","iv_flag","anom","is_anomaly","anomalous","anomaly_flag"],
+
+      cls:          ["hm_class","hm_sev","severity","sev","status","class","classification"],
+
+      p_ac_real_w:  ["p_ac_w","pac_real_w","p_real_w","p_ac_real","pac","pac_w","p_ac"],
+      p_ac_model_w: ["p_model_w","p_ac_model","p_ac_modelo_w","p_modelo_w","pac_model_w","pac_modelo_w","p_ac_mod_w"],
+
+      g_poa:        ["gpoa","g_poa_used","gpoa_used","gpoa_poa","gpoa_poa_wm2","g_poa_poa","g_poa_wm2","g_poa_w"],
+
+      inv_missing:  ["flag_inverter_missing","inverter_missing","inv_missing","missing_inv","flag_inv_missing","flag_oper_missing","oper_missing","device_missing","flag_device_missing"],
+
+      i_ac_a:       ["i_ac_a","iac_a","i_ac_l1","i_ac","iac"],
+      v_ac_v:       ["v_ac","vac","v_ac_v","v_ac_l1","vac_l1","v_ll","v_ln"],
+      p_dc_w:       ["p_dc_w","pdc_w","p_dc","pdc"],
+      v_dc_v:       ["v_dc_v","vdc_v","vdc","v_string_v"],
+      i_dc_a:       ["i_dc_a","idc_a","idc","i_string_a"],
+    };
+    const keys = [key, ...((ALIASES[key] || []))];
+    for (const k of keys){
+      const arr = s?.[k];
+      if (Array.isArray(arr) && idx >= 0 && idx < arr.length) return arr[idx];
+    }
+    return null;
+  }
+
+  function isExplicitTrue(v){
+    if (v === true || v === 1) return true;
+    if (typeof v === "string"){
+      const s = v.trim().toLowerCase();
+      return (s === "true" || s === "1" || s === "yes" || s === "y" || s === "sim");
+    }
+    return false;
+  }
+
+  function isNullishValue(v){
+    if (v === null || v === undefined) return true;
+    if (typeof v === "number") return !Number.isFinite(v);
+    const s = String(v).trim().toLowerCase();
+    return (s === "" || s === "-" || s === "—" || s === "na" || s === "nan" || s === "null" || s === "none");
+  }
+
+  function normalizeClass(v){
+    const s = String(v ?? "").trim().toLowerCase();
+    if (!s) return "ok";
+    if (["none","missing","no_data","nodata","sem dados","na","nan","null","nil"].includes(s)) return "none";
+    if (["ok","normal","idle","green","pass","clean","clear"].includes(s)) return "ok";
+    if (["warn","warning","anom","anomaly","alert","yellow"].includes(s)) return "warn";
+    if (["crit","critical","fault","fail","failure","red"].includes(s)) return "crit";
+    if (/^\d+$/.test(s)){
+      const n = Number(s);
+      if (n <= 0) return "ok";
+      if (n === 1) return "warn";
+      return "crit";
+    }
+    return "warn";
+  }
+
+  function toneFromCell(obj){
+    const cls = normalizeClass(obj?.cls);
+    if (cls !== "warn") return cls;
+    const reason = String(obj?.reason || "").trim().toLowerCase();
+    const lbl = String(obj?.lbl || "").trim().toLowerCase();
+    const code = String(obj?.code || "").trim().toLowerCase();
+    if (reason === "partial_generation_loss_probable" || lbl === "partial_generation_loss_probable" || code === "partial_generation_loss_probable") {
+      return "softok";
+    }
+    if (reason === "persistent_underperformance" || lbl === "persistent_underperformance" || code === "persistent_underperformance") {
+      return "softwarn";
+    }
+    return cls;
+  }
+
+  function classRank(cls){
+    if (cls === "crit") return 3;
+    if (cls === "warn") return 2;
+    if (cls === "ok")   return 1;
+    return 0; // none
+  }
+
+  function sevColor(tone){
+    const cs = getComputedStyle(document.documentElement);
+    if (tone === "crit") return cs.getPropertyValue("--hm-crit").trim();
+    if (tone === "warn") return cs.getPropertyValue("--hm-warn").trim();
+    if (tone === "softwarn") return cs.getPropertyValue("--hm-softwarn").trim();
+    if (tone === "softok") return cs.getPropertyValue("--hm-softok").trim();
+    if (tone === "ok")   return cs.getPropertyValue("--hm-ok").trim();
+    return cs.getPropertyValue("--hm-none").trim();
+  }
+
+  function classFromCode(payload, code){
+    const map = payload?.rca_code_to_sev || {};
+    const k = String(code ?? "").trim();
+    if (k !== "" && map && Object.prototype.hasOwnProperty.call(map, k)){
+      return normalizeClass(map[k]);
+    }
+    const c = Number(code);
+    if (!Number.isFinite(c)) return "ok";
+    if (c <= 0) return "ok";
+    if (c === 1) return "warn";
+    return "crit";
+  }
+
+  function hasInverterOperative(payload, idx){
+    const invMiss = seriesAt(payload, "inv_missing", idx);
+    if (invMiss != null && String(invMiss).trim() !== ""){
+      return !isExplicitTrue(invMiss);
+    }
+
+    const pac = Number(seriesAt(payload, "p_ac_real_w", idx));
+    if (Number.isFinite(pac)) return true;
+
+    const iac = Number(seriesAt(payload, "i_ac_a", idx));
+    if (Number.isFinite(iac)) return true;
+
+    const vac = Number(seriesAt(payload, "v_ac_v", idx));
+    if (Number.isFinite(vac)) return true;
+
+    const pdc = Number(seriesAt(payload, "p_dc_w", idx));
+    if (Number.isFinite(pdc)) return true;
+
+    return false;
+  }
+
+  function overrideByMismatchOrPower(payload, idx){
+    const warnAbs  = Math.max(0, getNum("warn_abs", 0.35));
+    const faultAbs = Math.max(0, getNum("fault_abs", 0.90));
+    const gpoaMin  = Math.max(0, getNum("gpoa_min", 50));
+    const pminW    = Math.max(0, getNum("pmin_w", 0));
+
+    let mm = Number(seriesAt(payload, "mismatch_rel", idx));
+    if (!Number.isFinite(mm)){
+      const pr = Number(seriesAt(payload, "p_ac_real_w", idx));
+      const pm = Number(seriesAt(payload, "p_ac_model_w", idx));
+      if (Number.isFinite(pr) && Number.isFinite(pm) && Math.abs(pm) > 1e-9){
+        mm = (pr - pm) / pm;
+      }
+    }
+
+    if (Number.isFinite(mm)){
+      if (mm <= -faultAbs) return { cls: "crit", reason: "mismatch<=-fault_abs", mm };
+      if (Math.abs(mm) >= warnAbs) return { cls: "warn", reason: "|mismatch|>=warn_abs", mm };
+    }
+
+    const g = Number(seriesAt(payload, "g_poa", idx));
+    const pr = Number(seriesAt(payload, "p_ac_real_w", idx));
+    const pm = Number(seriesAt(payload, "p_ac_model_w", idx));
+
+    if (Number.isFinite(g) && Number.isFinite(pr) && Number.isFinite(pm)){
+      if (g >= gpoaMin && pm > Math.max(50, pminW) && pr <= pminW){
+        return { cls: "crit", reason: "no_generation_under_sun", g, pr, pm };
+      }
+    }
+    return null;
+  }
+
+
+  function currentDisplayMode(){
+    const el = $("display_mode");
+    const v = String(el?.value || "mismatch").trim().toLowerCase();
+    return (v === "tipologia") ? "tipologia" : "mismatch";
+  }
+
+  function pointClass(payload, idx){
+    const s = payload?.series || {};
+    const mode = currentDisplayMode();
+    const arr = (mode === "tipologia") ? (s.hm_class_typology || []) : (s.hm_class_mismatch || []);
+    const reasons = (mode === "tipologia") ? (s.hm_reason_typology || []) : (s.hm_reason_mismatch || []);
+    const cls = normalizeClass(arr[idx]);
+    if (arr.length){
+      return { cls, reason: reasons[idx] || `backend_${mode}` };
+    }
+
+    const rawCls = seriesAt(payload, "cls", idx);
+    let base = null;
+    if (rawCls != null && String(rawCls).trim() !== ""){
+      base = { cls: normalizeClass(rawCls), reason: "backend_class", raw: rawCls };
+    } else {
+      const code = seriesAt(payload, "code", idx);
+      if (code != null && String(code).trim() !== ""){
+        base = { cls: classFromCode(payload, code), reason: "rca_code", code };
+      } else {
+        const an = seriesAt(payload, "anomaly", idx);
+        base = isExplicitTrue(an) ? { cls: "warn", reason: "anomaly=true" } : { cls: "ok", reason: "default_ok" };
+      }
+    }
+    return base;
+  }
+
+  function setKpis(payload){
+    const s = payload?.series || {};
+    const t = s.t_local || s.x_local || payload?.x_local || [];
+    const pts = Array.isArray(t) ? t.length : 0;
+
+    let ok = 0, warn = 0, crit = 0, none = 0;
+    for (let i=0; i<pts; i++){
+      const cls = pointClass(payload, i).cls;
+      if (cls === "ok") ok++;
+      else if (cls === "warn") warn++;
+      else if (cls === "crit") crit++;
+      else none++;
+    }
+
+    const rs = (payload?.range?.start || $("start")?.value || "—");
+    const re = (payload?.range?.end   || $("end")?.value   || "—");
+
+    $("kpiPts").textContent = pts ? String(pts) : "—";
+    $("kpiOk").textContent = pts ? String(ok) : "—";
+    $("kpiWarn").textContent = pts ? String(warn) : "—";
+    $("kpiCrit").textContent = pts ? String(crit) : "—";
+    $("kpiNoData").textContent = pts ? String(none) : "—";
+    $("kpiRange").textContent = `${rs} → ${re}`;
+  }
+
+  /* Heatmap helpers */
+  function ymdList(aYmd, bYmd){
+    const out = [];
+    const mA = String(aYmd||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const mB = String(bYmd||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!mA || !mB) return out;
+
+    let a = Date.UTC(+mA[1], +mA[2]-1, +mA[3]);
+    let b = Date.UTC(+mB[1], +mB[2]-1, +mB[3]);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return out;
+
+    for (let t=a; t<=b; t += 86400000){
+      const d = new Date(t);
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth()+1).padStart(2,"0");
+      const dd = String(d.getUTCDate()).padStart(2,"0");
+      out.push(`${y}-${m}-${dd}`);
+    }
+    return out;
+  }
+
+  function localPartsFromIso(str){
+    let x = String(str||"").trim();
+    if (!x) return { day:null, minute:null };
+    if (x.includes(" ") && !x.includes("T")) x = x.replace(" ","T");
+    const day = x.slice(0,10);
+    const hh = Number(x.slice(11,13));
+    const mi = Number(x.slice(14,16));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { day:null, minute:null };
+    if (!Number.isFinite(hh) || !Number.isFinite(mi)) return { day, minute:null };
+    return { day, minute: hh*60 + mi };
+  }
+
+  function buildCellMap(payload, dtm){
+    const start = (payload?.range?.start || $("start")?.value || "").slice(0,10);
+    const end   = (payload?.range?.end   || $("end")?.value   || "").slice(0,10);
+
+    const days = ymdList(start, end);
+    const dayToIdx = new Map(days.map((d,i)=>[d,i]));
+    const nBins = Math.floor(1440 / dtm);
+
+    const cell = new Map();
+
+    for (let di=0; di<days.length; di++){
+      for (let ti=0; ti<nBins; ti++){
+        const key = `${di}|${ti}`;
+        cell.set(key, {
+          idx: -1,
+          has_any: false,
+          has_oper: false,
+          cls: "none",
+          reason: "no_point_in_bin",
+          mm: null,
+          lbl: null,
+          code: null,
+          day: days[di],
+          minute: ti*dtm,
+        });
+      }
+    }
+
+    const s = payload?.series || {};
+    const t = s.t_local || s.x_local || payload?.x_local || [];
+
+    const hmDay = Array.isArray(s.hm_day_local) ? s.hm_day_local : null;
+    const hmMin = Array.isArray(s.hm_minute_local) ? s.hm_minute_local : null;
+
+    const bestScore = new Map();
+
+    for (let i=0; i<t.length; i++){
+      let ds = (hmDay && i < hmDay.length) ? hmDay[i] : null;
+      let minutes = (hmMin && i < hmMin.length) ? hmMin[i] : null;
+
+      if (!ds || minutes == null){
+        const lp = localPartsFromIso(t[i]);
+        ds = ds || lp.day;
+        if (minutes == null) minutes = lp.minute;
+      }
+      if (!ds || minutes == null) continue;
+
+      const di = dayToIdx.get(ds);
+      if (di == null) continue;
+
+      const ti = Math.floor(Number(minutes) / dtm);
+      if (ti < 0 || ti >= nBins) continue;
+
+      const key = `${di}|${ti}`;
+
+      const binCenter = ti*dtm + dtm/2;
+      const dist = Math.abs(Number(minutes) - binCenter);
+
+      const hasOper = hasInverterOperative(payload, i);
+
+      let cls = "none";
+      let reason = "no_operatives";
+      let cinfo = null;
+      if (hasOper){
+        cinfo = pointClass(payload, i);
+        cls = cinfo.cls || "ok";
+        reason = cinfo.reason || "classified";
+      }
+
+      const score = (hasOper ? 10_000_000 : 0) + classRank(cls)*1_000_000 + (-dist);
+      const prev = bestScore.get(key);
+      if (prev != null && score <= prev) continue;
+      bestScore.set(key, score);
+
+      let mm = Number(seriesAt(payload, "mismatch_rel", i));
+      if (!Number.isFinite(mm)){
+        const pr = Number(seriesAt(payload, "p_ac_real_w", i));
+        const pm = Number(seriesAt(payload, "p_ac_model_w", i));
+        if (Number.isFinite(pr) && Number.isFinite(pm) && Math.abs(pm) > 1e-9){
+          mm = (pr - pm) / pm;
+        } else {
+          mm = NaN;
+        }
+      }
+
+      const lbl = seriesAt(payload, "label", i);
+      const code = seriesAt(payload, "code", i);
+
+      const localIso = (typeof t[i] === "string") ? t[i] : null;
+      const tkey = localIso ? String(localIso).slice(0,16) : null;
+      const cellObj = {
+        idx: i,
+        has_any: true,
+        has_oper: hasOper,
+        cls,
+        reason,
+        mm: (Number.isFinite(mm) ? mm : null),
+        lbl: (lbl == null ? null : String(lbl)),
+        code: (code == null ? null : String(code)),
+        day: ds,
+        minute: Number(minutes),
+        tkey,
+        exact_ts_local: localIso,
+      };
+      cellObj.tone = toneFromCell(cellObj);
+      cell.set(key, cellObj);
+    }
+
+    return { days, nBins, cell };
+  }
+
+  const hmState = {
+    payload:null, days:[], nBins:0, dtm:15, cell:new Map(), geo:null,
+    selectedKey: null, selectedSnapshot: null
+  };
+
+  function fitHeatmapToWidth(){
+    const wrap = $("hmWrap");
+    const canvas = $("hmCanvas");
+    if (!wrap || !canvas) return;
+    const W = canvas.width, H = canvas.height;
+    if (!W || !H) return;
+    const avail = Math.max(0, wrap.clientWidth - 2);
+    if (!avail) return;
+    const scale = Math.min(1, avail / W);
+    canvas.style.width = (W * scale) + "px";
+    canvas.style.height = (H * scale) + "px";
+  }
+
+  function drawHeatmapCanvas(){
+    const payload = hmState.payload;
+    const canvas = $("hmCanvas");
+    const tip = $("hmTip");
+    if (!canvas || !payload) return;
+
+    const ctx = canvas.getContext("2d");
+    const days = hmState.days;
+    const nBins = hmState.nBins;
+
+    if (!days.length || !nBins){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      if (tip) tip.textContent = "Sem dados suficientes para heatmap.";
+      return;
+    }
+
+    const pad = 10;
+    const topH = 26;
+    const leftW = 78;
+    const cellSz = 12;
+    const gap = 3;
+
+    const W = pad + leftW + (nBins * (cellSz+gap)) + pad;
+    const H = pad + topH + (days.length * (cellSz+gap)) + pad;
+
+    canvas.width = W;
+    canvas.height = H;
+
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = "rgba(10,20,40,.10)";
+    ctx.fillRect(0,0,W,H);
+
+    ctx.fillStyle = "rgba(233,246,255,.85)";
+    ctx.font = "bold 11px ui-monospace, Menlo, Consolas, monospace";
+    ctx.textBaseline = "middle";
+
+    const dtm = hmState.dtm;
+    const binsPerHour = Math.max(1, Math.floor(60/dtm));
+    for (let ti=0; ti<nBins; ti++){
+      if (ti % binsPerHour !== 0) continue;
+      const minutes = ti*dtm;
+      const hh = String(Math.floor(minutes/60)).padStart(2,"0");
+      const mm = String(minutes%60).padStart(2,"0");
+      const label = `${hh}:${mm}`;
+      const x = pad + leftW + ti*(cellSz+gap);
+      const y = pad + 12;
+      ctx.fillText(label, x, y);
+    }
+
+    ctx.font = "12px ui-monospace, Menlo, Consolas, monospace";
+    for (let di=0; di<days.length; di++){
+      const ds = days[di];
+      const ddmm = ds.length >= 10 ? `${ds.slice(8,10)}/${ds.slice(5,7)}` : ds;
+
+      const y = pad + topH + di*(cellSz+gap);
+
+      ctx.fillStyle = "rgba(233,246,255,.88)";
+      ctx.fillText(ddmm, pad, y + cellSz/2);
+
+      for (let ti=0; ti<nBins; ti++){
+        const key = `${di}|${ti}`;
+        const obj = hmState.cell.get(key);
+        const tone = obj ? (obj.tone || obj.cls) : "none";
+        const x = pad + leftW + ti*(cellSz+gap);
+
+        ctx.fillStyle = sevColor(tone);
+        ctx.fillRect(x, y, cellSz, cellSz);
+      }
+    }
+
+    if (hmState.selectedKey){
+      const [diS, tiS] = hmState.selectedKey.split("|").map(Number);
+      if (Number.isFinite(diS) && Number.isFinite(tiS)){
+        const x = pad + leftW + tiS*(cellSz+gap);
+        const y = pad + topH + diS*(cellSz+gap);
+        ctx.save();
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--hm-sel").trim();
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(x-1, y-1, cellSz+2, cellSz+2);
+        ctx.restore();
+      }
+    }
+
+    hmState.geo = { pad, topH, leftW, cell: cellSz, gap, W, H, days, nBins, dtm };
+    fitHeatmapToWidth();
+  }
+
+  function renderHeatmapCanvas(payload){
+    hmState.payload = payload;
+    hmState.dtm = Math.max(1, Number($("dt_minutes")?.value || 15));
+    $("hmBinLbl").textContent = String(hmState.dtm);
+
+    const built = buildCellMap(payload, hmState.dtm);
+    hmState.days = built.days;
+    hmState.nBins = built.nBins;
+    hmState.cell = built.cell;
+
+    let ok=0, warn=0, crit=0, none=0, any=0, oper=0;
+    for (const v of hmState.cell.values()){
+      if (v.has_any) any++;
+      if (v.has_oper) oper++;
+      if (v.cls === "ok") ok++;
+      else if (v.cls === "warn") warn++;
+      else if (v.cls === "crit") crit++;
+      else none++;
+    }
+
+    $("hmBadgeTxt").textContent =
+      `normal=${ok} | warn=${warn} | falha=${crit} | cinza=${none} | bins com ponto=${any} | bins com operativos=${oper}`;
+
+    $("kpiNoData").textContent = (hmState.days.length && hmState.nBins) ? String(none) : "—";
+
+    drawHeatmapCanvas();
+  }
+
+  function binTimeStr(mins){
+    const m = Number(mins);
+    if (!Number.isFinite(m)) return "—";
+    const hh = String(Math.floor(m/60)).padStart(2,"0");
+    const mm = String(m%60).padStart(2,"0");
+    return `${hh}:${mm}`;
+  }
+
+  /* ✅ CORREÇÃO 1: pointSnapshot agora devolve as CHAVES mesmo sem idx válido.
+     Isso garante que os nomes das variáveis apareçam mesmo sem registros no bin. */
+  function pointSnapshot(payload, idx){
+    const s = payload?.series || {};
+    const out = {};
+    const keys = Object.keys(s).sort();
+    for (const k of keys){
+      const arr = s[k];
+      if (!Array.isArray(arr)) continue;
+      if (idx < 0 || idx >= arr.length){
+        out[k] = null; // mantém o nome com valor "—"
+      } else {
+        out[k] = arr[idx];
+      }
+    }
+    return out;
+  }
+
+  function snapshotVerbose(raw){
+    const out = {};
+    const keys = Object.keys(raw).sort();
+    for (const k of keys){
+      out[prettyKeyVerbose(k)] = raw[k];
+    }
+    return out;
+  }
+
+  /* ✅ CORREÇÃO 2: MPPT por source só mostra DC (Vdc/Idc/Pdc).
+     Vac/Iac são AC e NÃO podem aparecer “por MPPT”. */
+  function isMpptSourceName(src){
+    return String(src || "").toUpperCase().includes("|MPPT");
+  }
+
+  function mpptTagFromSource(src){
+    const s = String(src || "");
+    const m = s.match(/(?:\||\b)MPPT\s*([0-9]+)/i);
+    return m ? `MPPT${m[1]}` : "MPPT";
+  }
+
+  function mpptSourceList(payload){
+    const fromRange = payload?.range?.selected_sources;
+    if (Array.isArray(fromRange) && fromRange.length){
+      return fromRange.filter(isMpptSourceName);
+    }
+    const fromSources = payload?.sources?.selected_sources;
+    if (Array.isArray(fromSources) && fromSources.length){
+      return fromSources.filter(isMpptSourceName);
+    }
+    const sbs = payload?.series_by_source;
+    if (sbs && typeof sbs === "object"){
+      return Object.keys(sbs).filter(isMpptSourceName);
+    }
+    return [];
+  }
+
+  /* ✅ CORREÇÃO 3: mostrar os NOMES mesmo sem registros/None/0.
+     Portanto: NÃO filtra por isNullishValue; sempre cria as linhas. */
+  function collectMpptItems(payload, idx){
+    const sbs = payload?.series_by_source;
+    if (!sbs || typeof sbs !== "object") return [];
+
+    const out = [];
+    const mpptSrcs = mpptSourceList(payload);
+
+    for (const src of mpptSrcs){
+      const block = sbs?.[src] || {};
+      const tag = mpptTagFromSource(src);
+      const getAt = (key) => {
+        const arr = block?.[key];
+        if (Array.isArray(arr) && idx >= 0 && idx < arr.length) return arr[idx];
+        return null;
+      };
+
+      const rows = [
+        ["Vdc med [V]", getAt("v_dc_v")],
+        ["Vdc mod [V]", getAt("v_dc_model_v")],
+        ["Idc med [A]", getAt("i_dc_a")],
+        ["Idc mod [A]", getAt("i_dc_model_a")],
+        ["Pdc med [W]", getAt("p_dc_w")],
+        ["Pdc mod [W]", getAt("p_dc_model_w")],
+      ];
+
+      for (const [label, v] of rows){
+        out.push({ k: `${label}@${src}`, v, label: `${tag} — ${label}` });
+      }
+
+      const note = getAt("model_note");
+      if (!isNullishValue(note)) {
+        out.push({ k: `model_note@${src}`, v: note, label: `${tag} — Nota do modelo` });
+      }
+    }
+    return out;
+  }
+
+  function collectMpptDump(payload, idx){
+    const sbs = payload?.series_by_source;
+    if (!sbs || typeof sbs !== "object") return null;
+
+    const mpptSrcs = mpptSourceList(payload);
+
+    const out = {};
+    for (const src of mpptSrcs){
+      const block = sbs?.[src] || {};
+      const tag = mpptTagFromSource(src);
+
+      const getAt = (key) => {
+        const arr = block?.[key];
+        if (Array.isArray(arr) && idx >= 0 && idx < arr.length) return arr[idx];
+        return null;
+      };
+
+      const vdc = getAt("v_dc_v");
+      const idc = getAt("i_dc_a");
+      const pdc = getAt("p_dc_w");
+
+      const vdcN = Number(vdc), idcN = Number(idc);
+      const pEst = (Number.isFinite(vdcN) && Number.isFinite(idcN)) ? (vdcN * idcN) : null;
+
+      out[tag] = {
+        source: src,
+        v_dc_v: vdc,
+        i_dc_a: idc,
+        p_dc_w: pdc,
+        p_dc_est_w: pEst,
+        v_dc_model_v: getAt("v_dc_model_v"),
+        i_dc_model_a: getAt("i_dc_model_a"),
+        p_dc_model_w: getAt("p_dc_model_w"),
+        topology_ok: getAt("topology_ok"),
+        model_note: getAt("model_note"),
+      };
+    }
+
+    return Object.keys(out).length ? out : null;
+  }
+
+  function openDetailDrawer(){
+    const dr = $("detailDrawer");
+    if (!dr) return;
+    dr.classList.add("open");
+    dr.setAttribute("aria-hidden", "false");
+  }
+
+  function closeDetailDrawer(){
+    const dr = $("detailDrawer");
+    if (!dr) return;
+    dr.classList.remove("open");
+    dr.setAttribute("aria-hidden", "true");
+  }
+
+
+  function confidenceLevelPt(level){
+    const m = { very_high: "muito alta", high: "alta", moderate: "moderada", low: "baixa", very_low: "muito baixa" };
+    return m[String(level || "")] || (level || "—");
+  }
+
+  function confidenceReasonText(block){
+    const reasons = Array.isArray(block?.reasons) ? block.reasons.filter(Boolean) : [];
+    return reasons.length ? reasons.join("; ") : "—";
+  }
+
+  function buildConfidenceRows(raw, dumpPoint){
+    const conf = dumpPoint?.confidence || {};
+    const notes = conf.notes || {};
+    return [
+      { label: "Confiabilidade dos dados", value: fmtPct(raw.data_reliability_score), key: "data_reliability_score" },
+      { label: "Nível dos dados", value: confidenceLevelPt(raw.data_reliability_level), key: "data_reliability_level" },
+      { label: "Razões (dados)", value: confidenceReasonText(notes.data_reliability), key: "data_reliability_reasons" },
+      { label: "Confiança da detecção", value: fmtPct(raw.detection_confidence_score), key: "detection_confidence_score" },
+      { label: "Nível da detecção", value: confidenceLevelPt(raw.detection_confidence_level), key: "detection_confidence_level" },
+      { label: "Razões (detecção)", value: confidenceReasonText(notes.detection_confidence), key: "detection_confidence_reasons" },
+      { label: "Confiança do diagnóstico", value: fmtPct(raw.diagnosis_confidence_score), key: "diagnosis_confidence_score" },
+      { label: "Nível do diagnóstico", value: confidenceLevelPt(raw.diagnosis_confidence_level), key: "diagnosis_confidence_level" },
+      { label: "Razões (diagnóstico)", value: confidenceReasonText(notes.diagnosis_confidence), key: "diagnosis_confidence_reasons" },
+      { label: "Estado operativo", value: fmtAny(raw.state_label), key: "state_label" },
+      { label: "Domínio provável", value: fmtAny(raw.domain_label), key: "domain_label" },
+      { label: "Diagnóstico final", value: fmtAny(raw.diagnosis_label), key: "diagnosis_label" },
+      { label: "Evidência direta de rede", value: fmtAny(raw.direct_grid_evidence), key: "direct_grid_evidence" },
+      { label: "Sem injeção sob sol", value: fmtAny(raw.zero_injection_flag), key: "zero_injection_flag" },
+      { label: "Tier de irradiância", value: fmtAny(raw.irradiance_tier), key: "irradiance_tier" },
+    ];
+  }
+
+  function renderKvRows(obj, keys){
+    return keys.map((k) => `<tr><td class="k mono">${prettyKeyCompact(k)}</td><td class="v mono">${fmtAny(obj?.[k])}</td></tr>`).join("");
+  }
+
+  function mergeDefined(baseObj, overrideObj){
+    const out = { ...(baseObj || {}) };
+    const src = overrideObj || {};
+    Object.keys(src).forEach((k) => {
+      const v = src[k];
+      if (v !== undefined && v !== null && !(typeof v === 'number' && !Number.isFinite(v))) out[k] = v;
+    });
+    return out;
+  }
+
+  function pickFirst(...vals){
+    for (const v of vals){
+      if (v !== undefined && v !== null && !(typeof v === 'number' && !Number.isFinite(v))) return v;
+    }
+    return null;
+  }
+
+
+  function pickDumpValue(dumpPoint, fallbackPoint, payload, idx, keys){
+    const list = Array.isArray(keys) ? keys : [keys];
+    for (const k of list){
+      const parts = String(k).split('.');
+      let cur = dumpPoint;
+      for (const part of parts){ cur = cur?.[part]; }
+      if (!isNullishValue(cur)) return cur;
+      cur = fallbackPoint;
+      for (const part of parts){ cur = cur?.[part]; }
+      if (!isNullishValue(cur)) return cur;
+      if (!String(k).includes('.')) {
+        const sv = seriesAt(payload, String(k), idx);
+        if (!isNullishValue(sv)) return sv;
+      }
+    }
+    return null;
+  }
+  function renderCompareTable(tbl, dumpPoint, fallbackPoint, payload, idx){
+    if (!tbl) return;
+    const rows = [
+      ["Potência AC (W)", pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.p_ac_model_w","p_ac_model_w","residuals.p_ac.expected","p_ac_model_w"]), pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.p_ac_w","p_ac_w","residuals.p_ac.measured","p_ac_real_w","p_ac_w"])],
+      ["Potência DC (W)", pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.p_dc_model_w","p_dc_model_w","residuals.p_dc.expected","p_dc_model_w"]), pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.p_dc_w","p_dc_w","residuals.p_dc.measured","p_dc_w"])],
+      ["Tensão DC (V)", pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.v_dc_model_v","v_dc_model_v","residuals.v_dc.expected","v_dc_model_v"]), pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.v_dc_v","v_dc_v","residuals.v_dc.measured","v_dc_v"])],
+      ["Corrente DC (A)", pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.i_dc_model_a","i_dc_model_a","residuals.i_dc.expected","i_dc_model_a"]), pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.i_dc_a","i_dc_a","residuals.i_dc.measured","i_dc_a"])],
+      ["GPOA usada (W/m²)", pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.g_poa_used","g_poa_used","meteo.g_poa_used","g_poa"]), null],
+      ["Tcell (°C)", pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.tcell_c","tcell_c"]), null],
+    ];
+    tbl.innerHTML = `<tr><th>Variável</th><th>Modelo</th><th>Medido</th></tr>` + rows.map(([label, m, o]) => `<tr><td class="k mono">${label}</td><td class="v mono">${fmtAny(m)}</td><td class="v mono">${fmtAny(o)}</td></tr>`).join("");
+  }
+
+  function pickDayIrradianceSeries(series){
+    const candidates = [
+      ["g_poa_used", "Irradiância POA usada (W/m²)"],
+      ["g_poa", "Irradiância POA (W/m²)"],
+      ["g_poa_wm2", "Irradiância POA (W/m²)"],
+      ["gpoa", "Irradiância POA (W/m²)"],
+      ["gti", "GTI (W/m²)"],
+      ["ghi", "GHI (W/m²)"],
+    ];
+    for (const [key, label] of candidates){
+      const arr = series?.[key];
+      if (Array.isArray(arr) && arr.some((v) => Number.isFinite(Number(v)))){
+        return { key, label, values: arr };
+      }
+    }
+    return { key: null, label: "Irradiância (W/m²)", values: [] };
+  }
+
+  function renderSelectedDayCurve(payload, cellObj){
+    const canvasPower = $("chartDetailDay");
+    const canvasIrr = $("chartDetailIrrDay");
+    if ((!canvasPower && !canvasIrr) || !window.Chart) return;
+    if (chartDetailDay){ chartDetailDay.destroy(); chartDetailDay = null; }
+    if (chartDetailIrrDay){ chartDetailIrrDay.destroy(); chartDetailIrrDay = null; }
+    if (chartDetailIrrDay){ chartDetailIrrDay.destroy(); chartDetailIrrDay = null; }
+    const dayKey = cellObj?.day || cellObj?.ds || null;
+    if (!payload || !cellObj || !dayKey) return;
+
+    const s = payload.series || {};
+    const labels = s.t_local || [];
+    const days = s.hm_day_local || [];
+    const prAll = s.p_ac_real_w || s.p_ac_w || [];
+    const pmAll = s.p_ac_model_w || [];
+    const irrSeries = pickDayIrradianceSeries(s);
+    const irrAll = irrSeries.values || [];
+
+    const idxs = [];
+    for (let i=0; i<days.length; i++) if (days[i] === dayKey) idxs.push(i);
+    if (!idxs.length) return;
+
+    const localLabels = idxs.map(i => {
+      const iso = String(labels[i] || "");
+      return iso.length >= 16 ? iso.slice(11,16) : iso;
+    });
+    const pr = idxs.map(i => prAll[i]);
+    const pm = idxs.map(i => pmAll[i]);
+    const irr = idxs.map(i => irrAll[i]);
+    const selectedIndex = idxs.indexOf(cellObj.idx);
+    const pointR = localLabels.map((_,k)=>k===selectedIndex?4:0);
+    const pointHoverR = localLabels.map((_,k)=>k===selectedIndex?6:3);
+
+    if (canvasPower){
+      chartDetailDay = new Chart(canvasPower, {
+        type: "line",
+        data: {
+          labels: localLabels,
+          datasets: [
+            { label: "P AC real (W)", data: pr, borderWidth: 2, pointRadius: pointR, pointHoverRadius: pointHoverR, tension: 0.15 },
+            { label: "P AC modelo (W)", data: pm, borderWidth: 2, pointRadius: pointR, pointHoverRadius: pointHoverR, tension: 0.15 },
+          ]
+        },
+        options: chartCommonOptions(),
+      });
+    }
+
+    if (canvasIrr && irr.some((v) => Number.isFinite(Number(v)))){
+      const irrOpts = chartCommonOptions();
+      irrOpts.scales = {
+        x: irrOpts.scales?.x || {},
+        y: {
+          ...(irrOpts.scales?.y || {}),
+          title: {
+            display: true,
+            text: irrSeries.label || "Irradiância (W/m²)",
+            color: "rgba(233,246,255,.88)",
+            font: { size: 12, weight: "700" }
+          }
+        }
+      };
+      chartDetailIrrDay = new Chart(canvasIrr, {
+        type: "line",
+        data: {
+          labels: localLabels,
+          datasets: [
+            {
+              label: irrSeries.label || "Irradiância (W/m²)",
+              data: irr,
+              borderWidth: 2,
+              tension: 0.15,
+              pointRadius: pointR,
+              pointHoverRadius: pointHoverR,
+              borderColor: "#ffd25a",
+              backgroundColor: "rgba(255, 210, 90, 0.22)",
+              pointBackgroundColor: localLabels.map((_,k)=>k===selectedIndex?"#ffd25a":"rgba(255, 210, 90, 0.22)"),
+              pointBorderColor: localLabels.map((_,k)=>k===selectedIndex?"#fff3b0":"#ffd25a"),
+              pointBorderWidth: localLabels.map((_,k)=>k===selectedIndex?2:1),
+              spanGaps: true,
+            },
+          ]
+        },
+        options: irrOpts,
+      });
+    }
+  }
+
+  function buildSeriesDumpFallback(payload, idx){
+    if (!payload || !Number.isInteger(idx) || idx < 0) return {};
+    return {
+      confidence: {
+        data_reliability_score: seriesAt(payload, "data_reliability_score", idx),
+        data_reliability_level: seriesAt(payload, "data_reliability_level", idx),
+        detection_confidence_score: seriesAt(payload, "detection_confidence_score", idx),
+        detection_confidence_level: seriesAt(payload, "detection_confidence_level", idx),
+        diagnosis_confidence_score: seriesAt(payload, "diagnosis_confidence_score", idx),
+        diagnosis_confidence_level: seriesAt(payload, "diagnosis_confidence_level", idx),
+      },
+      detection: {
+        valid_period: seriesAt(payload, "valid_period", idx),
+        stable_sky: seriesAt(payload, "stable_sky", idx),
+        anomaly: seriesAt(payload, "anomaly", idx),
+        anomaly_power: seriesAt(payload, "anomaly_power", idx),
+        residual_trigger: seriesAt(payload, "residual_trigger", idx),
+        residual_event_score: seriesAt(payload, "residual_event_score", idx),
+        combined_event_score: seriesAt(payload, "combined_event_score", idx),
+        ewma_z: seriesAt(payload, "ewma_z", idx),
+        cusum_score: seriesAt(payload, "cusum_score", idx),
+        irradiance_tier: seriesAt(payload, "irradiance_tier", idx),
+        rca_code: seriesAt(payload, "code", idx),
+        rca_label: seriesAt(payload, "label", idx),
+      },
+      chosen_total: {
+        p_ac_w: seriesAt(payload, "p_ac_real_w", idx),
+        p_dc_w: seriesAt(payload, "p_dc_w", idx),
+        p_ac_mppt_sum_w: seriesAt(payload, "p_ac_mppt_sum_w", idx),
+        p_ac_agg_w: seriesAt(payload, "p_ac_agg_w", idx),
+        v_dc_v: seriesAt(payload, "v_dc_v", idx),
+        i_dc_a: seriesAt(payload, "i_dc_a", idx),
+        v_ac_v: seriesAt(payload, "v_ac_v", idx),
+        i_ac_a: seriesAt(payload, "i_ac_a", idx),
+        freq_hz: seriesAt(payload, "freq_hz", idx),
+        inv_coverage: seriesAt(payload, "inv_coverage", idx),
+        flag_inv_missing_all: seriesAt(payload, "flag_inv_missing_all", idx),
+        flag_inv_missing_partial: seriesAt(payload, "flag_inv_missing_partial", idx),
+      },
+      model: {
+        g_poa_used: seriesAt(payload, "g_poa", idx),
+        tcell_c: seriesAt(payload, "tcell_c", idx),
+        p_ac_model_w: seriesAt(payload, "p_ac_model_w", idx),
+        p_dc_model_w: seriesAt(payload, "p_dc_model_w", idx),
+        v_dc_model_v: seriesAt(payload, "v_dc_model_v", idx),
+        i_dc_model_a: seriesAt(payload, "i_dc_model_a", idx),
+        mismatch_rel: seriesAt(payload, "mismatch_rel", idx),
+        valid_model: seriesAt(payload, "valid_model", idx),
+      },
+      meteo: {
+        g_poa_used: seriesAt(payload, "g_poa", idx),
+        gti: seriesAt(payload, "gti", idx),
+        ghi: seriesAt(payload, "ghi", idx),
+        dni: seriesAt(payload, "dni", idx),
+        dhi: seriesAt(payload, "dhi", idx),
+        temp_air: seriesAt(payload, "temp_air", idx),
+        wind_speed: seriesAt(payload, "wind_speed", idx),
+        rh: seriesAt(payload, "rh", idx),
+        meteo_qc_score: seriesAt(payload, "meteo_qc_score", idx),
+        flag_meteo_missing: seriesAt(payload, "flag_meteo_missing", idx),
+        flag_meteo_low_confidence: seriesAt(payload, "flag_meteo_low_confidence", idx),
+        flag_meteo_interpolated: seriesAt(payload, "flag_meteo_interpolated", idx),
+        flag_meteo_outlier: seriesAt(payload, "flag_meteo_outlier", idx),
+        flag_meteo_artifact: seriesAt(payload, "flag_meteo_artifact", idx),
+      },
+      residuals: {
+        p_ac: { measured: seriesAt(payload, "p_ac_real_w", idx), expected: seriesAt(payload, "p_ac_model_w", idx), abs: seriesAt(payload, "p_ac_residual_abs", idx), rel: seriesAt(payload, "p_ac_residual_rel", idx) },
+        p_dc: { measured: seriesAt(payload, "p_dc_w", idx), expected: seriesAt(payload, "p_dc_model_w", idx), abs: seriesAt(payload, "p_dc_residual_abs", idx), rel: seriesAt(payload, "p_dc_residual_rel", idx) },
+        v_dc: { measured: seriesAt(payload, "v_dc_v", idx), expected: seriesAt(payload, "v_dc_model_v", idx), abs: seriesAt(payload, "v_dc_residual_abs", idx), rel: seriesAt(payload, "v_dc_residual_rel", idx) },
+        i_dc: { measured: seriesAt(payload, "i_dc_a", idx), expected: seriesAt(payload, "i_dc_model_a", idx), abs: seriesAt(payload, "i_dc_residual_abs", idx), rel: seriesAt(payload, "i_dc_residual_rel", idx) },
+      },
+    };
+  }
+
+  function renderValidationDashboard(payload){
+    const summary = payload?.summary?.validation || {};
+    const coverage = summary?.coverage || {};
+    const eventMetrics = summary?.event_metrics || {};
+    const sampleMetrics = summary?.sample_metrics || {};
+
+    const setTxt = (id, value) => { const el = $(id); if (el) el.textContent = value; };
+    setTxt("valEventPrecision", fmtPct(eventMetrics.precision ?? null, 1));
+    setTxt("valEventRecall", fmtPct(eventMetrics.recall ?? null, 1));
+    setTxt("valEventF1", fmtPct(eventMetrics.f1 ?? null, 1));
+    setTxt("valEventFarDay", fmtN(eventMetrics.false_alarm_events_per_day ?? null, 2));
+    setTxt("valSamplePrecision", fmtPct(sampleMetrics.precision ?? null, 1));
+    setTxt("valSampleRecall", fmtPct(sampleMetrics.recall ?? null, 1));
+
+    const cov = $("validationCoverageText");
+    if (cov){
+      cov.innerHTML = `
+        <div class="validation-row">
+          <span class="pill info">Eventos previstos: <span class="mono">${fmtAny(coverage.predicted_events)}</span></span>
+          <span class="pill ok">Eventos reais confirmados: <span class="mono">${fmtAny(coverage.truth_events_confirmed)}</span></span>
+          <span class="pill neutral">Janelas normais: <span class="mono">${fmtAny(coverage.truth_windows_normal)}</span></span>
+          <span class="pill warn">Incertos: <span class="mono">${fmtAny(coverage.truth_events_uncertain)}</span></span>
+          <span class="pill crit">Descartados: <span class="mono">${fmtAny(coverage.truth_events_dismissed)}</span></span>
+          <span class="pill neutral">Dias rotulados: <span class="mono">${fmtAny(coverage.labeled_days)}</span></span>
+          <span class="pill neutral">Bins rotulados: <span class="mono">${fmtAny(coverage.labeled_bins)}</span></span>
+        </div>`;
+    }
+
+    const delay = $("validationDelayText");
+    if (delay){
+      delay.innerHTML = `
+        <div class="validation-row tight">
+          <span class="pill neutral">Delay médio: <span class="mono">${fmtN(eventMetrics.mean_detection_delay_min ?? null, 1)} min</span></span>
+          <span class="pill neutral">Delay mediano: <span class="mono">${fmtN(eventMetrics.median_detection_delay_min ?? null, 1)} min</span></span>
+          <span class="pill neutral">P90 delay: <span class="mono">${fmtN(eventMetrics.p90_detection_delay_min ?? null, 1)} min</span></span>
+          <span class="pill crit">FA evento/dia: <span class="mono">${fmtN(eventMetrics.false_alarm_events_per_day ?? null, 2)}</span></span>
+          <span class="pill crit">FA evento/semana: <span class="mono">${fmtN(eventMetrics.false_alarm_events_per_week ?? null, 2)}</span></span>
+          <span class="pill crit">FA bin/dia: <span class="mono">${fmtN(sampleMetrics.false_alarm_bins_per_day ?? null, 2)}</span></span>
+        </div>`;
+    }
+
+    const confWrap = $("validationConfusionWrap");
+    if (confWrap) confWrap.innerHTML = renderMatrixTable(summary?.event_confusion_matrix || summary?.confusion_matrix || {});
+    const irrWrap = $("validationIrradianceWrap");
+    if (irrWrap) irrWrap.innerHTML = renderMetricRows(summary?.by_irradiance_bucket || {}, "irr");
+    const metWrap = $("validationMeteoWrap");
+    if (metWrap) metWrap.innerHTML = renderMetricRows(summary?.by_meteo_quality || {}, "meteo");
+
+    const listBox = $("validationEventsList");
+    if (listBox){
+      const rows = getPredEventList(payload);
+      if (!rows.length){
+        listBox.innerHTML = `<div class="validation-empty">Nenhum evento previsto no intervalo atual.</div>`;
+      } else {
+        listBox.innerHTML = rows.map((ev)=>{
+          const reviewState = String(ev?.review_state || ev?.known_vs_unknown || "pending");
+          return `
+            <div class="validation-event-item">
+              <div class="validation-row tight">
+                <span class="pill ${pillClassForState(reviewState)}">${escHtml(reviewState)}</span>
+                <span class="pill neutral mono">id=${fmtAny(ev?.id)}</span>
+                <span class="pill info">${escHtml(ev?.match_type || "—")}</span>
+              </div>
+              <div><b>Previsto:</b> <span class="mono">${escHtml(ev?.pred_label || ev?.event_label_prelim || "—")}</span></div>
+              <div><b>Final:</b> <span class="mono">${escHtml(ev?.final_label || "—")}</span></div>
+              <div><b>Verdade associada:</b> <span class="mono">${escHtml(ev?.matched_truth_label || "—")}</span></div>
+              <div class="mono">${escHtml(ev?.ts_start_utc || "—")} → ${escHtml(ev?.ts_end_utc || "—")}</div>
+            </div>`;
+        }).join("");
+      }
+    }
+  }
+
+  function renderValidationPanel(validationBlock, cellObj, payload){
+    const predCtx = resolvePredEventContext(payload, cellObj, validationBlock || {});
+    const predEvent = predCtx?.predEvent || null;
+    const effectivePredEventId = predCtx?.predEventId;
+    const truthDefaults = buildTruthDefaults(payload, cellObj, validationBlock || {});
+    const reviewState = String(validationBlock?.pred_event_review_state || predEvent?.review_state || predEvent?.known_vs_unknown || "pending");
+    const finalLabel = String(validationBlock?.pred_event_final_label || predEvent?.final_label || validationBlock?.pred_event_label_prelim || predEvent?.pred_label || "");
+    const truthLabel = String(validationBlock?.truth_label || finalLabel || "");
+    const truthState = String(validationBlock?.bin_truth_state === "normal" ? "normal" : (validationBlock?.truth_event_id ? "confirmed" : "confirmed"));
+    const predExists = !!parsePositiveInt(effectivePredEventId);
+
+    const predInfo = predExists ? `
+      <div class="validation-row tight">
+        <span class="pill info mono">Evento previsto #${fmtAny(effectivePredEventId)}</span>
+        <span class="pill ${pillClassForState(reviewState)}">${escHtml(reviewState)}</span>
+        <span class="pill neutral">status=${escHtml(validationBlock?.pred_event_status || predEvent?.status || "—")}</span>
+        ${predCtx?.source === "summary_inference" ? `<span class="pill warn">vinculado por inferência temporal</span>` : ``}
+      </div>
+      <div class="validation-help mono">${escHtml(predEvent?.ts_start_utc || "—")} → ${escHtml(predEvent?.ts_end_utc || "—")}</div>
+      <table class="kv">
+        <tr><td class="k">Rótulo preliminar</td><td class="v mono">${escHtml(validationBlock?.pred_event_label_prelim || predEvent?.event_label_prelim || "—")}</td></tr>
+        <tr><td class="k">Rótulo final salvo</td><td class="v mono">${escHtml(validationBlock?.pred_event_final_label || predEvent?.final_label || "—")}</td></tr>
+        <tr><td class="k">Match atual</td><td class="v mono">${escHtml(predEvent?.match_type || "—")}</td></tr>
+      </table>` : `
+      <div class="validation-banner warn">Este bin não veio associado a um <b>FaultEvent</b> previsto no overlay do backend. Se houver um evento compatível em <code>summary.events</code>, a interface tentará vinculá-lo automaticamente; caso contrário, você ainda pode registrar um evento real manualmente logo abaixo.</div>`;
+
+    const truthInfo = `
+      <div class="validation-row tight" style="margin-top:.6rem;">
+        <span class="pill ${pillClassForState(validationBlock?.bin_truth_state)}">bin truth=${escHtml(validationBlock?.bin_truth_state || "unlabeled")}</span>
+        <span class="pill neutral mono">truth_event_id=${fmtAny(validationBlock?.truth_event_id)}</span>
+      </div>
+      <div class="validation-help">Rótulo de verdade atual para o bin selecionado: <span class="mono">${escHtml(validationBlock?.bin_truth_label || "—")}</span></div>`;
+
+    return `
+      <div class="validation-block">
+        <h4 style="margin-top:0;">Estado atual da validação</h4>
+        ${predInfo}
+        ${truthInfo}
+      </div>
+      <div style="height:.8rem"></div>
+      <div class="validation-block">
+        <h4 style="margin-top:0;">Revisar evento previsto</h4>
+        <div class="validation-help">Use esta ação quando o sistema gerou um <b>FaultEvent</b> para o bin. A revisão atualiza o evento previsto e, quando aplicável, cria/atualiza automaticamente o ground truth associado.</div>
+        <div class="form-grid" style="margin-top:.75rem;">
+          <div class="form-field">
+            <label for="reviewState">Estado da revisão</label>
+            <select id="reviewState" class="select-glass" ${predExists ? "" : "disabled"}>
+              <option value="pending" ${reviewState === "pending" ? "selected" : ""}>pending</option>
+              <option value="confirmed" ${reviewState === "confirmed" ? "selected" : ""}>confirmed</option>
+              <option value="dismissed" ${reviewState === "dismissed" ? "selected" : ""}>dismissed</option>
+              <option value="uncertain" ${reviewState === "uncertain" ? "selected" : ""}>uncertain</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="reviewFinalLabel">Rótulo final</label>
+            <select id="reviewFinalLabel" class="select-glass mono" ${predExists ? "" : "disabled"}>
+              ${buildLabelOptions(finalLabel, { allowBlank:true, preferred:[validationBlock?.pred_event_label_prelim, predEvent?.event_label_prelim, predEvent?.pred_label] })}
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="reviewAnnotationSource">Fonte da anotação</label>
+            <select id="reviewAnnotationSource" class="select-glass" ${predExists ? "" : "disabled"}>
+              <option value="specialist_review" selected>specialist_review</option>
+              <option value="client_report_plus_specialist_review">client_report_plus_specialist_review</option>
+              <option value="maintenance_ticket">maintenance_ticket</option>
+              <option value="utility_confirmation">utility_confirmation</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="reviewAnnotationConfidence">Confiança</label>
+            <select id="reviewAnnotationConfidence" class="select-glass" ${predExists ? "" : "disabled"}>
+              <option value="A">A</option>
+              <option value="B" selected>B</option>
+              <option value="C">C</option>
+            </select>
+          </div>
+          <div class="form-field full">
+            <label for="reviewNotes">Notas da revisão</label>
+            <textarea id="reviewNotes" class="textarea-glass" ${predExists ? "" : "disabled"}></textarea>
+          </div>
+        </div>
+        <div class="validation-actions" style="margin-top:.75rem;">
+          <button type="button" class="btn-glow" id="btnSaveReview" ${predExists ? "" : "disabled"}>Salvar revisão</button>
+        </div>
+      </div>
+      <div style="height:.8rem"></div>
+      <div class="validation-block">
+        <h4 style="margin-top:0;">Registrar / atualizar evento real (ground truth)</h4>
+        <div class="validation-help">Use esta seção para registrar um evento real confirmado, uma janela normal ou um evento incerto, mesmo que o sistema não tenha detectado nada.</div>
+        <div class="form-grid" style="margin-top:.75rem;">
+          <div class="form-field">
+            <label for="truthState">Truth state</label>
+            <select id="truthState" class="select-glass">
+              <option value="confirmed" ${truthState === "confirmed" ? "selected" : ""}>confirmed</option>
+              <option value="normal" ${truthState === "normal" ? "selected" : ""}>normal</option>
+              <option value="uncertain" ${truthState === "uncertain" ? "selected" : ""}>uncertain</option>
+              <option value="dismissed" ${truthState === "dismissed" ? "selected" : ""}>dismissed</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="truthLabel">Truth label</label>
+            <select id="truthLabel" class="select-glass mono">
+              ${buildLabelOptions(truthLabel, { allowBlank:false, preferred:[truthLabel, finalLabel, validationBlock?.truth_label, validationBlock?.pred_event_label_prelim, predEvent?.event_label_prelim, predEvent?.pred_label] })}
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="truthStartUtc">Início UTC</label>
+            <input id="truthStartUtc" class="input-glass mono" type="text" value="${escHtml(truthDefaults.startUtc)}" placeholder="2026-03-18T14:00:00Z">
+          </div>
+          <div class="form-field">
+            <label for="truthEndUtc">Fim UTC</label>
+            <input id="truthEndUtc" class="input-glass mono" type="text" value="${escHtml(truthDefaults.endUtc)}" placeholder="2026-03-18T15:00:00Z">
+          </div>
+          <div class="form-field">
+            <label for="truthAnnotationSource">Fonte da anotação</label>
+            <select id="truthAnnotationSource" class="select-glass">
+              <option value="specialist_review" selected>specialist_review</option>
+              <option value="client_report_plus_specialist_review">client_report_plus_specialist_review</option>
+              <option value="maintenance_ticket">maintenance_ticket</option>
+              <option value="utility_confirmation">utility_confirmation</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="truthAnnotationConfidence">Confiança</label>
+            <select id="truthAnnotationConfidence" class="select-glass">
+              <option value="A">A</option>
+              <option value="B" selected>B</option>
+              <option value="C">C</option>
+            </select>
+          </div>
+          <div class="form-field full">
+            <label for="truthNotes">Notas do evento real</label>
+            <textarea id="truthNotes" class="textarea-glass"></textarea>
+          </div>
+        </div>
+        <div class="validation-actions" style="margin-top:.75rem;">
+          <button type="button" class="btn-glow secondary" id="btnSaveTruthEvent">Salvar evento real</button>
+        </div>
+      </div>`;
+  }
+
+  function bindValidationActions(payload, cellObj, validationBlock){
+    const page = $("fddPage");
+    const reviewUrl = page?.dataset?.reviewApi;
+    const truthUrl = page?.dataset?.truthApi;
+    const selectedDump = cellObj?.dumpPoint || payload?.dump_by_tkey?.[cellObj?.tkey] || {};
+    const predCtx = resolvePredEventContext(payload, cellObj, validationBlock || {});
+
+    $("btnSaveReview")?.addEventListener("click", async ()=>{
+      const faultEventId = parsePositiveInt(predCtx?.predEventId);
+      if (!faultEventId){
+        alert("Este bin não possui FaultEvent previsto para revisão.");
+        return;
+      }
+      try{
+        await postJson(reviewUrl, {
+          fault_event_id: faultEventId,
+          review_state: $("reviewState")?.value || "pending",
+          final_label: $("reviewFinalLabel")?.value || "",
+          annotation_source: $("reviewAnnotationSource")?.value || "specialist_review",
+          annotation_confidence: $("reviewAnnotationConfidence")?.value || "B",
+          notes: $("reviewNotes")?.value || "",
+        });
+        await runFdd({ save:false, preserveSelection:true });
+        setStatus(true, "Revisão salva com sucesso.");
+        setTimeout(()=>setStatus(false), 2200);
+      }catch(err){
+        alert(`Erro ao salvar revisão: ${String(err.message || err)}`);
+      }
+    });
+
+    const truthStateEl = $("truthState");
+    const truthLabelEl = $("truthLabel");
+    truthStateEl?.addEventListener("change", ()=>{
+      const state = String(truthStateEl.value || "confirmed");
+      if (!truthLabelEl) return;
+      if (state === "normal"){
+        truthLabelEl.value = "normal";
+      } else if (state === "dismissed" && (!truthLabelEl.value || truthLabelEl.value === "normal")){
+        truthLabelEl.value = "unknown";
+      }
+    });
+
+    $("btnSaveTruthEvent")?.addEventListener("click", async ()=>{
+      try{
+        const body = {
+          plant_id: Number($("plant_id")?.value || 0),
+          fault_event_id: parsePositiveInt(predCtx?.predEventId) || undefined,
+          ts_start_utc: $("truthStartUtc")?.value || "",
+          ts_end_utc: $("truthEndUtc")?.value || "",
+          truth_state: $("truthState")?.value || "confirmed",
+          truth_label: $("truthLabel")?.value || "unknown",
+          annotation_source: $("truthAnnotationSource")?.value || "specialist_review",
+          annotation_confidence: $("truthAnnotationConfidence")?.value || "B",
+          notes: $("truthNotes")?.value || "",
+          source_oper: String(payload?.sources?.selected_source || ""),
+          source_meteo: String(payload?.sources?.source_meteo || ""),
+          detector_version: String(payload?.version_summary?.detector_version || "mismatch_runtime_v1"),
+        };
+        if (!body.ts_start_utc || !body.ts_end_utc) throw new Error("Informe início e fim UTC do evento real.");
+        await postJson(truthUrl, body);
+        await runFdd({ save:false, preserveSelection:true });
+        setStatus(true, "Evento real salvo com sucesso.");
+        setTimeout(()=>setStatus(false), 2200);
+      }catch(err){
+        alert(`Erro ao salvar evento real: ${String(err.message || err)}`);
+      }
+    });
+  }
+
+  function setDrawerTab(name){
+    document.querySelectorAll('.drawer-tab-btn').forEach((el)=>el.classList.toggle('active', el.dataset.tab===name));
+    document.querySelectorAll('.drawer-tab-panel').forEach((el)=>el.classList.toggle('active', el.dataset.panel===name));
+  }
+
+  function renderDetail(payload, cellObj){
+    const meta = $("detailMeta");
+    const tblAll = $("detailAll");
+    const tblMppt = $("detailMppt");
+    const tblMeteo = $("detailMeteo");
+    const tblConf = $("detailConfidence");
+    const tblDet = $("detailDetection");
+    const tblAC = $("detailAC");
+    const tblCompare = $("detailCompare");
+    const dump = $("detailDump");
+    const meteoHealth = $("detailMeteoHealth");
+    const detailValidation = $("detailValidation");
+
+    if (!cellObj || !payload){
+      if (meta) meta.textContent = '—';
+      [tblAll,tblMppt,tblMeteo,tblConf,tblDet,tblAC,tblCompare].forEach((el)=>{ if(el) el.innerHTML=''; });
+      if (dump) dump.textContent = '{}';
+      if (meteoHealth) meteoHealth.innerHTML = '';
+      if (detailValidation) detailValidation.innerHTML = '';
+      if (chartDetailDay){ chartDetailDay.destroy(); chartDetailDay = null; }
+      if (chartDetailIrrDay){ chartDetailIrrDay.destroy(); chartDetailIrrDay = null; }
+      closeDetailDrawer();
+      return;
+    }
+
+    const idx = Number.isInteger(cellObj?.idx) ? cellObj.idx : -1;
+    const ds = cellObj?.day || cellObj?.ds || '—';
+    const ts = cellObj?.ts || binTimeStr(cellObj?.minute) || '—';
+    const fallbackPoint = buildSeriesDumpFallback(payload, idx) || {};
+    const dumpPoint = cellObj?.dumpPoint || payload?.dump_by_tkey?.[cellObj?.tkey] || fallbackPoint;
+    const clsTxt = cellObj?.cls || 'none';
+    const tsLocal = dumpPoint?.ts_local || cellObj?.exact_ts_local || '—';
+    const tsUtc = dumpPoint?.ts_utc || '—';
+    if (meta) meta.textContent = `Data/hora local: ${fmtAny(tsLocal)} • UTC: ${fmtAny(tsUtc)} • classe=${clsTxt} • razão=${cellObj?.reason || '—'} • idx=${idx >= 0 ? idx : '—'}`;
+
+    const confBlock = mergeDefined(fallbackPoint?.confidence || {}, dumpPoint?.confidence || {});
+    const detBlock = mergeDefined(fallbackPoint?.detection || {}, dumpPoint?.detection || {});
+    const meteoBlock = mergeDefined(fallbackPoint?.meteo || {}, dumpPoint?.meteo || {});
+    const acBlock = mergeDefined(fallbackPoint?.chosen_total || {}, dumpPoint?.chosen_total || {});
+    const modelBlock = mergeDefined(fallbackPoint?.model || {}, dumpPoint?.model || {});
+    const residualBlock = mergeDefined(fallbackPoint?.residuals || {}, dumpPoint?.residuals || {});
+    const validationBlock = mergeDefined(fallbackPoint?.validation || {}, dumpPoint?.validation || {});
+    validationBlock.selected_ts_utc = dumpPoint?.ts_utc || '';
+    // flat fallbacks adicionais
+    detBlock.ewma_z = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.ewma_z","ewma_z"]);
+    detBlock.cusum_score = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.cusum_score","cusum_score"]);
+    detBlock.residual_event_score = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.residual_event_score","residual_event_score"]);
+    detBlock.combined_event_score = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.combined_event_score","combined_event_score"]);
+    detBlock.rca_code = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.rca_code","rca_code","code"]);
+    detBlock.rca_label = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.rca_label","rca_label","label"]);
+    acBlock.p_ac_w = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.p_ac_w","p_ac_w","p_ac_real_w","p_ac_w","p_ac_mppt_sum_w","p_ac_agg_w"]);
+    acBlock.v_ac_v = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.v_ac_v","v_ac_v"]);
+    acBlock.i_ac_a = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.i_ac_a","i_ac_a"]);
+    acBlock.freq_hz = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.freq_hz","freq_hz"]);
+    modelBlock.v_dc_model_v = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.v_dc_model_v","v_dc_model_v","residuals.v_dc.expected","v_dc_model_v"]);
+    modelBlock.i_dc_model_a = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.i_dc_model_a","i_dc_model_a","residuals.i_dc.expected","i_dc_model_a"]);
+    modelBlock.p_ac_model_w = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.p_ac_model_w","p_ac_model_w","residuals.p_ac.expected","p_ac_model_w"]);
+    modelBlock.p_dc_model_w = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.p_dc_model_w","p_dc_model_w","residuals.p_dc.expected","p_dc_model_w"]);
+    modelBlock.g_poa_used = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.g_poa_used","g_poa_used","meteo.g_poa_used","g_poa"]);
+    modelBlock.tcell_c = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.tcell_c","tcell_c"]);
+
+    const raw = {};
+    if (acBlock && typeof acBlock === 'object') Object.assign(raw, acBlock);
+    if (meteoBlock && typeof meteoBlock === 'object') Object.assign(raw, meteoBlock);
+    if (modelBlock && typeof modelBlock === 'object') Object.assign(raw, modelBlock);
+
+    const sourceMeteo = payload?.sources?.source_meteo || dumpPoint?.source_meteo || '—';
+    const meteoSummary = meteoHealthSummary({ ...raw, ...meteoBlock }, sourceMeteo);
+    renderMeteoHealth(meteoHealth, meteoSummary);
+
+    if (tblMppt) {
+      const mpptItems = collectMpptItems(payload, idx);
+      tblMppt.innerHTML = (mpptItems.length ? mpptItems : [{label:'—', v:'—'}]).map((it)=>`<tr><td class="k mono">${String(it.label)}</td><td class="v mono">${fmtAny(it.v)}</td></tr>`).join('');
+    }
+    if (tblMeteo) tblMeteo.innerHTML = renderKvRows(meteoBlock, ['g_poa_used','ghi','dni','dhi','temp_air','wind_speed','rh','meteo_qc_score','flag_meteo_missing','flag_meteo_low_confidence','flag_meteo_interpolated','flag_meteo_outlier','flag_meteo_artifact']);
+    if (tblConf) tblConf.innerHTML = renderKvRows(confBlock, ['data_reliability_score','data_reliability_level','detection_confidence_score','detection_confidence_level','diagnosis_confidence_score','diagnosis_confidence_level']);
+    if (tblDet) tblDet.innerHTML = renderKvRows(detBlock, ['valid_period','stable_sky','anomaly','anomaly_power','residual_trigger','residual_event_score','combined_event_score','ewma_z','cusum_score','irradiance_tier','rca_code','rca_label']);
+    if (tblAC) tblAC.innerHTML = renderKvRows(acBlock, ['p_ac_w','p_ac_mppt_sum_w','p_ac_agg_w','v_ac_v','i_ac_a','freq_hz','inv_coverage','flag_inv_missing_all','flag_inv_missing_partial']);
+    renderCompareTable(tblCompare, { ...dumpPoint, chosen_total: acBlock, meteo: meteoBlock, model: modelBlock, residuals: residualBlock }, fallbackPoint, payload, idx);
+
+    if (tblAll){
+      const baseItems = Object.entries(raw).map(([k,v]) => ({ k, v, label: prettyKeyCompact(k) }));
+      baseItems.sort((a,b) => (String(a.label).localeCompare(String(b.label)) || String(a.k).localeCompare(String(b.k))));
+      tblAll.innerHTML = (baseItems.length ? baseItems : [{label:'—',v:'—'}]).map((it)=>`<tr><td class="k mono">${String(it.label)}</td><td class="v mono">${fmtAny(it.v)}</td></tr>`).join('');
+    }
+
+    const dumpObj = snapshotVerbose(raw);
+    dumpObj.__confidence = confBlock;
+    dumpObj.__detection = detBlock;
+    dumpObj.__model = modelBlock;
+    dumpObj.__residuals = residualBlock;
+    dumpObj.__mppt_by_source = collectMpptDump(payload, idx);
+    dumpObj.__heatmap = { day: ds, time_bin: ts, dt_minutes: hmState.dtm, has_any: !!cellObj.has_any, idx: (idx >= 0 ? idx : null), has_oper: !!cellObj.has_oper, class: clsTxt, reason: cellObj.reason };
+    hmState.selectedSnapshot = dumpObj;
+    if (dump) dump.textContent = JSON.stringify(dumpObj, null, 2);
+    if (detailValidation){
+      detailValidation.innerHTML = renderValidationPanel(validationBlock, { ...cellObj, dumpPoint }, payload);
+      bindValidationActions(payload, { ...cellObj, dumpPoint }, validationBlock);
+    }
+    renderSelectedDayCurve(payload, cellObj);
+    setDrawerTab(document.querySelector('.drawer-tab-btn.active')?.dataset.tab || 'mppt');
+    openDetailDrawer();
+  }
+
+  function clearSelection(){
+    hmState.selectedKey = null;
+    hmState.selectedSnapshot = null;
+    if (chartDetailDay){ chartDetailDay.destroy(); chartDetailDay = null; }
+    if (chartDetailIrrDay){ chartDetailIrrDay.destroy(); chartDetailIrrDay = null; }
+    renderDetail(null, null);
+    drawHeatmapCanvas();
+  }
+
+  function bindHeatmapHoverAndClick(){
+    const canvas = $("hmCanvas");
+    const tip = $("hmTip");
+    if (!canvas || canvas.__bound) return;
+    canvas.__bound = true;
+
+    const hitTest = (ev) => {
+      if (!hmState.geo) return null;
+      const r = canvas.getBoundingClientRect();
+      const sx = canvas.width / Math.max(1, r.width);
+      const sy = canvas.height / Math.max(1, r.height);
+      const x = (ev.clientX - r.left) * sx;
+      const y = (ev.clientY - r.top)  * sy;
+
+      const { pad, topH, leftW, cell, gap, days, nBins, dtm } = hmState.geo;
+      const gx = x - (pad + leftW);
+      const gy = y - (pad + topH);
+
+      const stride = (cell + gap);
+      const ti = Math.floor(gx / stride);
+      const di = Math.floor(gy / stride);
+
+      if (ti < 0 || ti >= nBins || di < 0 || di >= days.length) return null;
+      const ds = days[di];
+      const minutes = ti*dtm;
+      const ts = binTimeStr(minutes);
+      const key = `${di}|${ti}`;
+      return { di, ti, ds, ts, key };
+    };
+
+    canvas.addEventListener("mousemove", (ev) => {
+      const h = hitTest(ev);
+      if (!h){ if (tip) tip.textContent = ""; return; }
+
+      const obj = hmState.cell.get(h.key);
+      if (!obj){
+        if (tip) tip.textContent = `${h.ds} ${h.ts} • (bin inválido)`;
+        return;
+      }
+
+      if (!obj.has_any){
+        if (tip) tip.textContent = `${h.ds} ${h.ts} • sem ponto no bin`;
+        return;
+      }
+
+      const mmTxt = (obj.mm == null) ? "—" : `${fmtN(obj.mm,3)} (${fmtPct(obj.mm,1)})`;
+      if (tip) tip.textContent =
+        `${h.ds} ${h.ts} • class=${obj.cls} • operativos=${obj.has_oper ? "sim" : "não"} • reason=${obj.reason ?? "—"} • RCA=${obj.code ?? "—"} • rótulo=${obj.lbl ?? "—"} • mismatch=${mmTxt}`;
+    });
+
+    canvas.addEventListener("mouseleave", () => { if (tip) tip.textContent = ""; });
+
+    canvas.addEventListener("click", (ev) => {
+      const h = hitTest(ev);
+      if (!h) return;
+
+      const obj = hmState.cell.get(h.key);
+      hmState.selectedKey = h.key;
+
+      drawHeatmapCanvas();
+      renderDetail(hmState.payload, obj);
+    });
+  }
+
+  /* API */
+  function buildQuery(payload){
+    const qs = new URLSearchParams();
+    for (const [k,v] of Object.entries(payload)){
+      if (v === undefined || v === null || v === "") continue;
+      qs.set(k, String(v));
+    }
+    if (payload.plant_id != null){
+      qs.set("plant_pk", String(payload.plant_id));
+      qs.set("pk", String(payload.plant_id));
+    }
+    return qs.toString();
+  }
+
+  async function fetchFddData(apiUrl, payload){
+    const url = apiUrl + "?" + buildQuery(payload);
+    const res = await fetch(url, { method: "GET", headers: { "Accept": "application/json" } });
+
+    const txt = await res.text();
+    let data = null;
+    try{ data = JSON.parse(txt); }catch(_e){}
+
+    if (!res.ok){
+      const msg = (data && (data.error || data.detail)) ? (data.error || data.detail) : txt.slice(0, 400);
+      throw new Error(`HTTP ${res.status}: ${msg}`);
+    }
+    return data;
+  }
+
+  function currentPayloadBase(){
+    const plantId = $("plant_id")?.value;
+    const start = $("start")?.value;
+    const end   = $("end")?.value;
+
+    if (!plantId){ throw new Error("Informe plant_id"); }
+    if (!start || !end){ throw new Error("Informe start e end"); }
+
+    const payload = {
+      plant_id: Number(plantId),
+      start,
+      end,
+      warn_abs: getNum("warn_abs", 0.35),
+      fault_abs: getNum("fault_abs", 0.90),
+      gpoa_min: getNum("gpoa_min", 50),
+      pmin_w: getNum("pmin_w", 0),
+      dt_minutes: Math.max(1, Number($("dt_minutes")?.value || 15)),
+      display_mode: currentDisplayMode(),
+    };
+    Object.assign(payload, collectAdvancedPayload());
+    return payload;
+  }
+
+  function exportPdf(){
+    const page = $("fddPage");
+    const exportUrl = page ? page.dataset.export : null;
+    if (!exportUrl){
+      alert("URL de exportação PDF não configurada.");
+      return;
+    }
+    try{
+      const payload = currentPayloadBase();
+      const params = new URLSearchParams();
+      for (const [k, v] of Object.entries(payload)){
+        if (v === undefined || v === null || v === "") continue;
+        params.set(k, String(v));
+      }
+      params.set("plant_pk", String(payload.plant_id));
+      params.set("pk", String(payload.plant_id));
+      window.location.href = `${exportUrl}?${params.toString()}`;
+    }catch(err){
+      setStatus(true, `Erro exportação PDF: ${String(err.message || err)}`);
+    }
+  }
+
+  async function runFdd(opts = { save:false, preserveSelection:false }){
+    const page = $("fddPage");
+    const apiUrl = page ? page.dataset.api : null;
+    if (!apiUrl){ alert("API URL não configurada."); return; }
+
+    const btnRun = $("btnRun");
+    const btnSave = $("btnRunSave");
+
+    try{
+      const payload = currentPayloadBase();
+      if (opts && opts.save){ payload.persist = 1; payload.save = 1; }
+
+      setBtnLoading(btnRun, true, "Executar", "Executando...");
+      setBtnLoading(btnSave, true, "Executar + Salvar", "Salvando...");
+      setStatus(true, opts.save ? "Executando FDD e salvando no banco…" : "Executando FDD…");
+
+      const data = await fetchFddData(apiUrl, payload);
+
+      setKpis(data);
+      buildCharts(data);
+      renderHeatmapCanvas(data);
+      renderValidationDashboard(data);
+      bindHeatmapHoverAndClick();
+
+      if (opts && opts.preserveSelection && hmState.selectedKey){
+        const obj = hmState.cell.get(hmState.selectedKey);
+        if (obj) renderDetail(hmState.payload, obj);
+      }
+
+      setStatus(false);
+    }catch(err){
+      console.error(err);
+      setStatus(true, `Erro: ${String(err.message || err)}`);
+    }finally{
+      setBtnLoading(btnRun, false, "Executar", "Executando...");
+      setBtnLoading(btnSave, false, "Executar + Salvar", "Salvando...");
+    }
+  }
+
+  async function runRandomSearch(){
+    const page = $("fddPage");
+    const apiUrl = page ? page.dataset.randomSearch : null;
+    if (!apiUrl){ alert("API de random search não configurada."); return; }
+
+    const btn = $("btnRandomSearch");
+    try{
+      const payload = currentPayloadBase();
+      payload.display_mode = "tipologia";
+      payload.rs_trials = Math.max(1, Number($("rs_trials")?.value || 24));
+      payload.rs_seed = Number($("rs_seed")?.value || 42);
+
+      setBtnLoading(btn, true, "Executar Random Search", "Buscando...");
+      setStatus(true, "Executando random search para o fluxo por Tipologia de Falha…");
+
+      const data = await fetchFddData(apiUrl, payload);
+      if (!data || !data.ok){
+        throw new Error((data && data.error) ? data.error : "Falha no random search.");
+      }
+      applyParamsToForm(data.best_params || {});
+      if ($("display_mode")) $("display_mode").value = "tipologia";
+      renderRandomSearchResult(data);
+      setStatus(true, "Random search concluído. A melhor configuração foi carregada nos parâmetros; execute o FDD para avaliar o resultado.");
+    }catch(err){
+      console.error(err);
+      renderRandomSearchResult(null);
+      setStatus(true, `Erro random search: ${String(err.message || err)}`);
+    }finally{
+      setBtnLoading(btn, false, "Executar Random Search", "Buscando...");
+    }
+  }
+
+  function resetUi(){
+    destroyCharts();
+    clearSelection();
+
+    const c = $("hmCanvas");
+    if (c){
+      const ctx = c.getContext("2d");
+      ctx.clearRect(0,0,c.width,c.height);
+    }
+    $("hmTip").textContent = "";
+    $("hmBadgeTxt").textContent = "—";
+    $("kpiPts").textContent = "—";
+    $("kpiOk").textContent = "—";
+    $("kpiWarn").textContent = "—";
+    $("kpiCrit").textContent = "—";
+    $("kpiNoData").textContent = "—";
+    $("kpiRange").textContent = "—";
+    setStatus(false);
+    renderRandomSearchResult(null);
+    renderValidationDashboard({ summary: { validation: {}, events: [] } });
+    closeDetailDrawer();
+  }
+
+  function bindDetailButtons(){
+    $("btnClearSel")?.addEventListener("click", () => clearSelection());
+    $("btnCloseDetail")?.addEventListener("click", () => closeDetailDrawer());
+    document.querySelectorAll(".drawer-tab-btn").forEach((el)=>el.addEventListener("click", ()=>setDrawerTab(el.dataset.tab)));
+    $("btnCopySel")?.addEventListener("click", async () => {
+      const snap = hmState.selectedSnapshot;
+      if (!snap){ alert("Nenhum ponto selecionado."); return; }
+      try{
+        await navigator.clipboard.writeText(JSON.stringify(snap, null, 2));
+      }catch(_e){
+        alert("Não foi possível copiar (permissão). Selecione o texto do dump e copie manualmente.");
+      }
+    });
+  }
+
+  function bindHeatmapFit(){
+    const wrap = $("hmWrap");
+    if (!wrap) return;
+    try{
+      const ro = new ResizeObserver(() => fitHeatmapToWidth());
+      ro.observe(wrap);
+    }catch(_e){
+      window.addEventListener("resize", fitHeatmapToWidth);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    prefillDefaultsIfEmpty();
+
+    $("btnRun")?.addEventListener("click", () => runFdd({ save:false }));
+    $("btnRunSave")?.addEventListener("click", () => runFdd({ save:true }));
+    $("btnExportPdf")?.addEventListener("click", exportPdf);
+    $("btnReset")?.addEventListener("click", resetUi);
+    $("btnRandomSearch")?.addEventListener("click", runRandomSearch);
+
+    $("dt_minutes")?.addEventListener("change", () => {
+      if (hmState.payload) renderHeatmapCanvas(hmState.payload);
+    });
+    $("display_mode")?.addEventListener("change", () => {
+      if (hmState.payload) renderHeatmapCanvas(hmState.payload);
+      if (hmState.payload && hmState.selectedKey){
+        const obj = hmState.cell.get(hmState.selectedKey);
+        if (obj) renderDetail(hmState.payload, obj);
+      }
+    });
+
+    bindDetailButtons();
+    bindHeatmapFit();
+    renderValidationDashboard({ summary: { validation: {}, events: [] } });
+
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") closeDetailDrawer();
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,2384 @@
+{# templates/dashboard/mppt_gnn_fdd.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}FDD — MPPT GNN Full-State{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .dash, .dash *{ box-sizing: border-box; }
+    .dash{
+      display:grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 1rem;
+      align-items:start;
+      align-content:start;
+      grid-auto-rows: min-content;
+    }
+    .span-12{ grid-column: span 12; }
+
+    .page-head{
+      display:flex; gap:1rem; align-items:flex-start; justify-content:space-between;
+      flex-wrap:wrap;
+    }
+    .page-head h1{ margin:0; font-size:1.25rem; }
+    .page-head .sub{ margin:.15rem 0 0; opacity:.82; line-height:1.4; }
+
+    .ctl-row{
+      display:flex; flex-wrap:wrap; gap:.8rem; align-items:flex-end; width:100%;
+    }
+    .ctl{ display:flex; flex-direction:column; gap:.35rem; min-width:220px; }
+    .ctl.sm{ min-width:160px; }
+    .ctl label{ font-size:.85rem; opacity:.85; }
+    .ctl select, .ctl input[type="date"], .ctl input[type="text"], .ctl input[type="number"]{
+      padding:.55rem .7rem;
+      border-radius:12px;
+      background: rgba(10,20,40,.35);
+      border:1px solid rgba(255,255,255,.18);
+      color:#e9f6ff;
+      outline:none;
+      backdrop-filter: blur(6px);
+    }
+    .ctl select option{ color:#111; }
+
+    .mono{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    .btn-glow{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:.55rem;
+      padding:.70rem .95rem;
+      border-radius:14px;
+      border:1px solid rgba(110,210,255,.35);
+      background: linear-gradient(180deg, rgba(110,210,255,.22), rgba(90,200,255,.08));
+      color: rgba(233,246,255,.96);
+      text-decoration:none;
+      font-weight:750;
+      letter-spacing:.2px;
+      box-shadow:0 10px 24px rgba(0,0,0,.22);
+      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
+      cursor:pointer;
+      appearance:none;
+      -webkit-appearance:none;
+      outline:none;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn-glow:hover{
+      transform: translateY(-1px);
+      border-color: rgba(110,210,255,.55);
+      box-shadow:0 14px 34px rgba(0,0,0,.28);
+      background: linear-gradient(180deg, rgba(110,210,255,.28), rgba(90,200,255,.10));
+    }
+    .btn-glow:disabled{
+      opacity:.65;
+      cursor:not-allowed;
+      transform:none;
+      box-shadow:0 8px 18px rgba(0,0,0,.18);
+    }
+    .btn-glow.secondary{
+      border-color: rgba(255,255,255,.18);
+      background: rgba(255,255,255,.06);
+      box-shadow:0 10px 24px rgba(0,0,0,.18);
+    }
+    .btn-glow.secondary:hover{
+      border-color: rgba(255,255,255,.28);
+      background: rgba(255,255,255,.10);
+      box-shadow:0 14px 34px rgba(0,0,0,.22);
+    }
+    .btn-glow.danger{
+      border-color: rgba(255,110,140,.35);
+      background: linear-gradient(180deg, rgba(255,110,140,.20), rgba(255,110,140,.06));
+    }
+    .btn-glow.danger:hover{
+      border-color: rgba(255,110,140,.55);
+      background: linear-gradient(180deg, rgba(255,110,140,.26), rgba(255,110,140,.08));
+    }
+    .btn-glow .icon{ width:18px; height:18px; opacity:.95; }
+    .btn-glow .label{ line-height:1; }
+
+    .ctl-actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .kpi{
+      display:grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap:.75rem;
+    }
+    .kpi .tile{
+      padding:.85rem .9rem;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.05);
+      min-width:0;
+    }
+    .kpi .t{ font-size:.82rem; opacity:.78; margin:0 0 .15rem; }
+    .kpi .v{ font-size:1.15rem; font-weight:900; margin:0; }
+    .kpi .s{ margin:.2rem 0 0; font-size:.82rem; opacity:.78; overflow-wrap:anywhere; }
+
+    .model-health-grid{
+      display:grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap:.75rem;
+    }
+    .model-health-tile{
+      padding:.9rem .95rem;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.05);
+      min-width:0;
+    }
+    .model-health-tile .t{ font-size:.82rem; opacity:.78; margin:0 0 .2rem; }
+    .model-health-tile .v{ font-size:1.1rem; font-weight:900; margin:0; }
+    .model-health-tile .s{ margin:.2rem 0 0; font-size:.82rem; opacity:.78; overflow-wrap:anywhere; line-height:1.35; }
+    .model-health-status{
+      display:inline-flex; align-items:center; gap:.45rem;
+      padding:.28rem .7rem; border-radius:999px;
+      font-size:.88rem; font-weight:800;
+      border:1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06);
+    }
+    .model-health-status.ok{ border-color: rgba(70,230,140,.35); background: rgba(70,230,140,.12); }
+    .model-health-status.warn{ border-color: rgba(255,210,90,.35); background: rgba(255,210,90,.12); }
+    .model-health-status.crit{ border-color: rgba(255,90,110,.35); background: rgba(255,90,110,.12); }
+    .model-health-status.neutral{ border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.06); }
+
+    .modal-overlay{
+      position:fixed; inset:0; z-index:65;
+      background: rgba(2,8,20,.72);
+      backdrop-filter: blur(6px);
+      display:none;
+      align-items:center; justify-content:center;
+      padding:18px;
+    }
+    .modal-overlay.open{ display:flex; }
+    .model-modal{
+      width:min(1180px, 96vw);
+      max-height:92vh;
+      border-radius:20px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(12,18,32,.98);
+      box-shadow:0 24px 60px rgba(0,0,0,.42);
+      overflow:hidden;
+      display:flex; flex-direction:column;
+    }
+    .model-modal .hd{
+      padding:14px 16px 12px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      display:flex; gap:12px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap;
+    }
+    .model-modal .title{ margin:0; font-size:1.05rem; font-weight:900; }
+    .model-modal .meta{ margin:.25rem 0 0; opacity:.82; line-height:1.35; }
+    .model-modal .body{ padding:14px 16px 18px; overflow:auto; }
+    .matrix-wrap{ overflow:auto; border:1px solid rgba(255,255,255,.10); border-radius:14px; background: rgba(255,255,255,.03); }
+    table.matrix, table.report{
+      width:100%; border-collapse:collapse; min-width:560px;
+    }
+    table.matrix th, table.matrix td, table.report th, table.report td{
+      padding:.55rem .65rem; border-bottom:1px solid rgba(255,255,255,.08); text-align:right;
+    }
+    table.matrix th:first-child, table.matrix td:first-child, table.report th:first-child, table.report td:first-child{ text-align:left; }
+    table.matrix thead th, table.report thead th{
+      position:sticky; top:0; background: rgba(12,18,32,.98); z-index:1;
+    }
+    .report-note{ opacity:.8; margin:.2rem 0 0; line-height:1.35; }
+
+    .hm-wrap{
+      width:100%;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:16px;
+      padding:10px;
+      margin-top:.8rem;
+      background: rgba(255,255,255,.03);
+      overflow-x:hidden;
+      overflow-y:auto;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+    }
+    .hm-canvas{
+      display:block;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(10,20,40,.22);
+      cursor:pointer;
+      max-width:100%;
+      height:auto;
+    }
+    .hm-head{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      width:100%;
+    }
+    .hm-sub{ margin:.2rem 0 0; opacity:.78; line-height:1.35; }
+    .hm-tip{ margin-top:.55rem; min-height:1.2em; opacity:.85; }
+
+    .legend{
+      display:flex;
+      gap:.6rem;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+    }
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:.5rem;
+      padding:.28rem .65rem;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.06);
+      font-size:.90rem;
+      white-space:nowrap;
+      user-select:none;
+    }
+    .dot{
+      width:11px; height:11px;
+      border-radius:99px;
+      box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;
+    }
+
+    :root{
+      --hm-none: #a0a2a786;
+      --hm-ok:   #46e68c;
+      --hm-warn: #ffcf5a;
+      --hm-crit: #ff5a6e;
+      --hm-sel:  rgba(90,200,255,.95);
+    }
+
+    .status{
+      display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
+      padding:.55rem .7rem;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      border-radius:14px;
+      color: rgba(233,246,255,.9);
+    }
+    .spin{
+      width:14px; height:14px; border-radius:999px;
+      border:2px solid rgba(255,255,255,.25);
+      border-top-color: rgba(233,246,255,.9);
+      animation: sp 1s linear infinite;
+    }
+    @keyframes sp{ to{ transform: rotate(360deg); } }
+
+    .detail-drawer{
+      position:fixed;
+      top:0; right:0;
+      height:100vh;
+      width:760px;
+      max-width:96vw;
+      z-index:50;
+      border-left:1px solid rgba(255,255,255,.12);
+      background: rgba(12,18,32,.96);
+      box-shadow:-24px 0 48px rgba(0,0,0,.38);
+      transform: translateX(110%);
+      transition: transform .18s ease;
+      display:flex;
+      flex-direction:column;
+      pointer-events:none;
+    }
+    .detail-drawer.open{
+      transform: translateX(0%);
+      pointer-events:auto;
+    }
+    .detail-drawer .hd{
+      padding:14px 14px 12px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .detail-drawer .title{
+      margin:0;
+      font-size:1.02rem;
+      font-weight:800;
+    }
+    .detail-drawer .meta{
+      margin:.25rem 0 0;
+      opacity:.82;
+      line-height:1.35;
+      font-size:.88rem;
+      overflow-wrap:anywhere;
+    }
+    .detail-drawer .actions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+      width:100%;
+    }
+    .detail-drawer .body{
+      padding:12px 14px 14px;
+      overflow:auto;
+      flex:1 1 auto;
+    }
+
+    .detail-section{ margin-bottom:14px; }
+    .detail-section h4{
+      margin:.2rem 0 .6rem;
+      font-size:.96rem;
+      font-weight:800;
+    }
+
+    .meteo-health{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      background: rgba(255,255,255,.035);
+      padding:.85rem .9rem;
+      display:grid;
+      gap:.75rem;
+    }
+    .meteo-health-main{
+      display:flex;
+      gap:.8rem;
+      align-items:flex-start;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+    .meteo-health-title{ margin:0; font-size:.96rem; font-weight:800; }
+    .meteo-health-sub{ margin:.18rem 0 0; opacity:.82; line-height:1.35; }
+    .meteo-health-score{ min-width:110px; text-align:right; }
+    .meteo-health-score .v{ font-size:1.15rem; font-weight:900; }
+    .meteo-health-score .k{ opacity:.75; font-size:.78rem; }
+    .meteo-chips{ display:flex; flex-wrap:wrap; gap:.45rem; }
+    .meteo-chip{
+      display:inline-flex; align-items:center; gap:.4rem;
+      padding:.26rem .6rem; border-radius:999px;
+      font-size:.84rem; font-weight:700;
+      border:1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06);
+    }
+    .meteo-chip.ok{ border-color: rgba(70,230,140,.35); background: rgba(70,230,140,.10); }
+    .meteo-chip.warn{ border-color: rgba(255,210,90,.35); background: rgba(255,210,90,.10); }
+    .meteo-chip.crit{ border-color: rgba(255,90,110,.35); background: rgba(255,90,110,.10); }
+    .meteo-chip.neutral{ border-color: rgba(255,255,255,.14); background: rgba(255,255,255,.06); }
+    .meteo-facts{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap:.6rem;
+    }
+    .meteo-fact{
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      background: rgba(10,20,40,.22);
+      padding:.55rem .65rem;
+      min-width:0;
+    }
+    .meteo-fact .k{ display:block; opacity:.75; font-size:.78rem; }
+    .meteo-fact .v{ display:block; font-weight:800; margin-top:.12rem; overflow-wrap:anywhere; }
+    @media (max-width: 640px){
+      .meteo-facts{ grid-template-columns:1fr; }
+      .meteo-health-score{ text-align:left; }
+    }
+
+    table.kv{
+      width:100%;
+      border-collapse:collapse;
+      border-radius:14px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.03);
+    }
+    table.kv td{
+      padding:.55rem .65rem;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      vertical-align:top;
+      overflow-wrap:anywhere;
+    }
+    table.kv tr:last-child td{ border-bottom:0; }
+    td.k{ width:52%; opacity:.85; }
+    td.v{ font-weight:800; }
+
+    pre.dump{
+      margin:0;
+      padding:.75rem;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(10,20,40,.25);
+      max-height:46vh;
+      overflow:auto;
+      color: rgba(233,246,255,.92);
+      font-size:.88rem;
+      line-height:1.35;
+      white-space:pre;
+    }
+
+    @media (max-width: 1100px){
+      .kpi{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .model-health-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    @media (max-width: 680px){
+      .model-health-grid{ grid-template-columns: 1fr; }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div id="mpptPage"
+     class="dash"
+     data-api="{{ api_url|default:'' }}"
+     data-dump="{{ dump_url|default:'' }}"
+     data-actions="{{ actions_url|default:'' }}"
+     data-export="{{ export_pdf_url|default:'' }}">
+
+  <div class="card glass span-12">
+    <div class="page-head">
+      <div style="min-width:0;">
+        <h1>FDD — MPPT GNN Full-State</h1>
+        <div class="sub">
+          Heatmap coverage-first:
+          <b>cinza = sem operativos do inversor</b>,
+          <b>verde = bin com operativos e sem anomalia</b>,
+          <b>âmbar = mismatch moderado/persistente ou refinamento benigno com guarda</b>, <b>vermelho = bin com operativos e anomalia confirmada</b>.
+          Ao clicar no bin, o drawer mostra o evento, o diagnóstico, os dados agregados do inversor,
+          os dados canônicos por MPPT <b>sem duplicar AC indevidamente</b>,
+          e o <b>registro operativo bruto completo</b>.
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <a class="btn-glow secondary" href="{% url 'pv_dashboard' %}" title="Voltar ao Dashboard PV">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"
+                  stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M14 4h6v6" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M20 4 10 14" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span class="label">Dashboard PV</span>
+        </a>
+      </div>
+    </div>
+
+    <div style="height:.8rem"></div>
+
+    <div class="ctl-row">
+      <div class="ctl">
+        <label>Planta</label>
+        <select id="plant_id">
+          {% for p in plants %}
+            <option value="{{ p.id }}"
+              {% if plant_id and plant_id|stringformat:"s" == p.id|stringformat:"s" %}selected{% endif %}>
+              {% firstof p.nome p.name %} (#{{ p.id }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="ctl sm">
+        <label for="start">Início</label>
+        <input id="start" type="date" value="{{ start|default:'' }}">
+      </div>
+
+      <div class="ctl sm">
+        <label for="end">Fim</label>
+        <input id="end" type="date" value="{{ end|default:'' }}">
+      </div>
+
+      <div class="ctl sm">
+        <label for="dt_minutes">Bin (min)</label>
+        <select id="dt_minutes">
+          {% for m in dt_options %}
+            <option value="{{ m }}" {% if dt_minutes == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="ctl sm">
+        <label for="mppt">MPPT</label>
+        <select id="mppt">
+          <option value="all" {% if mppt == "all" or not mppt %}selected{% endif %}>Todos</option>
+          {% for k in mppt_options %}
+            <option value="{{ k }}" {% if mppt|stringformat:"s" == k|stringformat:"s" %}selected{% endif %}>MPPT {{ k }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="ctl sm">
+        <label for="view_mode">view_mode</label>
+        <select id="view_mode">
+          <option value="full" {% if view_mode == 'full' %}selected{% endif %}>full</option>
+          <option value="events" {% if view_mode == 'events' %}selected{% endif %}>events</option>
+        </select>
+      </div>
+
+      <div class="ctl sm">
+        <label for="event_classifier_version">Classificador de evento</label>
+        <input id="event_classifier_version" list="eventClassifierVersionList" type="text" value="{{ event_classifier_version|default:'event_rules_v2' }}">
+      </div>
+
+      <div class="ctl">
+        <label for="trained_model_version">Modelo treinado (saúde)</label>
+        <input id="trained_model_version" list="trainedModelVersionList" type="text" value="{{ trained_model_version|default:'' }}">
+        <datalist id="eventClassifierVersionList"></datalist>
+  <datalist id="trainedModelVersionList"></datalist>
+      </div>
+
+      <div class="ctl sm">
+        <label for="detector_version">detector_version</label>
+        <input id="detector_version" list="detectorVersionList" type="text" value="{{ detector_version|default:'hybrid_rules_v1' }}">
+        <datalist id="detectorVersionList"></datalist>
+      </div>
+
+      <div class="ctl" style="min-width:260px;">
+        <label for="source_oper">source_oper</label>
+        <input id="source_oper" list="sourceOperList" type="text" value="{{ source_oper|default:'' }}" placeholder="opcional">
+        <datalist id="sourceOperList"></datalist>
+      </div>
+
+      <div class="ctl" style="min-width:260px;">
+        <label for="source_meteo">source_meteo</label>
+        <input id="source_meteo" list="sourceMeteoList" type="text" value="{{ source_meteo|default:'' }}" placeholder="opcional">
+        <datalist id="sourceMeteoList"></datalist>
+      </div>
+
+      <div class="ctl" style="min-width:520px;">
+        <label>&nbsp;</label>
+        <div class="ctl-actions">
+          <button class="btn-glow" id="btnRefresh" type="button" title="Atualizar heatmap">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M8 5v14l11-7-11-7Z" fill="rgba(233,246,255,.92)"/>
+            </svg>
+            <span class="label">Atualizar</span>
+          </button>
+
+          <button class="btn-glow secondary" id="btnTrain" type="button" title="O treino desta tela alimenta apenas o bundle do modelo treinado">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 20V8" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M8 20V4" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M12 20v-6" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M16 20v-10" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M20 20v-8" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="label">Treino (off)</span>
+          </button>
+
+          <button class="btn-glow secondary" id="btnInfer" type="button" title="Executar detector plant-level + eventos + inferência MPPT/event-level">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 2v10" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M8 6l4-4 4 4" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 14v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="label">Detectar + Inferir</span>
+          </button>
+
+          <button class="btn-glow secondary" id="btnExportPdf" type="button" title="Exportar relatório PDF de síntese operativa do período selecionado">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M14 3v5h5" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M12 11v6" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+              <path d="m9.5 14.5 2.5 2.5 2.5-2.5" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="label">Exportar PDF</span>
+          </button>
+
+          <button class="btn-glow danger" id="btnReset" type="button" title="Limpar heatmap/seleção">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M21 4v6h-6" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="label">Reset</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:.8rem"></div>
+
+    <div class="status" id="statusBox" style="display:none;">
+      <span class="spin" aria-hidden="true"></span>
+      <span id="statusTxt">Carregando…</span>
+    </div>
+  </div>
+
+  <div class="card glass span-12">
+    <div class="kpi">
+      <div class="tile"><p class="t">diag_count</p><p class="v" id="kpiPred">—</p><p class="s">bins/linhas carregadas</p></div>
+      <div class="tile"><p class="t">Operativo normal</p><p class="v" id="kpiOk">—</p><p class="s">verde</p></div>
+      <div class="tile"><p class="t">Warn / atenção</p><p class="v" id="kpiWarn">—</p><p class="s">âmbar · mismatch/refino</p></div>
+      <div class="tile"><p class="t">Operativo anômalo</p><p class="v" id="kpiFault">—</p><p class="s">vermelho</p></div>
+      <div class="tile"><p class="t">Sem diagnóstico</p><p class="v" id="kpiNone">—</p><p class="s">cinza</p></div>
+      <div class="tile"><p class="t">Detector</p><p class="v" id="kpiDetector">—</p><p class="s">plant-level</p></div>
+      <div class="tile"><p class="t">Classificador evento</p><p class="v" id="kpiEventClassifier">—</p><p class="s">FaultEventMPPT</p></div>
+      <div class="tile"><p class="t">Modelo treinado</p><p class="v" id="kpiTrainedModel">—</p><p class="s">health/meta.json</p></div>
+      <div class="tile"><p class="t">Intervalo</p><p class="v" id="kpiRange">—</p><p class="s">start → end</p></div>
+    </div>
+  </div>
+
+  <div class="card glass span-12">
+    <div class="page-head">
+      <div style="min-width:0;">
+        <h3 style="margin:0;">Saúde do modelo</h3>
+        <div class="sub">
+          Resumo sintético do bundle de métricas salvo em <span class="mono">meta.json</span>
+          para o <b>trained_model_version</b> selecionado.
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <button class="btn-glow secondary" id="btnModelMetrics" type="button" disabled>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 19V5" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M10 19V9" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M16 19V13" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M22 19V3" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span class="label">Ver métricas avançadas</span>
+        </button>
+      </div>
+    </div>
+
+    <div style="height:.8rem"></div>
+
+    <div class="model-health-grid">
+      <div class="model-health-tile">
+        <p class="t">Status visual</p>
+        <div id="modelHealthStatus" class="model-health-status neutral">Sem métricas</div>
+        <p class="s" id="modelHealthStatusNote">Atualize o painel para carregar a saúde do modelo.</p>
+      </div>
+      <div class="model-health-tile">
+        <p class="t">Versão do modelo</p>
+        <p class="v mono" id="modelHealthVersion">—</p>
+        <p class="s" id="modelHealthScope">Sem fonte de avaliação carregada</p>
+      </div>
+      <div class="model-health-tile">
+        <p class="t">Data do treino</p>
+        <p class="v mono" id="modelHealthTrainedAt">—</p>
+        <p class="s">Timestamp do bundle salvo</p>
+      </div>
+      <div class="model-health-tile">
+        <p class="t">F1 macro validado</p>
+        <p class="v mono" id="modelHealthF1">—</p>
+        <p class="s">Holdout temporal / validação</p>
+      </div>
+      <div class="model-health-tile">
+        <p class="t">Balanced accuracy</p>
+        <p class="v mono" id="modelHealthBalanced">—</p>
+        <p class="s">Média do recall por classe</p>
+      </div>
+      <div class="model-health-tile">
+        <p class="t">Cobertura da validação</p>
+        <p class="v mono" id="modelHealthCoverage">—</p>
+        <p class="s">Frações/dias/amostras do holdout</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card glass span-12">
+    <div class="hm-head">
+      <div style="min-width:0;">
+        <h3 style="margin-top:0">Heatmap — dia × bin (canvas)</h3>
+        <div class="hm-sub">
+          Linhas = dias • Colunas = bins de <b id="hmBinLbl">15</b> min •
+          cinza = sem diagnóstico útil / inválido / sem operação útil •
+          verde = diagnóstico válido e normal •
+          âmbar = subdesempenho moderado/persistente, inclusive sob meteo 15 min interpolada quando o QC local permitir, ou benigno refinado com guarda •
+          vermelho = diagnóstico válido e anômalo.
+        </div>
+      </div>
+
+      <div class="legend">
+        <span class="badge"><span class="dot" style="background:var(--hm-none)"></span>sem diagnóstico / inválido</span>
+        <span class="badge"><span class="dot" style="background:var(--hm-ok)"></span>normal</span>
+        <span class="badge"><span class="dot" style="background:var(--hm-warn)"></span>warn</span>
+        <span class="badge"><span class="dot" style="background:var(--hm-crit)"></span>anômalo</span>
+        <span class="badge"><span class="mono" id="hmBadgeTxt">—</span></span>
+      </div>
+    </div>
+
+    <div class="hm-wrap" id="hmWrap">
+      <canvas id="hmCanvas" class="hm-canvas" width="800" height="420" title="Clique para selecionar um bin"></canvas>
+    </div>
+    <div id="hmTip" class="hm-tip"></div>
+  </div>
+</div>
+
+<aside id="detailDrawer" class="detail-drawer" aria-hidden="true">
+  <div class="hd">
+    <div style="min-width:0;">
+      <h3 class="title">Detalhe do bin / evento selecionado</h3>
+      <div class="meta" id="detailMeta">—</div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-glow secondary" type="button" id="btnCopySel" title="Copiar JSON do ponto">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M9 9h11v12H9V9Z" stroke="rgba(233,246,255,.92)" stroke-width="2" />
+          <path d="M4 15H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v1"
+                stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="label">Copiar</span>
+      </button>
+
+      <button class="btn-glow secondary" type="button" id="btnClearSel" title="Limpar seleção">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="label">Limpar</span>
+      </button>
+
+      <button class="btn-glow danger" type="button" id="btnCloseDetail" title="Fechar aba lateral">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="label">Fechar</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="detail-section">
+      <h4>Metadados do ponto</h4>
+      <table class="kv" id="detailMetaTbl"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Confiabilidade meteo</h4>
+      <div id="detailMeteoHealth" class="meteo-health"></div>
+    </div>
+
+    <div class="detail-section">
+      <h4>Evento</h4>
+      <table class="kv" id="detailEvent"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Resumo do evento</h4>
+      <table class="kv" id="detailEventSummary"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Confiabilidade</h4>
+      <table class="kv" id="detailConfidence"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Predição MPPT</h4>
+      <table class="kv" id="detailPred"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Features do MPPT / evento</h4>
+      <table class="kv" id="detailFeat"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Resumo do MPPT selecionado</h4>
+      <table class="kv" id="detailMpptSummary"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Flags e cobertura</h4>
+      <table class="kv" id="detailFlags"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Proveniência e filtros</h4>
+      <table class="kv" id="detailSources"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Saída do inversor</h4>
+      <table class="kv" id="detailInvOut"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Dados por MPPT</h4>
+      <table class="kv" id="detailMppt"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Warnings / alarmes do inversor</h4>
+      <table class="kv" id="detailWarn"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Outras variáveis do bin selecionado</h4>
+      <table class="kv" id="detailBin"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Registro operativo bruto do inversor</h4>
+      <table class="kv" id="detailRawOper"></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Dump</h4>
+      <pre class="dump" id="detailDump">{}</pre>
+    </div>
+  </div>
+</aside>
+
+<div id="modelMetricsModal" class="modal-overlay" aria-hidden="true">
+  <div class="model-modal">
+    <div class="hd">
+      <div style="min-width:0;">
+        <h3 class="title">Métricas avançadas do modelo</h3>
+        <div class="meta" id="modelMetricsMeta">—</div>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <button class="btn-glow danger" type="button" id="btnCloseModelMetrics">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span class="label">Fechar</span>
+        </button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="detail-section">
+        <h4>Resumo técnico</h4>
+        <table class="kv" id="modelMetricsSummary"></table>
+      </div>
+      <div class="detail-section">
+        <h4>Matriz de confusão</h4>
+        <div class="report-note">Linhas = classe real • Colunas = classe prevista</div>
+        <div id="modelMetricsMatrix" class="matrix-wrap"></div>
+      </div>
+      <div class="detail-section">
+        <h4>Matriz de confusão normalizada</h4>
+        <div class="report-note">Normalização por classe real (linha).</div>
+        <div id="modelMetricsMatrixNorm" class="matrix-wrap"></div>
+      </div>
+      <div class="detail-section">
+        <h4>Relatório por classe</h4>
+        <div id="modelMetricsReport" class="matrix-wrap"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  const FIELD_LABELS = {
+    ts_local: "Timestamp local",
+    ts_utc: "Timestamp UTC",
+
+    pac_w: "PAC do detector [W]",
+    pac_model_w: "PAC modelo do detector [W]",
+    p_ac_w: "Potência AC agregada [W]",
+    p_dc_w: "Potência DC agregada [W]",
+    e_ac_wh_15: "Energia AC 15 min [Wh]",
+    mismatch: "Mismatch",
+    warn_mismatch: "Warn por mismatch",
+    warn_mismatch_interp: "Warn por mismatch sob meteo interpolada",
+    warn_refined_guard: "Warn por refinamento guardado",
+
+    g_wm2: "Irradiância [W/m²]",
+    gti: "GTI [W/m²]",
+    ghi: "GHI [W/m²]",
+    dni: "DNI [W/m²]",
+    dhi: "DHI [W/m²]",
+    temp_air: "Temperatura do ar [°C]",
+    t_air_c: "Temperatura do ar [°C]",
+    wind_speed: "Velocidade do vento [m/s]",
+    rh: "UR [%]",
+    meteo_qc_score: "Score de QC meteo",
+    flag_meteo_low_confidence: "Meteo baixa confiança",
+    flag_meteo_interpolated: "Fonte meteo interpolada",
+    flag_meteo_outlier: "Outlier meteo",
+    flag_meteo_artifact: "Artefato meteo",
+    flag_meteo_missing: "Meteo missing",
+
+    vdc_total_v: "Vdc total [V]",
+    v_dc_v: "Vdc [V]",
+    v_dc_active_mean_v: "Vdc médio MPPTs ativos [V]",
+    i_dc_sum_a: "Idc soma MPPTs ativos [A]",
+    i_dc_a: "Idc [A]",
+    vac_v: "Vac [V]",
+    v_ac_v: "Vac [V]",
+    iac_a: "Iac [A]",
+    i_ac_a: "Iac [A]",
+    fac_hz: "Frequência [Hz]",
+    inv_coverage: "Cobertura inversor",
+    flag_inv_missing: "Inversor missing",
+    flag_inv_missing_all: "Inversor missing (all)",
+    flag_inv_missing_partial: "Inversor missing (partial)",
+    active_mppt_n: "Nº MPPTs ativos",
+    chosen_sources: "Sources agregadas",
+
+    mppt_pac_w: "MPPT selecionado Pac [W]",
+    mppt_pdc_w: "MPPT selecionado Pdc [W]",
+    mppt_vdc_v: "MPPT selecionado Vdc [V]",
+    mppt_idc_a: "MPPT selecionado Idc [A]",
+
+    inv_qac_var: "Qac inversor [var]",
+    inv_pf: "Fator de potência inversor",
+
+    diag_ts_utc: "Diagnóstico ts_utc",
+    diag_valid: "Diagnóstico válido",
+    diag_anomaly_flag: "Diagnóstico anomalia",
+    diag_rca_code: "RCA code",
+    diag_rca_label: "RCA label",
+    diag_state_label: "State",
+    diag_domain_label: "Domain",
+    diag_diagnosis_label: "Diagnosis",
+    diag_diagnosis_confidence: "Diagnosis confidence",
+    diag_data_reliability_score: "Data reliability",
+    diag_data_reliability_level: "Data reliability level",
+    diag_detection_confidence_score: "Detection confidence",
+    diag_detection_confidence_level: "Detection confidence level",
+    diag_diagnosis_confidence_score: "Diagnosis confidence",
+    diag_diagnosis_confidence_level: "Diagnosis confidence level",
+    diag_confidence_notes_json: "Confidence notes",
+    data_reliability_score: "Data reliability",
+    data_reliability_level: "Data reliability level",
+    detection_confidence_score: "Detection confidence",
+    detection_confidence_level: "Detection confidence level",
+    diagnosis_confidence_score: "Diagnosis confidence",
+    diagnosis_confidence_level: "Diagnosis confidence level",
+    confidence_notes_json: "Confidence notes",
+    diag_irradiance_tier: "Irradiance tier",
+    diag_fine_diag_allowed: "Fine diagnosis allowed",
+    diag_meteo_quality_ok: "Meteo quality OK",
+    diag_direct_grid_evidence: "Direct grid evidence",
+    diag_zero_injection_flag: "Zero injection",
+    diag_detector_score: "Detector score",
+    diag_detector_version: "Detector version",
+    diag_ewma_z: "EWMA z",
+    diag_cusum_score: "CUSUM score",
+    diag_stable_sky: "Stable sky",
+    diag_g_poa: "GPOA [W/m²]",
+    diag_tcell_c: "Tcell [°C]",
+    diag_pac_real_w: "PAC real [W]",
+    diag_pac_model_w: "PAC modelo [W]",
+    diag_mismatch_rel: "Mismatch relativo",
+
+    id: "ID",
+    source_oper: "Fonte operativa",
+    source_meteo: "Fonte meteorológica",
+    ts_start_utc: "Início UTC",
+    ts_end_utc: "Fim UTC",
+    ts_start_local: "Início local",
+    ts_end_local: "Fim local",
+    status: "Status",
+    detector_version: "Detector version",
+    detector_score_max: "Detector score max",
+    detector_score_mean: "Detector score mean",
+    severity_score: "Severity score",
+    energy_loss_wh: "Energia perdida [Wh]",
+    event_label_prelim: "Rótulo preliminar",
+    final_label: "Rótulo final",
+    known_vs_unknown: "Known vs unknown",
+    confidence: "Confidence",
+    novelty_score: "Novelty score",
+    meta: "Meta",
+
+    pred_code: "Pred code",
+    pred_label: "Pred label",
+    proba: "Probabilidades",
+    contribution: "Contribuições",
+    event_classifier_version: "Event classifier version",
+    trained_model_version: "Trained model version",
+    policy: "Policy",
+    p_ac_mppt_sum_w: "P AC ΣMPPT [W]",
+    p_ac_agg_w: "P AC AGG [W]",
+    alarm_code: "Alarm code",
+    alarm_sev: "Alarm severity",
+    warning: "Warning",
+    warnings: "Warnings",
+    alarm: "Alarm",
+    alarms: "Alarms",
+    mode: "Mode",
+  };
+
+  for (let i = 1; i <= 8; i++){
+    FIELD_LABELS[`mppt${i}_source_oper`] = `MPPT${i} source_oper`;
+    FIELD_LABELS[`mppt${i}_pac_w`] = `MPPT${i} Pac [W]`;
+    FIELD_LABELS[`mppt${i}_pdc_w`] = `MPPT${i} Pdc [W]`;
+    FIELD_LABELS[`mppt${i}_vdc_v`] = `MPPT${i} Vdc [V]`;
+    FIELD_LABELS[`mppt${i}_idc_a`] = `MPPT${i} Idc [A]`;
+    FIELD_LABELS[`mppt${i}_warning`] = `MPPT${i} warning`;
+    FIELD_LABELS[`mppt${i}_warnings`] = `MPPT${i} warnings`;
+    FIELD_LABELS[`mppt${i}_alarm`] = `MPPT${i} alarm`;
+    FIELD_LABELS[`mppt${i}_alarms`] = `MPPT${i} alarms`;
+    FIELD_LABELS[`mppt${i}_status`] = `MPPT${i} status`;
+  }
+
+  function humanizeKey(s){
+    const k = String(s || "");
+    if (!k) return "—";
+    const base = k.replace(/[_\-]+/g, " ").trim();
+    if (!base) return k;
+    return base.charAt(0).toUpperCase() + base.slice(1);
+  }
+
+  function prettyKey(k){
+    const s = String(k || "");
+    if (s.includes(" — ")) return s;
+    return FIELD_LABELS[s] || `${humanizeKey(s)} (${s})`;
+  }
+
+  function boolish(v){
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return Number.isFinite(v) && v !== 0;
+    const s = String(v ?? "").trim().toLowerCase();
+    return ["1","true","yes","sim","on"].includes(s);
+  }
+
+  function numOrNull(v){
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function meteoHealthSummary(data, sourceHint="—"){
+    const score = numOrNull(data?.meteo_qc_score);
+    const low = boolish(data?.flag_meteo_low_confidence);
+    const interp = boolish(data?.flag_meteo_interpolated);
+    const outlier = boolish(data?.flag_meteo_outlier);
+    const artifact = boolish(data?.flag_meteo_artifact);
+    const missing = boolish(data?.flag_meteo_missing);
+    const source = String(sourceHint || data?.source_meteo || "—") || "—";
+
+    let tone = "ok";
+    let title = "Alta confiança meteorológica";
+    let note = "Sem indícios relevantes de degradação da qualidade meteo neste bin.";
+
+    if (missing){
+      tone = "crit";
+      title = "Sem meteorologia utilizável";
+      note = "O bin não tem suporte meteorológico suficiente para sustentar o diagnóstico.";
+    } else if (interp && low){
+      tone = "crit";
+      title = "Baixa confiança meteorológica";
+      note = "A fonte 15 min parece interpolada para a região e o QC marcou baixa confiança.";
+    } else if (interp){
+      tone = "warn";
+      title = "Fonte interpolada em 15 min";
+      note = "Use cautela: a série solar de 15 min provavelmente não é nativa para esta região.";
+    } else if (low){
+      tone = "warn";
+      title = "Baixa confiança meteorológica";
+      note = "O QC sinalizou que este bin não é adequado para diagnóstico fino.";
+    } else if (outlier || artifact){
+      tone = "warn";
+      title = "Confiabilidade moderada";
+      note = "O QC detectou outlier ou artefato temporal na meteorologia deste bin.";
+    } else if (score !== null && score < 0.60){
+      tone = "warn";
+      title = "Confiabilidade reduzida";
+      note = "O score consolidado de QC ficou abaixo do intervalo recomendado.";
+    } else if (score !== null && score < 0.85){
+      tone = "warn";
+      title = "Confiabilidade moderada";
+      note = "O bin é utilizável, mas requer leitura prudente do diagnóstico.";
+    }
+
+    const chips = [
+      { cls: tone, txt: title },
+      { cls: "neutral", txt: `Fonte: ${source}` },
+    ];
+    if (interp) chips.push({ cls: "warn", txt: "15 min interpolado" });
+    if (low) chips.push({ cls: tone === "crit" ? "crit" : "warn", txt: "Baixa confiança" });
+    if (outlier) chips.push({ cls: "warn", txt: "Outlier tratado" });
+    if (artifact) chips.push({ cls: "warn", txt: "Artefato temporal" });
+    if (missing) chips.push({ cls: "crit", txt: "Sem meteo" });
+    if (!interp && !low && !outlier && !artifact && !missing) chips.push({ cls: "ok", txt: "QC favorável" });
+
+    return {
+      tone, title, note, score, source,
+      facts: {
+        source,
+        score,
+        interpolation: interp ? "Provável" : "Não sinalizada",
+        low_confidence: low ? "Sim" : "Não",
+        outlier: outlier ? "Sim" : "Não",
+        artifact: artifact ? "Sim" : "Não",
+      },
+      chips,
+    };
+  }
+
+  function renderMeteoHealth(el, summary){
+    if (!el) return;
+    if (!summary){
+      el.innerHTML = `<div class="meteo-health-sub">Selecione um bin para inspecionar a confiabilidade da meteorologia.</div>`;
+      return;
+    }
+    const scoreTxt = summary.score === null ? "—" : fmtAny(Number(summary.score.toFixed(2)));
+    const chipsHtml = (summary.chips || []).map(c => `<span class="meteo-chip ${c.cls}">${c.txt}</span>`).join("");
+    const facts = [
+      ["Fonte meteorológica", summary.facts.source],
+      ["QC score", scoreTxt],
+      ["Fonte 15 min interpolada", summary.facts.interpolation],
+      ["Baixa confiança", summary.facts.low_confidence],
+      ["Outlier detectado", summary.facts.outlier],
+      ["Artefato temporal", summary.facts.artifact],
+    ];
+    const factsHtml = facts.map(([k,v]) => `<div class="meteo-fact"><span class="k">${k}</span><span class="v mono">${fmtAny(v)}</span></div>`).join("");
+    el.innerHTML = `
+      <div class="meteo-health-main">
+        <div>
+          <div class="meteo-health-title">${summary.title}</div>
+          <div class="meteo-health-sub">${summary.note}</div>
+        </div>
+        <div class="meteo-health-score">
+          <div class="k">QC score</div>
+          <div class="v mono">${scoreTxt}</div>
+        </div>
+      </div>
+      <div class="meteo-chips">${chipsHtml}</div>
+      <div class="meteo-facts">${factsHtml}</div>
+    `;
+  }
+
+  function fmtAny(v){
+    if (v === null || v === undefined) return "—";
+    if (typeof v === "number"){
+      if (!Number.isFinite(v)) return "—";
+      return Number.isInteger(v) ? String(v) : String(v.toFixed(6)).replace(/\.?0+$/,'');
+    }
+    if (typeof v === "boolean") return v ? "true" : "false";
+    if (typeof v === "string") return v === "" ? "—" : v;
+    try{ return JSON.stringify(v); }catch(_e){ return String(v); }
+  }
+
+  function fmtPct(v, digits=1){
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "—";
+    return `${(n * 100).toFixed(digits)}%`;
+  }
+
+  function fmtIsoLocal(iso){
+    if (!iso) return "—";
+    try{
+      const d = new Date(String(iso));
+      if (Number.isNaN(d.getTime())) return String(iso);
+      return d.toLocaleString();
+    }catch(_e){
+      return String(iso);
+    }
+  }
+
+  function clearModelHealth(){
+    const statusEl = $("modelHealthStatus");
+    if (statusEl){
+      statusEl.className = "model-health-status neutral";
+      statusEl.textContent = "Sem métricas";
+    }
+    $("modelHealthStatusNote").textContent = "Atualize o painel para carregar a saúde do modelo.";
+    $("modelHealthVersion").textContent = "—";
+    $("modelHealthScope").textContent = "Sem fonte de avaliação carregada";
+    $("modelHealthTrainedAt").textContent = "—";
+    $("modelHealthF1").textContent = "—";
+    $("modelHealthBalanced").textContent = "—";
+    $("modelHealthCoverage").textContent = "—";
+    const btn = $("btnModelMetrics");
+    if (btn) btn.disabled = true;
+  }
+
+  function renderModelHealth(health){
+    hmState.modelHealth = health || null;
+    if (!health){
+      clearModelHealth();
+      return;
+    }
+
+    const statusEl = $("modelHealthStatus");
+    if (statusEl){
+      statusEl.className = `model-health-status ${health.status_tone || 'neutral'}`;
+      statusEl.textContent = health.status_label || "Sem métricas";
+    }
+
+    $("modelHealthStatusNote").textContent = health.status_note || "—";
+    $("modelHealthVersion").textContent = health.model_version || $("trained_model_version")?.value || "—";
+    $("modelHealthScope").textContent = health.metrics_source_label || "Sem fonte de avaliação carregada";
+    $("modelHealthTrainedAt").textContent = fmtIsoLocal(health.trained_at_utc);
+    $("modelHealthF1").textContent = fmtPct(health.validation_f1_macro);
+    $("modelHealthBalanced").textContent = fmtPct(health.validation_balanced_accuracy);
+    $("modelHealthCoverage").textContent = health.validation_coverage_label || "—";
+
+    const btn = $("btnModelMetrics");
+    if (btn) btn.disabled = !health.advanced_available;
+  }
+
+  function renderMatrixTable(el, matrix, labels, formatter){
+    if (!el) return;
+    if (!Array.isArray(matrix) || !matrix.length){
+      el.innerHTML = `<div class="report-note" style="padding:.8rem;">Sem matriz disponível para este modelo.</div>`;
+      return;
+    }
+    const cols = Array.isArray(labels) && labels.length ? labels.map(String) : matrix[0].map((_, i) => String(i));
+    const head = cols.map(lbl => `<th class="mono">${lbl}</th>`).join("");
+    const rows = matrix.map((row, i) => {
+      const tds = row.map(v => `<td class="mono">${formatter(v)}</td>`).join("");
+      return `<tr><td class="mono">${cols[i] ?? i}</td>${tds}</tr>`;
+    }).join("");
+    el.innerHTML = `
+      <table class="matrix">
+        <thead><tr><th>Real \ Prevista</th>${head}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  function renderClassificationReport(el, report, labels){
+    if (!el) return;
+    if (!report || typeof report !== "object"){
+      el.innerHTML = `<div class="report-note" style="padding:.8rem;">Sem relatório por classe disponível.</div>`;
+      return;
+    }
+
+    const special = new Set(["accuracy", "macro avg", "weighted avg", "micro avg", "samples avg"]);
+    const order = Array.isArray(labels) && labels.length ? labels.map(String) : [];
+    const rows = [];
+
+    for (const key of order){
+      if (report[key] && typeof report[key] === "object") rows.push([key, report[key]]);
+    }
+    for (const [key, value] of Object.entries(report)){
+      if (special.has(key)) continue;
+      if (rows.some(([k]) => k === key)) continue;
+      if (value && typeof value === "object") rows.push([key, value]);
+    }
+    for (const key of ["macro avg", "weighted avg"]){
+      if (report[key] && typeof report[key] === "object") rows.push([key, report[key]]);
+    }
+
+    const body = rows.map(([name, obj]) => `
+      <tr>
+        <td class="mono">${name}</td>
+        <td class="mono">${fmtPct(obj.precision, 1)}</td>
+        <td class="mono">${fmtPct(obj.recall, 1)}</td>
+        <td class="mono">${fmtPct(obj["f1-score"], 1)}</td>
+        <td class="mono">${fmtAny(obj.support)}</td>
+      </tr>
+    `).join("");
+
+    const accuracy = (typeof report.accuracy === "number")
+      ? `<div class="report-note" style="padding:.75rem .85rem;">Accuracy global: <span class="mono">${fmtPct(report.accuracy, 1)}</span></div>`
+      : "";
+
+    el.innerHTML = `
+      ${accuracy}
+      <table class="report">
+        <thead>
+          <tr>
+            <th>Classe</th>
+            <th>Precision</th>
+            <th>Recall</th>
+            <th>F1-score</th>
+            <th>Support</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    `;
+  }
+
+  function openModelMetricsModal(){
+    const health = hmState.modelHealth;
+    if (!health || !health.advanced){
+      setStatus(true, "Sem métricas avançadas disponíveis para o modelo treinado atual.");
+      return;
+    }
+
+    const adv = health.advanced || {};
+    const split = adv.dataset_split || {};
+    const labels = adv.target_names || adv.labels || [];
+    const trainedAt = fmtIsoLocal(adv.trained_at_utc || health.trained_at_utc);
+
+    $("modelMetricsMeta").textContent = `${health.model_version || $("trained_model_version")?.value || '—'} • ${health.metrics_source_label || 'Sem fonte'} • treino em ${trainedAt}`;
+    renderKvTable($("modelMetricsSummary"), {
+      trained_model_version: health.model_version || $("trained_model_version")?.value || "—",
+      status: health.status_label || "—",
+      trained_at_local: trainedAt,
+      metrics_source: adv.metrics_source_label || health.metrics_source_label || "—",
+      accuracy: adv.accuracy,
+      balanced_accuracy: adv.balanced_accuracy,
+      f1_macro: adv.f1_macro,
+      f1_weighted: adv.f1_weighted,
+      mean_confidence: adv.mean_confidence,
+      log_loss: adv.log_loss,
+      n_samples: adv.n_samples,
+      validation_coverage_fraction: split.coverage_fraction,
+      train_samples: split.train_samples,
+      validation_samples: split.validation_samples,
+      validation_days: Array.isArray(split.validation_days) ? split.validation_days.length : 0,
+      validation_day_start: split.validation_day_start,
+      validation_day_end: split.validation_day_end,
+      split_strategy: split.strategy,
+    });
+
+    renderMatrixTable($("modelMetricsMatrix"), adv.confusion_matrix, labels, (v) => fmtAny(v));
+    renderMatrixTable($("modelMetricsMatrixNorm"), adv.confusion_matrix_normalized_true, labels, (v) => fmtPct(v, 1));
+    renderClassificationReport($("modelMetricsReport"), adv.classification_report, labels);
+
+    const modal = $("modelMetricsModal");
+    if (modal){
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+    }
+  }
+
+  function closeModelMetricsModal(){
+    const modal = $("modelMetricsModal");
+    if (modal){
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function setStatus(on, txt){
+    const box = $("statusBox");
+    const t = $("statusTxt");
+    if (!box || !t) return;
+    if (!on){
+      box.style.display = "none";
+      t.textContent = "";
+      return;
+    }
+    box.style.display = "";
+    t.textContent = txt || "Carregando…";
+  }
+
+  function setBtnLoading(btn, isLoading, labelIdle, labelLoading){
+    if (!btn) return;
+    btn.disabled = !!isLoading;
+    const lbl = btn.querySelector(".label");
+    if (lbl){
+      lbl.textContent = isLoading ? (labelLoading || "Carregando...") : (labelIdle || lbl.textContent);
+    }
+  }
+
+  function buildQuery(payload){
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(payload)){
+      if (v === undefined || v === null || v === "") continue;
+      qs.set(k, String(v));
+    }
+    if (payload.plant_id != null){
+      qs.set("plant_pk", String(payload.plant_id));
+      qs.set("pk", String(payload.plant_id));
+    }
+    return qs.toString();
+  }
+
+  async function fetchJson(url, opts={}){
+    const res = await fetch(url, opts);
+    const txt = await res.text();
+    let data = null;
+    try{ data = JSON.parse(txt); }catch(_e){}
+    if (!res.ok){
+      const msg = (data && (data.error || data.detail)) ? (data.error || data.detail) : txt.slice(0, 700);
+      throw new Error(`HTTP ${res.status}: ${msg}`);
+    }
+    if (!data || data.ok !== true){
+      const msg = (data && data.error) ? data.error : "Resposta inválida";
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  async function fetchApi(apiUrl, payload){
+    const url = apiUrl + "?" + buildQuery(payload);
+    return await fetchJson(url, { method: "GET", headers: { "Accept": "application/json" } });
+  }
+
+  async function postAction(actionsUrl, body){
+    return await fetchJson(actionsUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify(body || {})
+    });
+  }
+
+  function sevColor(cls){
+    const cs = getComputedStyle(document.documentElement);
+    if (cls === "crit") return cs.getPropertyValue("--hm-crit").trim();
+    if (cls === "warn") return cs.getPropertyValue("--hm-warn").trim();
+    if (cls === "ok")   return cs.getPropertyValue("--hm-ok").trim();
+    return cs.getPropertyValue("--hm-none").trim();
+  }
+
+  function stateToClass(state){
+    if (state === 3) return "crit";
+    if (state === 2) return "warn";
+    if (state === 1) return "ok";
+    return "none";
+  }
+
+  function isObjectLike(v){
+    return v !== null && typeof v === "object" && !Array.isArray(v);
+  }
+
+  function flattenValue(v){
+    if (Array.isArray(v)) return v.map(x => fmtAny(x)).join(" | ");
+    if (isObjectLike(v)) return JSON.stringify(v);
+    return v;
+  }
+
+  function normalizeDict(obj){
+    const out = {};
+    for (const [k, v] of Object.entries(obj || {})){
+      out[k] = flattenValue(v);
+    }
+    return out;
+  }
+
+  function pickByRegex(obj, regex){
+    const out = {};
+    for (const [k, v] of Object.entries(obj || {})){
+      if (regex.test(String(k || ""))){
+        out[k] = flattenValue(v);
+      }
+    }
+    return out;
+  }
+
+  function pickByKeys(obj, keys){
+    const out = {};
+    for (const k of keys){
+      if (Object.prototype.hasOwnProperty.call(obj || {}, k)){
+        out[k] = flattenValue(obj[k]);
+      }
+    }
+    return out;
+  }
+
+  function omitKeys(obj, usedKeys){
+    const used = new Set(usedKeys || []);
+    const out = {};
+    for (const [k, v] of Object.entries(obj || {})){
+      if (!used.has(k)){
+        out[k] = flattenValue(v);
+      }
+    }
+    return out;
+  }
+
+  function renderKvTable(tbl, obj){
+    if (!tbl) return;
+    const entries = Object.entries(obj || {});
+    const renderRow = ([k,v]) => `<tr><td class="k mono">${prettyKey(k)}</td><td class="v mono">${fmtAny(v)}</td></tr>`;
+    tbl.innerHTML = entries.length ? entries.map(renderRow).join("") : `<tr><td class="k mono">—</td><td class="v mono">—</td></tr>`;
+  }
+
+  function flattenNestedForTable(out, obj, prefix=""){
+    if (!obj || typeof obj !== "object") return;
+
+    for (const [k, v] of Object.entries(obj)){
+      const key = prefix ? `${prefix}${k}` : k;
+
+      if (v && typeof v === "object" && !Array.isArray(v)){
+        flattenNestedForTable(out, v, `${key} › `);
+      } else if (Array.isArray(v)) {
+        out[key] = v.map(x => (typeof x === "object" ? JSON.stringify(x) : String(x))).join(" | ");
+      } else {
+        out[key] = v;
+      }
+    }
+  }
+
+  function sourceListByMppt(sourceOperList){
+    const map = {};
+    for (const src of (sourceOperList || [])){
+      const m = String(src || "").match(/(?:\||\b)MPPT\s*([0-9]+)/i);
+      if (!m) continue;
+      const idx = Number(m[1]);
+      if (Number.isFinite(idx) && idx > 0) map[idx] = src;
+    }
+    return map;
+  }
+
+  function canonicalObservedIndices(canonical, sourceOperList){
+    const idxSet = new Set();
+    const srcMap = sourceListByMppt(sourceOperList);
+
+    for (const k of Object.keys(srcMap)){
+      idxSet.add(Number(k));
+    }
+
+    for (let i = 1; i <= 8; i++){
+      const vals = [
+        canonical[`mppt${i}_pac_w`],
+        canonical[`mppt${i}_pdc_w`],
+        canonical[`mppt${i}_vdc_v`],
+        canonical[`mppt${i}_idc_a`],
+        canonical[`mppt${i}_warning`],
+        canonical[`mppt${i}_warnings`],
+        canonical[`mppt${i}_alarm`],
+        canonical[`mppt${i}_alarms`],
+        canonical[`mppt${i}_status`],
+      ];
+      const hasAny = vals.some(v => v !== null && v !== undefined && String(v) !== "");
+      if (hasAny) idxSet.add(i);
+    }
+
+    return Array.from(idxSet).sort((a,b) => a-b);
+  }
+
+  function buildCanonicalMpptFallback(sb, sources, sourceOperList){
+    const out = {};
+    const srcMap = sourceListByMppt(sourceOperList || Object.keys(sources || {}));
+    const observed = new Set(Object.keys(srcMap).map(Number));
+
+    for (let i = 1; i <= 8; i++){
+      const pack = {
+        source_oper: sb[`mppt${i}_source_oper`] ?? srcMap[i] ?? null,
+        pac_w: sb[`mppt${i}_pac_w`] ?? null,
+        pdc_w: sb[`mppt${i}_pdc_w`] ?? null,
+        vdc_v: sb[`mppt${i}_vdc_v`] ?? null,
+        idc_a: sb[`mppt${i}_idc_a`] ?? null,
+        warning: sb[`mppt${i}_warning`] ?? null,
+        warnings: sb[`mppt${i}_warnings`] ?? null,
+        alarm: sb[`mppt${i}_alarm`] ?? null,
+        alarms: sb[`mppt${i}_alarms`] ?? null,
+        status: sb[`mppt${i}_status`] ?? null,
+      };
+
+      for (const [src, vals] of Object.entries(sources || {})){
+        const m = String(src).match(/(?:\||\b)MPPT\s*([0-9]+)/i);
+        if (!m || Number(m[1]) !== i) continue;
+
+        if (pack.source_oper == null) pack.source_oper = src;
+        if (pack.pac_w == null && vals["p_ac_w"] != null) pack.pac_w = vals["p_ac_w"];
+        if (pack.pdc_w == null && vals["p_dc_w"] != null) pack.pdc_w = vals["p_dc_w"];
+        if (pack.vdc_v == null && vals["v_dc_v"] != null) pack.vdc_v = vals["v_dc_v"];
+        if (pack.idc_a == null && vals["i_dc_a"] != null) pack.idc_a = vals["i_dc_a"];
+        if (pack.warning == null && vals["warning"] != null) pack.warning = vals["warning"];
+        if (pack.warnings == null && vals["warnings"] != null) pack.warnings = vals["warnings"];
+        if (pack.alarm == null && vals["alarm"] != null) pack.alarm = vals["alarm"];
+        if (pack.alarms == null && vals["alarms"] != null) pack.alarms = vals["alarms"];
+        if (pack.alarm == null && vals["alarm_code"] != null) pack.alarm = vals["alarm_code"];
+        if (pack.alarms == null && vals["alarm_sev"] != null) pack.alarms = vals["alarm_sev"];
+        if (pack.status == null && vals["status"] != null) pack.status = vals["status"];
+      }
+
+      const hasAnyCore = [pack.source_oper, pack.pac_w, pack.pdc_w, pack.vdc_v, pack.idc_a, pack.warning, pack.warnings, pack.alarm, pack.alarms, pack.status]
+        .some(v => v !== null && v !== undefined && String(v) !== "");
+
+      if (hasAnyCore || observed.has(i)){
+        out[`mppt${i}_source_oper`] = pack.source_oper;
+        out[`mppt${i}_pac_w`] = pack.pac_w;
+        out[`mppt${i}_pdc_w`] = pack.pdc_w;
+        out[`mppt${i}_vdc_v`] = pack.vdc_v;
+        out[`mppt${i}_idc_a`] = pack.idc_a;
+        out[`mppt${i}_warning`] = pack.warning;
+        out[`mppt${i}_warnings`] = pack.warnings;
+        out[`mppt${i}_alarm`] = pack.alarm;
+        out[`mppt${i}_alarms`] = pack.alarms;
+        out[`mppt${i}_status`] = pack.status;
+      }
+    }
+
+    return out;
+  }
+
+  function buildCanonicalMpptDisplay(canonical, sourceOperList){
+    const out = {};
+    const idxs = canonicalObservedIndices(canonical, sourceOperList);
+
+    for (const i of idxs){
+      out[`mppt${i}_source_oper`] = canonical[`mppt${i}_source_oper`] ?? null;
+      out[`mppt${i}_pac_w`] = canonical[`mppt${i}_pac_w`] ?? null;
+      out[`mppt${i}_pdc_w`] = canonical[`mppt${i}_pdc_w`] ?? null;
+      out[`mppt${i}_vdc_v`] = canonical[`mppt${i}_vdc_v`] ?? null;
+      out[`mppt${i}_idc_a`] = canonical[`mppt${i}_idc_a`] ?? null;
+    }
+
+    return out;
+  }
+
+  function buildWarnDisplay(canonical, rawOperRecords, sourceOperList){
+    const out = {};
+    const idxs = canonicalObservedIndices(canonical, sourceOperList);
+
+    for (const i of idxs){
+      const baseKeys = [
+        `mppt${i}_warning`,
+        `mppt${i}_warnings`,
+        `mppt${i}_alarm`,
+        `mppt${i}_alarms`,
+        `mppt${i}_status`,
+      ];
+      for (const k of baseKeys){
+        const v = canonical[k];
+        if (v !== null && v !== undefined && String(v) !== ""){
+          out[k] = v;
+        }
+      }
+    }
+
+    for (const [src, rec] of Object.entries(rawOperRecords || {})){
+      const block = {};
+      for (const k of ["alarm_code", "alarm_sev", "warning", "warnings", "alarm", "alarms", "status", "mode"]){
+        if (rec && rec[k] !== null && rec[k] !== undefined && String(rec[k]) !== ""){
+          block[`${src} — ${k}`] = rec[k];
+        }
+      }
+      Object.assign(out, block);
+    }
+
+    return out;
+  }
+
+  const hmState = {
+    payload: null,
+    modelHealth: null,
+    selectedKey: null,
+    selectedDump: null,
+    selectedTkey: null,
+    selectedEventId: null,
+    geo: null,
+  };
+
+  function fitHeatmapToWidth(){
+    const wrap = $("hmWrap");
+    const canvas = $("hmCanvas");
+    if (!wrap || !canvas) return;
+    const W = canvas.width, H = canvas.height;
+    if (!W || !H) return;
+    const avail = Math.max(0, wrap.clientWidth - 2);
+    if (!avail) return;
+    const scale = Math.min(1, avail / W);
+    canvas.style.width = (W * scale) + "px";
+    canvas.style.height = (H * scale) + "px";
+  }
+
+  function drawHeatmapCanvas(payload){
+    const canvas = $("hmCanvas");
+    const tip = $("hmTip");
+    if (!canvas || !payload) return;
+
+    const ctx = canvas.getContext("2d");
+    const days = payload.days || [];
+    const grid = payload.grid || [];
+    const tkeys = payload.tkeys || [];
+    const eventIds = payload.event_ids || [];
+    const labels = payload.labels || [];
+    const bpd = Number(payload.bins_per_day || 96);
+    const dtm = Number(payload.dt_minutes || 15);
+
+    $("hmBinLbl").textContent = String(dtm);
+
+    if (!days.length || !bpd){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      if (tip) tip.textContent = "Sem dados suficientes para heatmap.";
+      return;
+    }
+
+    const pad = 10;
+    const topH = 26;
+    const leftW = 78;
+    const cellSz = 12;
+    const gap = 3;
+
+    const W = pad + leftW + (bpd * (cellSz + gap)) + pad;
+    const H = pad + topH + (days.length * (cellSz + gap)) + pad;
+
+    canvas.width = W;
+    canvas.height = H;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(10,20,40,.10)";
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = "rgba(233,246,255,.85)";
+    ctx.font = "bold 11px ui-monospace, Menlo, Consolas, monospace";
+    ctx.textBaseline = "middle";
+
+    const binsPerHour = Math.max(1, Math.floor(60 / dtm));
+    for (let ti = 0; ti < bpd; ti++){
+      if (ti % binsPerHour !== 0) continue;
+      const minutes = ti * dtm;
+      const hh = String(Math.floor(minutes / 60)).padStart(2, "0");
+      const mm = String(minutes % 60).padStart(2, "0");
+      const label = `${hh}:${mm}`;
+      const x = pad + leftW + ti * (cellSz + gap);
+      const y = pad + 12;
+      ctx.fillText(label, x, y);
+    }
+
+    ctx.font = "12px ui-monospace, Menlo, Consolas, monospace";
+    for (let di = 0; di < days.length; di++){
+      const ds = days[di];
+      const ddmm = ds.length >= 10 ? `${ds.slice(8,10)}/${ds.slice(5,7)}` : ds;
+      const y = pad + topH + di * (cellSz + gap);
+
+      ctx.fillStyle = "rgba(233,246,255,.88)";
+      ctx.fillText(ddmm, pad, y + cellSz / 2);
+
+      for (let ti = 0; ti < bpd; ti++){
+        const state = (grid[di] && grid[di][ti] !== undefined) ? grid[di][ti] : 0;
+        const cls = stateToClass(state);
+        const x = pad + leftW + ti * (cellSz + gap);
+
+        ctx.fillStyle = sevColor(cls);
+        ctx.fillRect(x, y, cellSz, cellSz);
+      }
+    }
+
+    if (hmState.selectedKey){
+      const [diS, tiS] = hmState.selectedKey.split("|").map(Number);
+      if (Number.isFinite(diS) && Number.isFinite(tiS)){
+        const x = pad + leftW + tiS * (cellSz + gap);
+        const y = pad + topH + diS * (cellSz + gap);
+        ctx.save();
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--hm-sel").trim();
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(x - 1, y - 1, cellSz + 2, cellSz + 2);
+        ctx.restore();
+      }
+    }
+
+    let ok = 0, warn = 0, crit = 0, none = 0;
+    for (let di = 0; di < days.length; di++){
+      for (let ti = 0; ti < bpd; ti++){
+        const state = (grid[di] && grid[di][ti] !== undefined) ? grid[di][ti] : 0;
+        if (state === 3) crit++;
+        else if (state === 2) warn++;
+        else if (state === 1) ok++;
+        else none++;
+      }
+    }
+
+    $("hmBadgeTxt").textContent = `normal=${ok} | warn=${warn} | anômalo=${crit} | sem_diagnóstico=${none}`;
+    $("kpiOk").textContent = String(ok);
+    if ($("kpiWarn")) $("kpiWarn").textContent = String(warn);
+    $("kpiFault").textContent = String(crit);
+    $("kpiNone").textContent = String(none);
+
+    hmState.geo = { pad, topH, leftW, cell: cellSz, gap, days, bpd, dtm, grid, tkeys, eventIds, labels };
+    fitHeatmapToWidth();
+  }
+
+  function binTimeStr(mins){
+    const m = Number(mins);
+    if (!Number.isFinite(m)) return "—";
+    const hh = String(Math.floor(m / 60)).padStart(2, "0");
+    const mm = String(m % 60).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+
+  function openDetailDrawer(){
+    const dr = $("detailDrawer");
+    if (!dr) return;
+    dr.classList.add("open");
+    dr.setAttribute("aria-hidden", "false");
+  }
+
+  function closeDetailDrawer(){
+    const dr = $("detailDrawer");
+    if (!dr) return;
+    dr.classList.remove("open");
+    dr.setAttribute("aria-hidden", "true");
+  }
+
+  function clearDetailTables(){
+    renderKvTable($("detailMetaTbl"), {});
+    renderKvTable($("detailEvent"), {});
+    renderKvTable($("detailEventSummary"), {});
+    renderKvTable($("detailPred"), {});
+    renderKvTable($("detailFeat"), {});
+    renderKvTable($("detailMpptSummary"), {});
+    renderKvTable($("detailFlags"), {});
+    renderKvTable($("detailSources"), {});
+    renderKvTable($("detailInvOut"), {});
+    renderKvTable($("detailMppt"), {});
+    renderKvTable($("detailWarn"), {});
+    renderKvTable($("detailBin"), {});
+    renderKvTable($("detailRawOper"), {});
+    $("detailDump").textContent = "{}";
+  }
+
+  function clearSelection(){
+    hmState.selectedKey = null;
+    hmState.selectedDump = null;
+    hmState.selectedTkey = null;
+    hmState.selectedEventId = null;
+    $("detailMeta").textContent = "—";
+    clearDetailTables();
+    closeDetailDrawer();
+  }
+
+  function currentPayloadBase(){
+    const plantId = $("plant_id")?.value;
+    const start = $("start")?.value;
+    const end = $("end")?.value;
+
+    if (!plantId) throw new Error("Informe plant_id");
+    if (!start || !end) throw new Error("Informe start e end");
+
+    const dtm = Number($("dt_minutes")?.value || 15);
+    const mpptRaw = String($("mppt")?.value || "all").trim().toLowerCase();
+    const mpptApi = (/^\d+$/.test(mpptRaw)) ? Number(mpptRaw) : 0;
+
+    const view_mode = String($("view_mode")?.value || "full").trim() || "full";
+    const event_classifier_version = String($("event_classifier_version")?.value || "").trim() || "event_rules_v2";
+    const trained_model_version = String($("trained_model_version")?.value || "").trim();
+    const detector_version = String($("detector_version")?.value || "").trim() || "hybrid_rules_v1";
+    const source_oper = String($("source_oper")?.value || "").trim();
+    const source_meteo = String($("source_meteo")?.value || "").trim();
+
+    return {
+      plant_id: Number(plantId),
+      start,
+      end,
+      dt_minutes: Number.isFinite(dtm) ? dtm : 15,
+      mppt: mpptApi,
+      mppt_ui: mpptRaw,
+      view_mode,
+      event_classifier_version,
+      trained_model_version,
+      detector_version,
+      source_oper,
+      source_meteo,
+    };
+  }
+
+
+  function syncDatalist(id, values){
+    const dl = $(id);
+    if (!dl) return;
+    dl.innerHTML = "";
+    for (const v of (values || [])){
+      const opt = document.createElement("option");
+      opt.value = String(v);
+      dl.appendChild(opt);
+    }
+  }
+
+  function syncMpptSelect(values){
+    const sel = $("mppt");
+    if (!sel) return;
+    const current = String(sel.value || "all");
+    const opts = Array.isArray(values) && values.length ? values : [1,2,3,4];
+    sel.innerHTML = '<option value="all">Todos</option>' + opts.map(v => `<option value="${v}">MPPT ${v}</option>`).join("");
+    const keep = opts.map(String).includes(current) || current === "all" ? current : "all";
+    sel.value = keep;
+  }
+
+  function syncAvailableControls(av){
+    if (!av) return;
+    syncDatalist("eventClassifierVersionList", av.event_classifier_versions || av.model_versions || []);
+    syncDatalist("trainedModelVersionList", av.trained_model_versions || []);
+    syncDatalist("detectorVersionList", av.detector_versions || []);
+    syncDatalist("sourceOperList", av.source_opers || []);
+    syncDatalist("sourceMeteoList", av.source_meteos || []);
+    syncMpptSelect(av.mppt_options || []);
+  }
+
+  async function refreshHeatmap(){
+    const page = $("mpptPage");
+    const apiUrl = page ? page.dataset.api : null;
+    if (!apiUrl){ alert("API URL não configurada."); return; }
+
+    const btn = $("btnRefresh");
+
+    try{
+      const payload = currentPayloadBase();
+      setBtnLoading(btn, true, "Atualizar", "Carregando...");
+      setStatus(true, "Carregando heatmap…");
+
+      const data = await fetchApi(apiUrl, payload);
+      hmState.payload = data;
+      renderModelHealth(data.model_health || null);
+      syncAvailableControls(data.available || {});
+
+      $("kpiPred").textContent = String(data.pred_count ?? "—");
+      $("kpiDetector").textContent = payload.detector_version || "—";
+      $("kpiEventClassifier").textContent = payload.event_classifier_version || "—";
+      $("kpiTrainedModel").textContent = payload.trained_model_version || "—";
+      $("kpiRange").textContent = `${payload.start} → ${payload.end}`;
+
+      if ((data.pred_count ?? 0) === 0){
+        const hint = data.hint || "Sem diagnósticos para os filtros atuais.";
+        $("hmTip").textContent = hint;
+        setStatus(true, hint);
+      } else {
+        $("hmTip").textContent = "";
+        setStatus(false);
+      }
+
+      drawHeatmapCanvas(data);
+      bindHeatmapHoverAndClick();
+    }catch(err){
+      console.error(err);
+      setStatus(true, `Erro: ${String(err.message || err)}`);
+    }finally{
+      setBtnLoading(btn, false, "Atualizar", "Carregando...");
+    }
+  }
+
+  function buildMetaBlock(hit, dumpObj=null){
+    const uiMppt = $("mppt")?.value || "all";
+    const d = dumpObj || {};
+    const ev = d.event || {};
+    const met = d.meteo || {};
+    return {
+      day: hit.day,
+      bin_time: hit.ts,
+      tkey: hit.tkey,
+      event_id: hit.eventId,
+      label: hit.label,
+      selected_key: hmState.selectedKey,
+      view_mode: $("view_mode")?.value || "full",
+      mppt: (String(uiMppt).toLowerCase() === "all") ? "Todos" : `MPPT ${uiMppt}`,
+      dt_minutes: $("dt_minutes")?.value || "—",
+      event_classifier_version: $("event_classifier_version")?.value || "—",
+      trained_model_version: $("trained_model_version")?.value || "—",
+      detector_version: $("detector_version")?.value || "—",
+      source_oper: ev.source_oper || $("source_oper")?.value || "—",
+      source_meteo: ev.source_meteo || met.source_meteo || $("source_meteo")?.value || "—",
+    };
+  }
+
+  async function loadDumpForSelection(eventId, tkey, hit){
+    const page = $("mpptPage");
+    const dumpUrl = page ? page.dataset.dump : null;
+    if (!dumpUrl){ alert("Dump URL não configurada."); return; }
+
+    const payload = currentPayloadBase();
+    const q = {
+      plant_id: payload.plant_id,
+      mppt: payload.mppt,
+      event_classifier_version: payload.event_classifier_version,
+      trained_model_version: payload.trained_model_version,
+      detector_version: payload.detector_version,
+      source_oper: payload.source_oper,
+      source_meteo: payload.source_meteo,
+      event_id: eventId || "",
+      tkey: tkey || "",
+    };
+
+    const url = dumpUrl + "?" + buildQuery(q);
+    const data = await fetchJson(url, { method: "GET", headers: { "Accept": "application/json" } });
+
+    const metaTxt = $("detailMeta");
+    const metaTbl = $("detailMetaTbl");
+    const meteoHealthEl = $("detailMeteoHealth");
+    const tblEvent = $("detailEvent");
+    const tblEventSummary = $("detailEventSummary");
+    const tblConfidence = $("detailConfidence");
+    const tblPred = $("detailPred");
+    const tblFeat = $("detailFeat");
+    const tblMpptSummary = $("detailMpptSummary");
+    const tblFlags = $("detailFlags");
+    const tblSources = $("detailSources");
+    const tblInvOut = $("detailInvOut");
+    const tblMppt = $("detailMppt");
+    const tblWarn = $("detailWarn");
+    const tblBin = $("detailBin");
+    const tblRawOper = $("detailRawOper");
+    const dumpEl = $("detailDump");
+
+    if (!data.found){
+      metaTxt.textContent = `${hit.day} ${hit.ts} • sem registro`;
+      renderKvTable(metaTbl, buildMetaBlock(hit));
+      renderMeteoHealth(meteoHealthEl, null);
+      renderKvTable(tblEvent, {});
+      renderKvTable(tblEventSummary, {});
+      renderKvTable(tblConfidence, {});
+      renderKvTable(tblPred, {});
+      renderKvTable(tblFeat, {});
+      renderKvTable(tblMpptSummary, {});
+      renderKvTable(tblFlags, {});
+      renderKvTable(tblSources, {});
+      renderKvTable(tblInvOut, {});
+      renderKvTable(tblMppt, {});
+      renderKvTable(tblWarn, {});
+      renderKvTable(tblBin, { hint: data.hint || "Sem dump" });
+      renderKvTable(tblRawOper, {});
+      hmState.selectedDump = data;
+      dumpEl.textContent = JSON.stringify(data, null, 2);
+      openDetailDrawer();
+      return;
+    }
+
+    const d = data.dump || {};
+    const ev = normalizeDict(d.event || {});
+    const evSummary = normalizeDict(d.event_summary || {});
+    const mp = normalizeDict(d.mppt_pred || {});
+    const featSummary = normalizeDict(d.mppt_feature_summary || {});
+    const mpptSummary = normalizeDict(d.selected_mppt_summary || {});
+    const binFlags = normalizeDict(d.bin_flags || {});
+    const sourceSummary = normalizeDict(d.source_summary || {});
+    const sbRaw = d.selected_bin || {};
+    const sb = normalizeDict(sbRaw);
+    const chosenTotalRaw = d.chosen_total || {};
+    const chosenTotal = normalizeDict(chosenTotalRaw);
+    const meteoRaw = d.meteo || {};
+    const meteo = normalizeDict(meteoRaw);
+    const sourceOperList = d.source_oper_list || [];
+    const sources = d.sources || {};
+    const rawOperRecords = d.raw_operational_records || {};
+    const canonicalMpptRaw = d.canonical_mppt || {};
+    const canonicalMppt = normalizeDict(
+      Object.keys(canonicalMpptRaw).length
+        ? canonicalMpptRaw
+        : buildCanonicalMpptFallback(sbRaw, sources, sourceOperList)
+    );
+
+    const rawOperFlat = {};
+    for (const [src, rec] of Object.entries(rawOperRecords)){
+      flattenNestedForTable(rawOperFlat, rec, `${src} — `);
+    }
+
+    const invOut = {
+      ...pickByKeys(chosenTotal, [
+        "policy",
+        "p_ac_w",
+        "p_ac_mppt_sum_w",
+        "p_ac_agg_w",
+        "p_dc_w",
+        "v_dc_active_mean_v",
+        "i_dc_sum_a",
+        "v_ac_v",
+        "i_ac_a",
+        "inv_coverage",
+        "flag_inv_missing_all",
+        "flag_inv_missing_partial",
+        "active_mppt_n",
+      ]),
+      ...pickByKeys(sb, [
+        "vdc_total_v",
+        "vac_v",
+        "iac_a",
+        "fac_hz",
+        "inv_qac_var",
+        "inv_pf",
+      ]),
+    };
+
+    const mpptData = buildCanonicalMpptDisplay(
+      Object.keys(canonicalMpptRaw).length ? canonicalMpptRaw : buildCanonicalMpptFallback(sbRaw, sources, sourceOperList),
+      sourceOperList
+    );
+
+    const warnData = buildWarnDisplay(
+      Object.keys(canonicalMpptRaw).length ? canonicalMpptRaw : buildCanonicalMpptFallback(sbRaw, sources, sourceOperList),
+      rawOperRecords,
+      sourceOperList
+    );
+
+    const usedFromSb = [
+      "vdc_total_v", "vac_v", "iac_a", "fac_hz", "inv_qac_var", "inv_pf",
+      "policy", "p_ac_w", "p_ac_mppt_sum_w", "p_ac_agg_w", "p_dc_w",
+      "v_dc_active_mean_v", "i_dc_sum_a", "v_ac_v", "i_ac_a",
+      "inv_coverage", "flag_inv_missing_all", "flag_inv_missing_partial", "active_mppt_n",
+      "mppt_pac_w", "mppt_pdc_w", "mppt_vdc_v", "mppt_idc_a",
+    ];
+
+    for (let i = 1; i <= 8; i++){
+      usedFromSb.push(`mppt${i}_source_oper`);
+      usedFromSb.push(`mppt${i}_pac_w`);
+      usedFromSb.push(`mppt${i}_pdc_w`);
+      usedFromSb.push(`mppt${i}_vdc_v`);
+      usedFromSb.push(`mppt${i}_idc_a`);
+      usedFromSb.push(`mppt${i}_warning`);
+      usedFromSb.push(`mppt${i}_warnings`);
+      usedFromSb.push(`mppt${i}_alarm`);
+      usedFromSb.push(`mppt${i}_alarms`);
+      usedFromSb.push(`mppt${i}_status`);
+    }
+
+    const remainingBin = omitKeys(sb, usedFromSb);
+
+    for (const [k, v] of Object.entries(meteo)){
+      if (!Object.prototype.hasOwnProperty.call(remainingBin, k)){
+        remainingBin[k] = v;
+      }
+    }
+
+    const metaObj = buildMetaBlock(hit, d);
+    const sourceForMeteo = sourceSummary.event_source_meteo || sourceSummary.requested_source_meteo || metaObj.source_meteo || meteoRaw.source_meteo || "—";
+    const meteoSummary = meteoHealthSummary({
+      ...meteoRaw,
+      ...sbRaw,
+      ...(d.bin_flags || {}),
+    }, sourceForMeteo);
+
+    metaTxt.textContent =
+      `${hit.day} ${hit.ts} • event_id=${fmtAny(ev.id)} • final_label=${fmtAny(ev.final_label || evSummary.final_label)} • pred_label=${fmtAny(mp.pred_label)}`;
+
+    renderKvTable(metaTbl, metaObj);
+    renderMeteoHealth(meteoHealthEl, meteoSummary);
+    renderKvTable(tblEvent, ev);
+    renderKvTable(tblEventSummary, evSummary);
+    renderKvTable(tblConfidence, buildConfidenceBlock(ev, evSummary, sb));
+    renderKvTable(tblPred, mp);
+    renderKvTable(tblFeat, featSummary);
+    renderKvTable(tblMpptSummary, mpptSummary);
+    renderKvTable(tblFlags, binFlags);
+    renderKvTable(tblSources, sourceSummary);
+    renderKvTable(tblInvOut, invOut);
+    renderKvTable(tblMppt, mpptData);
+    renderKvTable(tblWarn, warnData);
+    renderKvTable(tblBin, remainingBin);
+    renderKvTable(tblRawOper, rawOperFlat);
+
+    hmState.selectedDump = d;
+    const dumpWithMeteoHealth = {
+      ...d,
+      meteo_health: {
+        title: meteoSummary.title,
+        note: meteoSummary.note,
+        tone: meteoSummary.tone,
+        source: meteoSummary.source,
+        score: meteoSummary.score,
+      },
+    };
+    dumpEl.textContent = JSON.stringify(dumpWithMeteoHealth, null, 2);
+    openDetailDrawer();
+  }
+
+  function bindHeatmapHoverAndClick(){
+    const canvas = $("hmCanvas");
+    const tip = $("hmTip");
+    if (!canvas || canvas.__bound) return;
+    canvas.__bound = true;
+
+    const hitTest = (ev) => {
+      const g = hmState.geo;
+      if (!g) return null;
+
+      const r = canvas.getBoundingClientRect();
+      const sx = canvas.width / Math.max(1, r.width);
+      const sy = canvas.height / Math.max(1, r.height);
+      const x = (ev.clientX - r.left) * sx;
+      const y = (ev.clientY - r.top) * sy;
+
+      const { pad, topH, leftW, cell, gap, days, bpd, dtm } = g;
+      const gx = x - (pad + leftW);
+      const gy = y - (pad + topH);
+
+      const stride = (cell + gap);
+      const ti = Math.floor(gx / stride);
+      const di = Math.floor(gy / stride);
+
+      if (ti < 0 || ti >= bpd || di < 0 || di >= days.length) return null;
+
+      const rx = gx % stride;
+      const ry = gy % stride;
+      if (rx > cell || ry > cell) return null;
+
+      const tkey = (g.tkeys[di] && g.tkeys[di][ti]) ? g.tkeys[di][ti] : null;
+      const eventId = (g.eventIds[di] && g.eventIds[di][ti]) ? g.eventIds[di][ti] : null;
+      const label = (g.labels[di] && g.labels[di][ti]) ? g.labels[di][ti] : null;
+
+      return { di, ti, day: days[di], ts: binTimeStr(ti * g.dtm), tkey, eventId, label };
+    };
+
+    canvas.addEventListener("mousemove", (ev) => {
+      const h = hitTest(ev);
+      if (!h){
+        if (tip) tip.textContent = "";
+        return;
+      }
+      const g = hmState.geo;
+      const state = (g.grid[h.di] && g.grid[h.di][h.ti] !== undefined) ? g.grid[h.di][h.ti] : 0;
+      const cls = stateToClass(state);
+      if (tip){
+        tip.textContent = `${h.day} ${h.ts} • state=${cls} • label=${h.label || "—"} • event_id=${h.eventId || "—"} • tkey=${h.tkey || "—"}`;
+      }
+    });
+
+    canvas.addEventListener("mouseleave", () => {
+      if (tip) tip.textContent = "";
+    });
+
+    canvas.addEventListener("click", async (ev) => {
+      const h = hitTest(ev);
+      if (!h) return;
+
+      hmState.selectedKey = `${h.di}|${h.ti}`;
+      hmState.selectedTkey = h.tkey;
+      hmState.selectedEventId = h.eventId;
+
+      drawHeatmapCanvas(hmState.payload);
+
+      if (!h.tkey){
+        $("detailMeta").textContent = `${h.day} ${h.ts} • bin sem referência temporal`;
+        renderKvTable($("detailMetaTbl"), buildMetaBlock(h));
+        renderKvTable($("detailEvent"), {});
+        renderKvTable($("detailEventSummary"), {});
+        renderKvTable($("detailPred"), {});
+        renderKvTable($("detailFeat"), {});
+        renderKvTable($("detailMpptSummary"), {});
+        renderKvTable($("detailFlags"), {});
+        renderKvTable($("detailSources"), {});
+        renderKvTable($("detailInvOut"), {});
+        renderKvTable($("detailMppt"), {});
+        renderKvTable($("detailWarn"), {});
+        renderKvTable($("detailBin"), { hint: "Bin sem tkey disponível. Verifique filtros de fonte/detector e cobertura diagnóstica." });
+        renderKvTable($("detailRawOper"), {});
+        hmState.selectedDump = { day: h.day, ts: h.ts, event_id: h.eventId, tkey: null, label: h.label };
+        $("detailDump").textContent = JSON.stringify(hmState.selectedDump, null, 2);
+        openDetailDrawer();
+        return;
+      }
+
+      try{
+        setStatus(true, "Carregando dump do bin…");
+        await loadDumpForSelection(h.eventId, h.tkey, h);
+        setStatus(false);
+      }catch(err){
+        console.error(err);
+        setStatus(true, `Erro dump: ${String(err.message || err)}`);
+      }
+    });
+  }
+
+  async function runTrain(){
+    setStatus(true, "O treino desta tela afeta apenas o bundle do modelo treinado; a inferência operacional continua em Detectar + Inferir.");
+  }
+
+  async function runInfer(){
+    const page = $("mpptPage");
+    const actionsUrl = page ? page.dataset.actions : null;
+    if (!actionsUrl){ alert("Actions URL não configurada."); return; }
+
+    const btn = $("btnInfer");
+
+    try{
+      const payload = currentPayloadBase();
+      const body = {
+        action: "infer",
+        plant_id: payload.plant_id,
+        start: payload.start,
+        end: payload.end,
+        event_classifier_version: payload.event_classifier_version,
+        trained_model_version: payload.trained_model_version,
+        detector_version: payload.detector_version,
+        source_oper: payload.source_oper,
+        source_meteo: payload.source_meteo,
+        confidence_threshold: 0.60,
+        delete_existing: 1
+      };
+
+      setBtnLoading(btn, true, "Detectar + Inferir", "Processando...");
+      setStatus(true, "Rodando detector plant-level, gerando eventos e inferindo MPPT/event-level…");
+
+      const out = await postAction(actionsUrl, body);
+      console.log(out);
+
+      const detected = out.events_detected ?? "?";
+      const inferred = out.events_inferred ?? "?";
+      setStatus(true, `Processo OK. events_detected=${detected} • events_inferred=${inferred}. Atualizando heatmap…`);
+
+      await refreshHeatmap();
+    }catch(err){
+      console.error(err);
+      setStatus(true, `Erro infer: ${String(err.message || err)}`);
+    }finally{
+      setBtnLoading(btn, false, "Detectar + Inferir", "Processando...");
+    }
+  }
+
+  async function runExportPdf(){
+    const page = $("mpptPage");
+    const exportUrl = page ? page.dataset.export : null;
+    if (!exportUrl){
+      alert("Export URL não configurada.");
+      return;
+    }
+    const btn = $("btnExportPdf");
+    try{
+      const payload = currentPayloadBase();
+      const params = new URLSearchParams();
+      Object.entries(payload).forEach(([k, v]) => {
+        if (v === undefined || v === null) return;
+        params.set(k, String(v));
+      });
+      setBtnLoading(btn, true, "Exportar PDF", "Gerando PDF...");
+      setStatus(true, "Gerando relatório PDF com síntese operativa, saúde do modelo, mapa de bins e histórico...", false);
+      window.location.href = `${exportUrl}?${params.toString()}`;
+      setTimeout(() => setStatus(false), 1800);
+    }catch(err){
+      console.error(err);
+      setStatus(true, `Erro exportação PDF: ${String(err.message || err)}`);
+    }finally{
+      setTimeout(() => setBtnLoading(btn, false, "Exportar PDF", "Gerando PDF..."), 1200);
+    }
+  }
+
+  function bindControls(){
+    $("btnRefresh")?.addEventListener("click", refreshHeatmap);
+    $("btnTrain")?.addEventListener("click", runTrain);
+    $("btnInfer")?.addEventListener("click", runInfer);
+    $("btnExportPdf")?.addEventListener("click", runExportPdf);
+
+    $("btnReset")?.addEventListener("click", () => {
+      clearSelection();
+      const empty = {
+        days: [],
+        grid: [],
+        tkeys: [],
+        event_ids: [],
+        labels: [],
+        bins_per_day: Number($("dt_minutes")?.value || 15),
+        dt_minutes: Number($("dt_minutes")?.value || 15),
+      };
+      hmState.payload = empty;
+      drawHeatmapCanvas(empty);
+      $("kpiPred").textContent = "—";
+      $("kpiOk").textContent = "—";
+      if ($("kpiWarn")) $("kpiWarn").textContent = "—";
+      $("kpiFault").textContent = "—";
+      $("kpiNone").textContent = "—";
+      $("kpiDetector").textContent = "—";
+      $("kpiEventClassifier").textContent = "—";
+      $("kpiTrainedModel").textContent = "—";
+      $("kpiRange").textContent = "—";
+      $("hmBadgeTxt").textContent = "—";
+      clearModelHealth();
+      $("hmTip").textContent = "";
+      setStatus(false);
+    });
+
+    $("btnCopySel")?.addEventListener("click", async () => {
+      try{
+        const txt = JSON.stringify(hmState.selectedDump || {}, null, 2);
+        await navigator.clipboard.writeText(txt);
+        setStatus(true, "JSON copiado para a área de transferência.");
+      }catch(err){
+        console.error(err);
+        setStatus(true, "Falha ao copiar JSON.");
+      }
+    });
+
+    $("btnClearSel")?.addEventListener("click", () => {
+      clearSelection();
+      drawHeatmapCanvas(hmState.payload || {
+        days: [], grid: [], tkeys: [], event_ids: [], labels: [], bins_per_day: 96, dt_minutes: 15
+      });
+    });
+
+    $("btnCloseDetail")?.addEventListener("click", closeDetailDrawer);
+    $("btnModelMetrics")?.addEventListener("click", openModelMetricsModal);
+    $("btnCloseModelMetrics")?.addEventListener("click", closeModelMetricsModal);
+    $("modelMetricsModal")?.addEventListener("click", (ev) => {
+      if (ev.target === $("modelMetricsModal")) closeModelMetricsModal();
+    });
+
+    window.addEventListener("resize", fitHeatmapToWidth);
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") {
+        closeDetailDrawer();
+        closeModelMetricsModal();
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    bindControls();
+    clearSelection();
+    clearModelHealth();
+    try{
+      await refreshHeatmap();
+    }catch(err){
+      console.error(err);
+      setStatus(true, `Erro inicial: ${String(err.message || err)}`);
+    }
+  });
+</script>
+{% endblock %}

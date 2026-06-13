@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Apenas para os experimentos GNN legados baseados em PyTorch.
+torch==2.10.0
