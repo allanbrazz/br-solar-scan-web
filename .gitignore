@@ -42,5 +42,7 @@ tmp_mismatch_audit/
 # Editors and OS
 .idea/
 .vscode/
+.config/
+.local/
 .DS_Store
 Thumbs.db
