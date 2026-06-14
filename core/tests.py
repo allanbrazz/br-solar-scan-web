@@ -367,6 +367,26 @@ class RenovigiWorkflowTests(TestCase):
         self.assertNotContains(response, "Timeline de persistência de falha")
         self.assertNotContains(response, "Resíduo vs Instabilidade")
 
+    def test_pv_dashboard_empty_api_keeps_model_fit_contract(self):
+        response = self.client.get(
+            reverse("pv_dashboard_api_timeseries"),
+            {
+                "plant_id": self.plant.id,
+                "start": "2026-06-12",
+                "end": "2026-06-14",
+                "source_oper": "ALL",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["series"]["p_dc_w"], [])
+        self.assertEqual(payload["series"]["p_dc_model_w"], [])
+        self.assertEqual(payload["kpis"]["p_dc_fit_pairs"], 0)
+        self.assertIsNone(payload["kpis"]["p_dc_rmse_w"])
+        self.assertIsNone(payload["kpis"]["p_dc_pearson_r"])
+        self.assertIsNone(payload["kpis"]["p_dc_spearman_rho"])
+
     def test_mismatch_dashboard_contains_chapter_08_charts(self):
         response = self.client.get(reverse("mismatch_fdd"))
 

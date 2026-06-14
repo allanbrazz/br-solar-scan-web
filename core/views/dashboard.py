@@ -422,7 +422,10 @@ def pv_dashboard_timeseries_api(request: HttpRequest) -> JsonResponse:
             },
             "x": [],
             "x_label": [],
-            "series": {},
+            "series": {
+                "p_dc_w": [],
+                "p_dc_model_w": [],
+            },
             "series_by_source": {},
             "charts": {
                 "gauge": {"score": None, "gcv_stat": None, "label": "Indisponível"},
@@ -430,7 +433,13 @@ def pv_dashboard_timeseries_api(request: HttpRequest) -> JsonResponse:
                 "sankey": {"nodes": [], "links": [], "values_kwh": {}},
                 "timeline": {"times": [], "code": [], "code_hyst": [], "dt_minutes": 15.0, "min_persist_minutes": 60.0},
             },
-            "kpis": {"points": 0},
+            "kpis": {
+                "points": 0,
+                "p_dc_fit_pairs": 0,
+                "p_dc_rmse_w": None,
+                "p_dc_pearson_r": None,
+                "p_dc_spearman_rho": None,
+            },
             "audit": {"model_ok": False, "model_error": None, "model_meta": {}, "g_used": "—"},
             "debug": {"has_model": False, "model_error": None},
         }
