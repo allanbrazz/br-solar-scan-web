@@ -266,7 +266,7 @@ class PlantCredSaveView(LoginRequiredMixin, View):
             messages.success(request, "Credenciais salvas/atualizadas com sucesso.")
 
             if obj.provedor == "RENOVIGI":
-                return redirect("core:renovigi_console", pk=plant.pk)
+                return redirect("renovigi_console", pk=plant.pk)
 
             return redirect("plants:detail", pk=plant.pk)
 

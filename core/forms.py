@@ -2,6 +2,8 @@ from __future__ import annotations
 from django import forms
 import datetime as date
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm
 from functools import lru_cache
 from django.forms import inlineformset_factory 
 from datetime import timedelta
@@ -15,6 +17,20 @@ except Exception:
     available_timezones = lambda: set()
 
 from .models import PVModule, PVPlant, PlantMonitoringCredential, PVInverter, PlantCableSegment, PVPlantDetails, PVPlantStringConfig
+
+
+class SignupForm(UserCreationForm):
+    email = forms.EmailField(label="E-mail", required=True)
+
+    class Meta(UserCreationForm.Meta):
+        model = get_user_model()
+        fields = ("username", "email")
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if get_user_model().objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("Este e-mail ja esta associado a uma conta.")
+        return email
 
 
 

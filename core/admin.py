@@ -1,6 +1,10 @@
 # core/admin.py
 
 from django.contrib import admin
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.forms import UserCreationForm
+from django import forms
 from .models import (
     ShineCredential,
     ShineDevice,
@@ -18,6 +22,31 @@ from .models import (
 )
 from django.utils import timezone as dj_tz
 from zoneinfo import ZoneInfo
+
+
+class AdminUserCreationForm(UserCreationForm):
+    email = forms.EmailField(required=True)
+
+    class Meta(UserCreationForm.Meta):
+        model = get_user_model()
+        fields = ("username", "email")
+
+
+class BrazSolarUserAdmin(UserAdmin):
+    add_form = AdminUserCreationForm
+    add_fieldsets = (
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": ("username", "email", "password1", "password2"),
+            },
+        ),
+    )
+
+
+admin.site.unregister(get_user_model())
+admin.site.register(get_user_model(), BrazSolarUserAdmin)
 
 
 @admin.register(PVPlantMergedRecord15m)

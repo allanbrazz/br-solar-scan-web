@@ -300,6 +300,17 @@ EMAIL_BACKEND = env_str(
     "django.core.mail.backends.console.EmailBackend",
 )
 DEFAULT_FROM_EMAIL = env_str("DEFAULT_FROM_EMAIL", "no-reply@example.com")
+EMAIL_HOST = env_str("DJANGO_EMAIL_HOST", "localhost")
+EMAIL_PORT = env_int("DJANGO_EMAIL_PORT", 25)
+EMAIL_HOST_USER = env_str("DJANGO_EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = env_str("DJANGO_EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("DJANGO_EMAIL_USE_TLS", default=False)
+EMAIL_USE_SSL = env_bool("DJANGO_EMAIL_USE_SSL", default=False)
+EMAIL_TIMEOUT = env_int("DJANGO_EMAIL_TIMEOUT", 20)
+ACCOUNT_LOGIN_URL = env_str(
+    "ACCOUNT_LOGIN_URL",
+    "http://127.0.0.1:8000/accounts/login/",
+)
 
 
 # -----------------------------------------------------------------------------

@@ -1,0 +1,7 @@
+Ola, {{ user.username }}.
+
+Sua conta no Braz Solar Scan foi criada com sucesso.
+
+Acesse: {{ login_url }}
+
+Se voce nao esperava esta mensagem, entre em contato com o administrador do sistema.

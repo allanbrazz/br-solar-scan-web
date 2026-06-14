@@ -24,6 +24,11 @@
         {% if form.username.errors %}<ul class="messages"><li class="error">{{ form.username.errors|striptags }}</li></ul>{% endif %}
       </div>
       <div class="field">
+        <label for="{{ form.email.id_for_label }}">E-mail</label>
+        {{ form.email }}
+        {% if form.email.errors %}<ul class="messages"><li class="error">{{ form.email.errors|striptags }}</li></ul>{% endif %}
+      </div>
+      <div class="field">
         <label for="{{ form.password1.id_for_label }}">Senha</label>
         {{ form.password1 }}
         {% if form.password1.errors %}<ul class="messages"><li class="error">{{ form.password1.errors|striptags }}</li></ul>{% endif %}

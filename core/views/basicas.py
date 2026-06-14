@@ -103,15 +103,17 @@ def home(request: HttpRequest) -> HttpResponse:
     return render(request, "home.html", context)
 
 def signup(request: HttpRequest) -> HttpResponse:
+    from core.forms import SignupForm
+
     if not settings.ALLOW_PUBLIC_SIGNUP:
         raise Http404("Cadastro publico desabilitado.")
     if request.method == "POST":
-        form = UserCreationForm(request.POST)
+        form = SignupForm(request.POST)
         if form.is_valid():
             form.save()
             messages.success(request, "Conta criada com sucesso! Faça login.")
             return redirect("login")
     else:
-        form = UserCreationForm()
+        form = SignupForm()
     return render(request, "registration/signup.html", {"form": form})
 

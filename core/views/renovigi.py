@@ -206,7 +206,7 @@ class RenovigiConsoleView(LoginRequiredMixin, View):
 
         if not username or not password:
             messages.error(request, "Informe usuário e senha (ou marque 'usar senha salva').")
-            return redirect("core:renovigi_console", pk=plant.pk)
+            return redirect("renovigi_console", pk=plant.pk)
 
         try:
             # ---------------- DISCOVER ----------------
@@ -293,7 +293,7 @@ class RenovigiConsoleView(LoginRequiredMixin, View):
 
                 cred.save()
                 messages.success(request, "Planta e dispositivo vinculados. Campos foram pré-preenchidos.")
-                return redirect("core:renovigi_console", pk=plant.pk)
+                return redirect("renovigi_console", pk=plant.pk)
 
             # ---------------- SYNC (salvar no banco) ----------------
             if action == "sync":
@@ -408,7 +408,7 @@ class RenovigiConsoleView(LoginRequiredMixin, View):
                 return render(request, self.template_name, ctx)
 
             messages.error(request, "Ação inválida.")
-            return redirect("core:renovigi_console", pk=plant.pk)
+            return redirect("renovigi_console", pk=plant.pk)
 
         except Exception as exc:
             messages.error(request, f"Falha: {exc}")

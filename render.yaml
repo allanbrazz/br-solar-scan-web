@@ -39,3 +39,19 @@ services:
         sync: false
       - key: RENOVIGI_COMPANY_KEY
         sync: false
+      - key: DJANGO_EMAIL_BACKEND
+        value: django.core.mail.backends.smtp.EmailBackend
+      - key: DJANGO_EMAIL_HOST
+        value: smtp.gmail.com
+      - key: DJANGO_EMAIL_PORT
+        value: "587"
+      - key: DJANGO_EMAIL_HOST_USER
+        sync: false
+      - key: DJANGO_EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DJANGO_EMAIL_USE_TLS
+        value: "true"
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: ACCOUNT_LOGIN_URL
+        value: https://br-solar-scan.onrender.com/accounts/login/

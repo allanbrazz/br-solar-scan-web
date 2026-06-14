@@ -131,6 +131,20 @@ class PVPlant(models.Model):
         return self.nome
 
 
+class AccountNotification(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="account_notification",
+    )
+    creation_email_sent_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Notificacoes de {self.user}"
+
+
 
 
 
@@ -1313,4 +1327,4 @@ class FaultEventMPPT(models.Model):
         ordering = ["event_id", "mppt"]
 
     def __str__(self) -> str:
-        return f"event={self.event_id} mppt={self.mppt} {self.pred_label}"    
+        return f"event={self.event_id} mppt={self.mppt} {self.pred_label}"
