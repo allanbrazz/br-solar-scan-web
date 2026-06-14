@@ -28,6 +28,32 @@ python -m venv .venv
 Acesse `http://127.0.0.1:8000/`. Para os experimentos PyTorch, instale
 `requirements-ml.txt`.
 
+## Executavel para Windows
+
+O pacote desktop inicia um servidor HTTP local restrito a `127.0.0.1`, aplica as
+migracoes e abre o sistema no navegador padrao. Nao depende de Render, PostgreSQL
+ou conexao com um servidor externo para as paginas locais. Integracoes como
+Renovigi, Open-Meteo e NSRDB continuam exigindo internet quando utilizadas.
+
+Para gerar a versao portatil:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-desktop.txt
+.\build_desktop.ps1
+```
+
+Arquivos gerados:
+
+- `dist\BrazSolarScan\BrazSolarScan.exe`
+- `artifacts\BrazSolarScan-Windows.zip`
+
+O workflow `Executavel Windows` tambem gera esse ZIP no GitHub Actions e o
+disponibiliza como artefato para download por 30 dias.
+
+Os dados do cliente ficam persistidos em `%APPDATA%\BrazSolarScan`, separados
+dos arquivos do programa. O formato `onedir` foi escolhido para reduzir tempo de
+inicializacao e uso de memoria em comparacao com um executavel `onefile`.
+
 ## Deploy no Render
 
 O arquivo `render.yaml` cria o servico web e um PostgreSQL. No Blueprint do

@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.forms import MeteoRequestForm
+from core.views.dashboard import paired_model_metrics
 from core.models import (
     AccountNotification,
     InverterOperationalData,
@@ -21,6 +22,28 @@ class HealthCheckTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
+
+
+class DashboardMetricTests(TestCase):
+    def test_paired_model_metrics_calculates_rmse_and_correlations(self):
+        result = paired_model_metrics(
+            measured=[100.0, 200.0, 300.0, None],
+            modeled=[110.0, 190.0, 310.0, 400.0],
+        )
+
+        self.assertEqual(result["pairs"], 3)
+        self.assertAlmostEqual(result["rmse"], 10.0)
+        self.assertGreater(result["pearson_r"], 0.99)
+        self.assertEqual(result["spearman_rho"], 1.0)
+
+    def test_paired_model_metrics_handles_missing_or_constant_data(self):
+        empty = paired_model_metrics([None], [None])
+        constant = paired_model_metrics([5.0, 5.0], [10.0, 10.0])
+
+        self.assertEqual(empty["pairs"], 0)
+        self.assertIsNone(empty["rmse"])
+        self.assertIsNone(constant["pearson_r"])
+        self.assertIsNone(constant["spearman_rho"])
 
 
 class AccessControlTests(TestCase):
@@ -334,3 +357,22 @@ class RenovigiWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["page_size"], 200)
+
+    def test_pv_dashboard_contains_model_fit_card_and_removes_old_panels(self):
+        response = self.client.get(reverse("pv_dashboard"))
+
+        self.assertContains(response, "chartPdcFit")
+        self.assertContains(response, "pdcRmse")
+        self.assertNotContains(response, "Diagrama de perdas (Sankey)")
+        self.assertNotContains(response, "Timeline de persistência de falha")
+        self.assertNotContains(response, "Resíduo vs Instabilidade")
+
+    def test_mismatch_dashboard_contains_chapter_08_charts(self):
+        response = self.client.get(reverse("mismatch_fdd"))
+
+        self.assertContains(response, "chartResidualProfile")
+        self.assertContains(response, "residualMatrixCanvas")
+        self.assertContains(response, "fddFlowSvg")
+        self.assertContains(response, "diagnosticHourCanvas")
+        self.assertContains(response, "diagnosticMonthCanvas")
+        self.assertContains(response, "reorderPostHeatmapSections")

@@ -29,7 +29,9 @@ staticfiles/
 build/
 dist/
 *.spec
+!BrazSolarScan.spec
 .buildtmp/
+artifacts/
 
 # Generated studies, exports, and local audit artifacts
 ESTUDOCASO TEMP/

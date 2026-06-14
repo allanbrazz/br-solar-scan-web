@@ -144,6 +144,12 @@
 
     .chart-wrap{ position: relative; height: 330px; width: 100%; }
     .chart-wrap.sm{ height: 280px; }
+    .chapter-chart-wrap{ position:relative; min-height:360px; width:100%; overflow:auto; }
+    .chapter-chart-wrap canvas{ width:100%; min-width:760px; height:360px; }
+    .chapter-grid{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:1rem; }
+    .chapter-note{ opacity:.78; font-size:.88rem; line-height:1.45; margin-bottom:.75rem; }
+    .fdd-flow-svg{ width:100%; min-width:980px; height:360px; display:block; }
+    @media (max-width: 900px){ .chapter-grid{ grid-template-columns:1fr; } }
 
     .hm-wrap{
       width:100%;
@@ -712,7 +718,7 @@
     <div class="chart-wrap sm"><canvas id="chartPower"></canvas></div>
   </div>
 
-  <div class="card glass span-12">
+  <div class="card glass span-12" id="mainHeatmapCard">
     <div class="hm-head">
       <div style="min-width:0;">
         <h3 style="margin-top:0">Heatmap — dia × bin (canvas)</h3>
@@ -737,6 +743,33 @@
       <canvas id="hmCanvas" class="hm-canvas" width="800" height="420" title="Clique para selecionar um ponto"></canvas>
     </div>
     <div id="hmTip" class="hm-tip"></div>
+  </div>
+
+  <div class="card glass span-12" id="chapter08ProfileCard">
+    <h3 style="margin-top:0">Perfil horário integrado dos resíduos multicanais</h3>
+    <div class="chapter-note">Médias horárias dos resíduos relativos de P<sub>AC</sub>, P<sub>DC</sub>, V<sub>DC</sub> e I<sub>DC</sub>, com a irradiância G<sub>POA</sub> mediana no eixo secundário. Recorte entre 7h e 17h, sem interpolação.</div>
+    <div class="chapter-chart-wrap"><canvas id="chartResidualProfile"></canvas></div>
+  </div>
+
+  <div class="card glass span-12" id="chapter08MatrixCard">
+    <h3 style="margin-top:0">Matriz canal × hora com G<sub>POA</sub> sobreposta</h3>
+    <div class="chapter-note">A cor representa o resíduo relativo médio por canal e hora. A linha amarela mostra a irradiância mediana para o mesmo período.</div>
+    <div class="chapter-chart-wrap"><canvas id="residualMatrixCanvas" width="1200" height="420"></canvas></div>
+  </div>
+
+  <div class="card glass span-12" id="chapter08FlowCard">
+    <h3 style="margin-top:0">Fluxo de elegibilidade, ativação estatística e diagnóstico</h3>
+    <div class="chapter-note">Síntese das exclusões sucessivas desde a malha carregada até a sinalização de anomalia residual.</div>
+    <div class="chapter-chart-wrap"><svg id="fddFlowSvg" class="fdd-flow-svg" viewBox="0 0 1200 360" role="img" aria-label="Fluxo de elegibilidade do detector"></svg></div>
+  </div>
+
+  <div class="card glass span-12" id="chapter08DiagnosticsCard">
+    <h3 style="margin-top:0">Distribuição temporal das classes diagnósticas</h3>
+    <div class="chapter-note">Percentual de ocorrência de cada classe diagnóstica por hora do dia e por mês, normalizado pelo total de amostras em cada coluna.</div>
+    <div class="chapter-grid">
+      <div class="chapter-chart-wrap"><canvas id="diagnosticHourCanvas" width="900" height="480"></canvas></div>
+      <div class="chapter-chart-wrap"><canvas id="diagnosticMonthCanvas" width="900" height="480"></canvas></div>
+    </div>
   </div>
 
   <div class="card glass span-12">
@@ -1385,6 +1418,7 @@
 
   /* Charts */
   let chartPower = null;
+  let chartResidualProfile = null;
   let chartDetailDay = null;
   let chartDetailIrrDay = null;
 
@@ -1415,6 +1449,7 @@
 
   function destroyCharts(){
     if(chartPower){ chartPower.destroy(); chartPower = null; }
+    if(chartResidualProfile){ chartResidualProfile.destroy(); chartResidualProfile = null; }
     if(chartDetailDay){ chartDetailDay.destroy(); chartDetailDay = null; }
     if(chartDetailIrrDay){ chartDetailIrrDay.destroy(); chartDetailIrrDay = null; }
   }
@@ -1436,6 +1471,331 @@
       ]},
       options: chartCommonOptions()
     });
+  }
+
+  const CHAPTER_CHANNELS = [
+    { key: "p_ac_residual_rel", label: "r PAC", color: "#55c2ff" },
+    { key: "p_dc_residual_rel", label: "r PDC", color: "#75e6a8" },
+    { key: "v_dc_residual_rel", label: "r VDC", color: "#ffd166" },
+    { key: "i_dc_residual_rel", label: "r IDC", color: "#ff758f" },
+  ];
+
+  function finiteNumber(value){
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function localDateParts(value){
+    const text = String(value || "");
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2})/);
+    if (match) return { year:Number(match[1]), month:Number(match[2]), day:Number(match[3]), hour:Number(match[4]) };
+    const dateValue = new Date(text);
+    if (Number.isNaN(dateValue.getTime())) return null;
+    return { year:dateValue.getFullYear(), month:dateValue.getMonth()+1, day:dateValue.getDate(), hour:dateValue.getHours() };
+  }
+
+  function average(values){
+    const finite = values.map(finiteNumber).filter((value) => value !== null);
+    return finite.length ? finite.reduce((total, value) => total + value, 0) / finite.length : null;
+  }
+
+  function median(values){
+    const finite = values.map(finiteNumber).filter((value) => value !== null).sort((a, b) => a - b);
+    if (!finite.length) return null;
+    const middle = Math.floor(finite.length / 2);
+    return finite.length % 2 ? finite[middle] : (finite[middle - 1] + finite[middle]) / 2;
+  }
+
+  function hourlyChapterData(payload){
+    const series = payload?.series || {};
+    const times = series.t_local || payload?.x_local || [];
+    const hours = Array.from({length:11}, (_, index) => index + 7);
+    const result = { hours, gPoa: [] };
+    for (const channel of CHAPTER_CHANNELS) result[channel.key] = [];
+
+    for (const hour of hours){
+      const indexes = [];
+      for (let i = 0; i < times.length; i++){
+        if (localDateParts(times[i])?.hour === hour) indexes.push(i);
+      }
+      result.gPoa.push(median(indexes.map((index) => series.g_poa?.[index])));
+      for (const channel of CHAPTER_CHANNELS){
+        const meanValue = average(indexes.map((index) => series[channel.key]?.[index]));
+        result[channel.key].push(meanValue === null ? null : meanValue * 100);
+      }
+    }
+    return result;
+  }
+
+  function renderResidualProfile(payload){
+    const canvas = $("chartResidualProfile");
+    if (!canvas || !window.Chart) return;
+    if (chartResidualProfile){ chartResidualProfile.destroy(); chartResidualProfile = null; }
+    const hourly = hourlyChapterData(payload);
+    const datasets = CHAPTER_CHANNELS.map((channel) => ({
+      label: channel.label,
+      data: hourly[channel.key],
+      borderColor: channel.color,
+      backgroundColor: channel.color,
+      borderWidth: 2,
+      pointRadius: 3,
+      tension: .22,
+      spanGaps: false,
+      yAxisID: "yResidual",
+    }));
+    datasets.push({
+      label: "GPOA mediana",
+      data: hourly.gPoa,
+      borderColor: "#f2c94c",
+      backgroundColor: "rgba(242,201,76,.18)",
+      borderWidth: 3,
+      pointRadius: 3,
+      tension: .22,
+      spanGaps: false,
+      yAxisID: "yIrradiance",
+    });
+    const options = chartCommonOptions();
+    options.scales.yResidual = {
+      position: "left",
+      ticks: { color: "rgba(233,246,255,.85)" },
+      grid: { color: "rgba(255,255,255,.06)" },
+      title: { display:true, text:"Resíduo relativo (%)" },
+    };
+    options.scales.yIrradiance = {
+      position: "right",
+      beginAtZero: true,
+      ticks: { color: "#f2c94c" },
+      grid: { drawOnChartArea:false },
+      title: { display:true, text:"GPOA (W/m²)" },
+    };
+    delete options.scales.y;
+    chartResidualProfile = new Chart(canvas, {
+      type: "line",
+      data: { labels: hourly.hours.map((hour) => `${hour}h`), datasets },
+      options,
+    });
+  }
+
+  function residualColor(value){
+    if (!Number.isFinite(value)) return "rgba(255,255,255,.04)";
+    const normalized = Math.max(-1, Math.min(1, value / 100));
+    if (normalized < 0){
+      const strength = Math.abs(normalized);
+      return `rgb(${Math.round(225 - 175*strength)},${Math.round(238 - 95*strength)},${Math.round(250 - 35*strength)})`;
+    }
+    return `rgb(${Math.round(235 + 20*normalized)},${Math.round(238 - 135*normalized)},${Math.round(230 - 120*normalized)})`;
+  }
+
+  function renderResidualMatrix(payload){
+    const canvas = $("residualMatrixCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const hourly = hourlyChapterData(payload);
+    const width = 1200, height = 420;
+    canvas.width = width; canvas.height = height;
+    ctx.clearRect(0, 0, width, height);
+    const margin = { left:120, right:90, top:45, bottom:55 };
+    const cellWidth = (width - margin.left - margin.right) / hourly.hours.length;
+    const cellHeight = 55;
+    ctx.font = "14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    CHAPTER_CHANNELS.forEach((channel, row) => {
+      const y = margin.top + row * cellHeight;
+      ctx.fillStyle = "rgba(233,246,255,.92)";
+      ctx.textAlign = "right";
+      ctx.fillText(channel.label, margin.left - 14, y + cellHeight / 2);
+      hourly[channel.key].forEach((value, column) => {
+        const x = margin.left + column * cellWidth;
+        ctx.fillStyle = residualColor(value);
+        ctx.fillRect(x + 1, y + 1, cellWidth - 2, cellHeight - 2);
+        if (Number.isFinite(value)){
+          ctx.fillStyle = Math.abs(value) > 48 ? "white" : "#071321";
+          ctx.textAlign = "center";
+          ctx.fillText(`${value.toFixed(1)}%`, x + cellWidth / 2, y + cellHeight / 2);
+        }
+      });
+    });
+
+    ctx.fillStyle = "rgba(233,246,255,.82)";
+    ctx.textAlign = "center";
+    hourly.hours.forEach((hour, column) => {
+      ctx.fillText(`${hour}h`, margin.left + (column + .5) * cellWidth, margin.top + CHAPTER_CHANNELS.length * cellHeight + 22);
+    });
+
+    const finiteG = hourly.gPoa.filter((value) => Number.isFinite(value));
+    const gMax = finiteG.length ? Math.max(...finiteG, 1) : 1;
+    const chartTop = margin.top + CHAPTER_CHANNELS.length * cellHeight + 55;
+    const chartBottom = height - 35;
+    ctx.strokeStyle = "#f2c94c";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    let started = false;
+    hourly.gPoa.forEach((value, column) => {
+      if (!Number.isFinite(value)) { started = false; return; }
+      const x = margin.left + (column + .5) * cellWidth;
+      const y = chartBottom - (value / gMax) * (chartBottom - chartTop);
+      if (!started) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      started = true;
+    });
+    ctx.stroke();
+    ctx.fillStyle = "#f2c94c";
+    ctx.textAlign = "right";
+    ctx.fillText(`GPOA máx. ${gMax.toFixed(0)} W/m²`, width - 12, chartTop);
+  }
+
+  function renderFddFlow(payload){
+    const svg = $("fddFlowSvg");
+    if (!svg) return;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    const series = payload?.series || {};
+    const n = (series.t_local || []).length;
+    const masks = Array.from({length:n}, () => true);
+    const stages = [];
+    const countMask = (mask) => mask.filter(Boolean).length;
+    const nextMask = (previous, predicate) => previous.map((active, index) => active && predicate(index));
+    let current = masks;
+    stages.push({ label:"Malha carregada", count:countMask(current) });
+    current = nextMask(current, (i) => finiteNumber(series.p_ac_real_w?.[i]) !== null && finiteNumber(series.p_ac_model_w?.[i]) !== null);
+    stages.push({ label:"Fontes integradas", count:countMask(current) });
+    current = nextMask(current, (i) => finiteNumber(series.p_ac_residual_rel?.[i]) !== null);
+    stages.push({ label:"Resíduo calculável", count:countMask(current) });
+    current = nextMask(current, (i) => Boolean(series.valid_period?.[i]));
+    stages.push({ label:"Período válido", count:countMask(current) });
+    current = nextMask(current, (i) => finiteNumber(series.ewma_z?.[i]) !== null && finiteNumber(series.cusum_score?.[i]) !== null);
+    stages.push({ label:"EWMA/CUSUM", count:countMask(current) });
+    current = nextMask(current, (i) => Boolean(series.fine_diag_allowed?.[i]));
+    stages.push({ label:"Diagnóstico refinado", count:countMask(current) });
+    current = nextMask(current, (i) => Boolean(series.ev_residual_anomaly?.[i]));
+    stages.push({ label:"Anomalia residual", count:countMask(current) });
+
+    const ns = "http://www.w3.org/2000/svg";
+    const add = (tag, attrs, text) => {
+      const element = document.createElementNS(ns, tag);
+      Object.entries(attrs || {}).forEach(([key, value]) => element.setAttribute(key, String(value)));
+      if (text !== undefined) element.textContent = text;
+      svg.appendChild(element);
+      return element;
+    };
+    const baseY = 220;
+    const startX = 20;
+    const stepX = 170;
+    stages.forEach((stage, index) => {
+      const x = startX + index * stepX;
+      if (index > 0){
+        const previous = stages[index - 1];
+        const loss = Math.max(0, previous.count - stage.count);
+        const width = Math.max(4, 28 * (stage.count / Math.max(1, stages[0].count)));
+        add("path", { d:`M ${x-stepX+125} ${baseY} C ${x-stepX+145} ${baseY}, ${x-20} ${baseY}, ${x} ${baseY}`, fill:"none", stroke:"rgba(242,201,76,.75)", "stroke-width":width, "stroke-linecap":"round" });
+        add("rect", { x:x-105, y:55, width:145, height:54, rx:8, fill:"rgba(173,181,189,.16)", stroke:"rgba(173,181,189,.72)" });
+        add("text", { x:x-32, y:76, fill:"rgba(233,246,255,.82)", "text-anchor":"middle", "font-size":13 }, `Excluídos: ${loss}`);
+        add("text", { x:x-32, y:94, fill:"rgba(233,246,255,.62)", "text-anchor":"middle", "font-size":11 }, `${previous.count ? (100*loss/previous.count).toFixed(1) : "0.0"}% da etapa`);
+      }
+      add("rect", { x, y:baseY-50, width:125, height:100, rx:12, fill:index === stages.length-1 ? "rgba(255,90,110,.22)" : "rgba(55,140,210,.22)", stroke:index === stages.length-1 ? "#ff6b7f" : "#55c2ff", "stroke-width":2 });
+      add("text", { x:x+62, y:baseY-14, fill:"white", "text-anchor":"middle", "font-size":13, "font-weight":"700" }, stage.label);
+      add("text", { x:x+62, y:baseY+13, fill:"#f2c94c", "text-anchor":"middle", "font-size":20, "font-weight":"700" }, stage.count);
+      add("text", { x:x+62, y:baseY+34, fill:"rgba(233,246,255,.72)", "text-anchor":"middle", "font-size":11 }, `${stages[0].count ? (100*stage.count/stages[0].count).toFixed(1) : "0.0"}% da malha`);
+    });
+  }
+
+  function heatColor(value, maxValue){
+    if (!Number.isFinite(value) || value <= 0) return "rgba(255,255,255,.035)";
+    const ratio = Math.max(0, Math.min(1, value / Math.max(maxValue, 1)));
+    const r = Math.round(18 + 224 * ratio);
+    const g = Math.round(58 + 143 * ratio);
+    const b = Math.round(90 - 14 * ratio);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function renderDiagnosticHeatmap(canvasId, payload, dimension){
+    const canvas = $(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const series = payload?.series || {};
+    const times = series.t_local || [];
+    const labels = series.diagnosis_label || [];
+    const excluded = new Set(["ok", "normal", "invalid", "unknown", ""]);
+    const countsByLabel = new Map();
+    labels.forEach((label) => {
+      const key = String(label || "").trim();
+      if (!excluded.has(key.toLowerCase())) countsByLabel.set(key, (countsByLabel.get(key) || 0) + 1);
+    });
+    const rowLabels = Array.from(countsByLabel.entries()).sort((a,b) => b[1]-a[1]).slice(0, 9).map(([label]) => label);
+    const columns = dimension === "hour" ? Array.from({length:24}, (_, i) => i) : Array.from({length:12}, (_, i) => i+1);
+    const denom = new Map(columns.map((column) => [column, 0]));
+    const matrix = rowLabels.map(() => columns.map(() => 0));
+    for (let i = 0; i < times.length; i++){
+      const parts = localDateParts(times[i]);
+      if (!parts) continue;
+      const columnValue = dimension === "hour" ? parts.hour : parts.month;
+      const columnIndex = columns.indexOf(columnValue);
+      if (columnIndex < 0) continue;
+      denom.set(columnValue, (denom.get(columnValue) || 0) + 1);
+      const rowIndex = rowLabels.indexOf(String(labels[i] || ""));
+      if (rowIndex >= 0) matrix[rowIndex][columnIndex] += 1;
+    }
+    const percentages = matrix.map((row) => row.map((count, index) => {
+      const total = denom.get(columns[index]) || 0;
+      return total ? 100 * count / total : null;
+    }));
+    const finite = percentages.flat().filter((value) => Number.isFinite(value));
+    const maxValue = finite.length ? Math.max(...finite, 1) : 1;
+    const width = 900;
+    const height = Math.max(360, 115 + Math.max(rowLabels.length, 1) * 42);
+    canvas.width = width; canvas.height = height;
+    ctx.clearRect(0, 0, width, height);
+    ctx.font = "12px sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(233,246,255,.94)";
+    ctx.textAlign = "center";
+    ctx.font = "700 15px sans-serif";
+    ctx.fillText(dimension === "hour" ? "Classes por hora do dia" : "Classes por mês", width/2, 22);
+    const margin = { left:220, right:25, top:52, bottom:45 };
+    const cellWidth = (width - margin.left - margin.right) / columns.length;
+    const cellHeight = rowLabels.length ? (height - margin.top - margin.bottom) / rowLabels.length : 40;
+    if (!rowLabels.length){
+      ctx.font = "14px sans-serif";
+      ctx.fillText("Sem classes anômalas no período selecionado.", width/2, height/2);
+      return;
+    }
+    rowLabels.forEach((label, row) => {
+      ctx.fillStyle = "rgba(233,246,255,.88)";
+      ctx.textAlign = "right";
+      ctx.font = "12px sans-serif";
+      ctx.fillText(humanizeKey(label).slice(0, 29), margin.left - 10, margin.top + (row+.5)*cellHeight);
+      columns.forEach((column, col) => {
+        const value = percentages[row][col];
+        const x = margin.left + col*cellWidth;
+        const y = margin.top + row*cellHeight;
+        ctx.fillStyle = heatColor(value, maxValue);
+        ctx.fillRect(x+1, y+1, cellWidth-2, cellHeight-2);
+        if (Number.isFinite(value) && value > 0 && cellWidth >= 30){
+          ctx.fillStyle = value/maxValue > .58 ? "#071321" : "white";
+          ctx.textAlign = "center";
+          ctx.font = "10px sans-serif";
+          ctx.fillText(value.toFixed(1), x+cellWidth/2, y+cellHeight/2);
+        }
+      });
+    });
+    ctx.fillStyle = "rgba(233,246,255,.8)";
+    ctx.textAlign = "center";
+    ctx.font = "11px sans-serif";
+    columns.forEach((column, index) => ctx.fillText(String(column), margin.left+(index+.5)*cellWidth, height-22));
+  }
+
+  function renderChapter08Charts(payload){
+    renderResidualProfile(payload);
+    renderResidualMatrix(payload);
+    renderFddFlow(payload);
+    renderDiagnosticHeatmap("diagnosticHourCanvas", payload, "hour");
+    renderDiagnosticHeatmap("diagnosticMonthCanvas", payload, "month");
+  }
+
+  function reorderPostHeatmapSections(){
+    const validation = $("validationSummaryCard");
+    const lastChapterCard = $("chapter08DiagnosticsCard");
+    if (validation && lastChapterCard) lastChapterCard.after(validation);
   }
 
   /* Séries / Aliases */
@@ -2923,6 +3283,7 @@
       setKpis(data);
       buildCharts(data);
       renderHeatmapCanvas(data);
+      renderChapter08Charts(data);
       renderValidationDashboard(data);
       bindHeatmapHoverAndClick();
 
@@ -3023,6 +3384,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    reorderPostHeatmapSections();
     prefillDefaultsIfEmpty();
 
     $("btnRun")?.addEventListener("click", () => runFdd({ save:false }));

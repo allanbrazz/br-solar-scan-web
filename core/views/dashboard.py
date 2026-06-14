@@ -52,6 +52,70 @@ def _float_or_none(v: Any) -> Optional[float]:
         return None
 
 
+def _average_ranks(values: List[float]) -> List[float]:
+    indexed = sorted(enumerate(values), key=lambda item: item[1])
+    ranks = [0.0] * len(values)
+    start = 0
+    while start < len(indexed):
+        end = start + 1
+        while end < len(indexed) and indexed[end][1] == indexed[start][1]:
+            end += 1
+        average_rank = (start + 1 + end) / 2.0
+        for position in range(start, end):
+            ranks[indexed[position][0]] = average_rank
+        start = end
+    return ranks
+
+
+def _pearson_correlation(xs: List[float], ys: List[float]) -> Optional[float]:
+    if len(xs) < 2 or len(xs) != len(ys):
+        return None
+    mean_x = sum(xs) / len(xs)
+    mean_y = sum(ys) / len(ys)
+    centered_x = [value - mean_x for value in xs]
+    centered_y = [value - mean_y for value in ys]
+    denominator = math.sqrt(
+        sum(value * value for value in centered_x)
+        * sum(value * value for value in centered_y)
+    )
+    if denominator <= 0:
+        return None
+    return sum(x * y for x, y in zip(centered_x, centered_y)) / denominator
+
+
+def paired_model_metrics(
+    measured: List[Optional[float]] | None,
+    modeled: List[Optional[float]] | None,
+) -> Dict[str, Any]:
+    pairs: List[tuple[float, float]] = []
+    for measured_value, modeled_value in zip(measured or [], modeled or []):
+        measured_float = _float_or_none(measured_value)
+        modeled_float = _float_or_none(modeled_value)
+        if measured_float is not None and modeled_float is not None:
+            pairs.append((measured_float, modeled_float))
+
+    if not pairs:
+        return {"pairs": 0, "rmse": None, "pearson_r": None, "spearman_rho": None}
+
+    measured_values = [pair[0] for pair in pairs]
+    modeled_values = [pair[1] for pair in pairs]
+    rmse = math.sqrt(
+        sum((measured_value - modeled_value) ** 2 for measured_value, modeled_value in pairs)
+        / len(pairs)
+    )
+    pearson_r = _pearson_correlation(modeled_values, measured_values)
+    spearman_rho = _pearson_correlation(
+        _average_ranks(modeled_values),
+        _average_ranks(measured_values),
+    )
+    return {
+        "pairs": len(pairs),
+        "rmse": rmse,
+        "pearson_r": pearson_r,
+        "spearman_rho": spearman_rho,
+    }
+
+
 def _get_merged15m_model():
     return apps.get_model("core", "PVPlantMergedRecord15m")
 
@@ -812,6 +876,7 @@ def pv_dashboard_timeseries_api(request: HttpRequest) -> JsonResponse:
     persist_minutes = 60.0
 
     p_ac_model_w = None
+    p_dc_model_w = None
     mismatch_rel = None
     tcell_c = None
     e_model_kwh = None
@@ -987,6 +1052,8 @@ def pv_dashboard_timeseries_api(request: HttpRequest) -> JsonResponse:
 
                 if out_model.get("mismatch_rel") is not None:
                     mismatch_rel = np_to_list_none(out_model["mismatch_rel"])
+                if out_model.get("pdc_expected_w") is not None:
+                    p_dc_model_w = np_to_list_none(out_model["pdc_expected_w"])
                 if out_model.get("tcell_c") is not None:
                     tcell_c = np_to_list_none(out_model["tcell_c"])
 
@@ -1038,6 +1105,7 @@ def pv_dashboard_timeseries_api(request: HttpRequest) -> JsonResponse:
     met_missing_frac = round(met_missing_ts / n, 3) if n else 0.0
     inv_missing_frac = round(inv_missing_ts_all / n, 3) if n else 0.0
     inv_partial_missing_frac = round(inv_missing_ts_partial / n, 3) if n else 0.0
+    pdc_fit = paired_model_metrics(p_dc, p_dc_model_w)
 
     payload: Dict[str, Any] = {
         "ok": True,
@@ -1088,6 +1156,7 @@ def pv_dashboard_timeseries_api(request: HttpRequest) -> JsonResponse:
 
             # modelo
             "p_ac_model_w": p_ac_model_w,
+            "p_dc_model_w": p_dc_model_w,
             "mismatch_rel": mismatch_rel,
             "tcell_c": tcell_c,
             "p_ac_pu_model": p_ac_pu_model,
@@ -1123,6 +1192,10 @@ def pv_dashboard_timeseries_api(request: HttpRequest) -> JsonResponse:
             "agg_sources_qty": len(agg_sources),
             "meteo_reliability_score": (charts.get("gauge") or {}).get("score") if isinstance(charts, dict) else None,
             "meteo_reliability_label": (charts.get("gauge") or {}).get("label") if isinstance(charts, dict) else None,
+            "p_dc_fit_pairs": pdc_fit["pairs"],
+            "p_dc_rmse_w": None if pdc_fit["rmse"] is None else round(pdc_fit["rmse"], 3),
+            "p_dc_pearson_r": None if pdc_fit["pearson_r"] is None else round(pdc_fit["pearson_r"], 6),
+            "p_dc_spearman_rho": None if pdc_fit["spearman_rho"] is None else round(pdc_fit["spearman_rho"], 6),
         },
         "audit": audit,
         "debug": {

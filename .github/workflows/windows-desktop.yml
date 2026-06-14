@@ -1,0 +1,42 @@
+name: Executavel Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v6
+
+      - name: Configurar Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-desktop.txt
+
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements-desktop.txt
+
+      - name: Construir pacote Windows
+        shell: powershell
+        run: .\build_desktop.ps1 -PythonPath python
+
+      - name: Publicar executavel
+        uses: actions/upload-artifact@v7
+        with:
+          name: BrazSolarScan-Windows-${{ github.sha }}
+          path: artifacts/BrazSolarScan-Windows.zip
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
