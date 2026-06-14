@@ -158,6 +158,16 @@
       <span>Plantas</span>
     </a>
 
+    <a href="{% url 'opdata_index' %}"
+       class="nav-item {% if rm and rm.url_name == 'opdata_index' or rm and rm.url_name == 'opdata_list' or rm and rm.url_name == 'renovigi_console' %}active{% endif %}"
+       aria-label="Dados operativos">
+      <svg class="icon" viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="10" y="12" width="44" height="40" rx="5" fill="#4aa3ff"/>
+        <path d="M18 40l8-9 7 6 12-14" fill="none" stroke="#e6f2ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Dados operativos</span>
+    </a>
+
     <a href="{% url 'open_meteo_view' %}"
        class="nav-item {% if rm and rm.url_name == 'open_meteo_view' %}active{% endif %}"
        {% if rm and rm.url_name == 'open_meteo_view' %}aria-current="page"{% endif %}

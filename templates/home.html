@@ -515,6 +515,7 @@
         <div class="sub">Amostras de telemetria persistidas a partir do inversor ou plataforma de monitoramento.</div>
         <div class="sub wrap-anywhere" style="margin-top:.6rem;">Última sincronização: <b>{{ oper_last_sync|default:"—" }}</b></div>
         <div class="sub wrap-anywhere">Última amostra: <b>{{ oper_last_sample|default:"—" }}</b></div>
+        <a class="btn btn-primary" style="margin-top:.8rem;" href="{% url 'opdata_index' %}">Abrir dados operativos</a>
       </div>
       <svg class="kpi-icon" viewBox="0 0 64 64" aria-hidden="true">
         <rect x="14" y="14" width="36" height="36" rx="6" fill="#4aa3ff"/>

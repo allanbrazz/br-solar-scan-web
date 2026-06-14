@@ -19,6 +19,7 @@ from core.models import (
     PVPlantStringConfig,
     PlantCableSegment,
 )
+from core.access import plants_accessible_to
 #---------------------------
 #---------------------------  P L A N T A S
 #---------------------------
@@ -29,12 +30,40 @@ class PlantListView(LoginRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
-        # Cada usuário vê apenas as SUAS plantas
-        qs = PVPlant.objects.filter(owner=self.request.user)
+        qs = plants_accessible_to(self.request.user)
         q = self.request.GET.get("q", "").strip()
+        tz = self.request.GET.get("tz", "").strip()
+        sort = self.request.GET.get("sort", "nome").strip()
+        order = self.request.GET.get("order", "asc").strip().lower()
         if q:
             qs = qs.filter(nome__icontains=q)
-        return qs
+        if tz:
+            qs = qs.filter(timezone=tz)
+
+        ordering = {
+            "nome": "nome",
+            "lat": "latitude",
+            "lon": "longitude",
+            "tz": "timezone",
+        }.get(sort, "nome")
+        if order == "desc":
+            ordering = f"-{ordering}"
+        return qs.order_by(ordering, "pk")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        accessible = plants_accessible_to(self.request.user)
+        context.update(
+            {
+                "q": self.request.GET.get("q", "").strip(),
+                "sort": self.request.GET.get("sort", "nome").strip(),
+                "order": self.request.GET.get("order", "asc").strip().lower(),
+                "tz_options": accessible.order_by("timezone")
+                .values_list("timezone", flat=True)
+                .distinct(),
+            }
+        )
+        return context
 
 class PlantCreateView(LoginRequiredMixin, CreateView):
     model = PVPlant
@@ -57,10 +86,9 @@ class PlantDetailView(LoginRequiredMixin, DetailView):
     def get_queryset(self):
         # melhora performance e já traz configs
         return (
-            PVPlant.objects
-            .filter(owner=self.request.user)
+            plants_accessible_to(self.request.user)
             .select_related("details")
-            .prefetch_related("details__string_configs")
+            .prefetch_related("details__string_configs", "credentials")
         )
 
     def get_context_data(self, **kwargs):
@@ -87,7 +115,12 @@ class PlantDetailView(LoginRequiredMixin, DetailView):
         ctx["has_string_configs"] = bool(string_configs)
 
         # Form em branco para NOVA credencial
-        ctx["cred_form"] = PlantMonitoringCredentialForm()
+        credentials = list(p.credentials.all())
+        preferred_cred = next(
+            (cred for cred in credentials if cred.provedor == "RENOVIGI"),
+            None,
+        ) or next(iter(credentials), None)
+        ctx["cred_form"] = PlantMonitoringCredentialForm(instance=preferred_cred)
 
         # ======= botão Renovigi =======
         ctx["has_renovigi_cred"] = PlantMonitoringCredential.objects.filter(
@@ -135,7 +168,7 @@ class PlantDetailsEditView(LoginRequiredMixin, View):
         return PVStringConfigFormSet(**kwargs)
 
     def get(self, request, pk):
-        plant = get_object_or_404(PVPlant, pk=pk, owner=request.user)
+        plant = get_object_or_404(plants_accessible_to(request.user), pk=pk)
         details, _ = PVPlantDetails.objects.get_or_create(plant=plant)
 
         form = PVPlantDetailsForm(instance=details)
@@ -145,7 +178,7 @@ class PlantDetailsEditView(LoginRequiredMixin, View):
         return render(request, self.template_name, ctx)
 
     def post(self, request, pk):
-        plant = get_object_or_404(PVPlant, pk=pk, owner=request.user)
+        plant = get_object_or_404(plants_accessible_to(request.user), pk=pk)
         details, _ = PVPlantDetails.objects.get_or_create(plant=plant)
 
         form = PVPlantDetailsForm(request.POST, instance=details)
@@ -188,7 +221,7 @@ class PlantCablesEditView(LoginRequiredMixin, View):
     template_name = "plants/cables_form.html"
 
     def _get_plant(self, request, pk):
-        return get_object_or_404(PVPlant, pk=pk, owner=request.user)
+        return get_object_or_404(plants_accessible_to(request.user), pk=pk)
 
     def get(self, request, pk):
         plant = self._get_plant(request, pk)
@@ -225,7 +258,7 @@ class PlantUpdateView(LoginRequiredMixin, UpdateView):
     success_url = reverse_lazy("plants:list")
 
     def get_queryset(self):
-        return PVPlant.objects.filter(owner=self.request.user)
+        return plants_accessible_to(self.request.user)
 
     def form_valid(self, form):
         resp = super().form_valid(form)
@@ -233,8 +266,13 @@ class PlantUpdateView(LoginRequiredMixin, UpdateView):
         return resp
 
 class PlantCredSaveView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        plant = get_object_or_404(plants_accessible_to(request.user), pk=pk)
+        detail_url = reverse("plants:detail", kwargs={"pk": plant.pk})
+        return redirect(f"{detail_url}#credentials")
+
     def post(self, request, pk):
-        plant = get_object_or_404(PVPlant, pk=pk, owner=request.user)
+        plant = get_object_or_404(plants_accessible_to(request.user), pk=pk)
         provedor_val = request.POST.get("provedor") or None
 
         cred = None
@@ -270,6 +308,14 @@ class PlantCredSaveView(LoginRequiredMixin, View):
 
             return redirect("plants:detail", pk=plant.pk)
 
-        messages.error(request, "Erro ao salvar credenciais.")
-        return redirect("plants:detail", pk=plant.pk)
+        field_errors = []
+        for field_name, errors in form.errors.items():
+            label = form.fields[field_name].label if field_name in form.fields else field_name
+            field_errors.append(f"{label}: {'; '.join(errors)}")
+        detail_url = reverse("plants:detail", kwargs={"pk": plant.pk})
+        messages.error(
+            request,
+            "Erro ao salvar credenciais. " + " ".join(field_errors),
+        )
+        return redirect(f"{detail_url}#credentials")
     

@@ -137,32 +137,24 @@
   </article>
 
   {# ===================== Credenciais ===================== #}
-  <article class="card glass accent-purple" style="grid-column: 1 / -1;">
+  <article id="credentials" class="card glass accent-purple" style="grid-column: 1 / -1; scroll-margin-top: 24px;">
     <div class="flex-between" style="display:flex; justify-content:space-between; align-items:center;">
       <h3>Credenciais de monitoramento</h3>
 
-      {# Decide se habilita o botão Renovigi #}
-      {% with has_renovigi=False %}
-        {% for c in p.credentials.all %}
-          {% if c.provedor == "RENOVIGI" and c.username %}
-            {% with has_renovigi=True %}{% endwith %}
-          {% endif %}
-        {% endfor %}
-
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
         {% if has_renovigi_cred %}
           <a class="btn btn-primary" href="{{ renovigi_console_url }}">
-            Dados operativos (Renovigi)
-          </a>
-          <a class="btn btn-primary" href="{% url 'opdata_list' p.pk %}">
-            Ver dados operativos (salvos)
+            Adquirir dados (Renovigi)
           </a>
         {% else %}
-          <a class="btn btn-primary disabled" href="#" aria-disabled="true"
-            title="Cadastre uma credencial RENOVIGI para habilitar">
-            Dados operativos (Renovigi)
+          <a class="btn btn-primary" href="#credentials">
+            Configurar Renovigi
           </a>
         {% endif %}
-      {% endwith %}
+        <a class="btn btn-primary" href="{% url 'opdata_list' p.pk %}">
+          Ver dados operativos salvos
+        </a>
+      </div>
     </div>
 
     <div class="mb-2" style="margin-top:10px;">
@@ -181,18 +173,24 @@
 
     <form method="post" action="{% url 'plants:cred_save' p.pk %}" class="mt-2" novalidate>
       {% csrf_token %}
+      {% if cred_form.non_field_errors %}
+        <div class="alert">{{ cred_form.non_field_errors }}</div>
+      {% endif %}
       <div style="display:grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap:12px; align-items:end;">
         <div>
           <label class="form-label" for="{{ cred_form.provedor.id_for_label }}">{{ cred_form.provedor.label }}</label>
           {{ cred_form.provedor }}
+          {{ cred_form.provedor.errors }}
         </div>
         <div>
           <label class="form-label" for="{{ cred_form.username.id_for_label }}">{{ cred_form.username.label }}</label>
           {{ cred_form.username }}
+          {{ cred_form.username.errors }}
         </div>
         <div>
           <label class="form-label" for="{{ cred_form.password.id_for_label }}">{{ cred_form.password.label }}</label>
           {{ cred_form.password }}
+          {{ cred_form.password.errors }}
         </div>
       </div>
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">

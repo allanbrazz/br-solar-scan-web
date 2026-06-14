@@ -6,6 +6,7 @@ from core.views._imports import *
 from core.models import (
     PVPlant,
 )
+from core.access import plants_accessible_to
 
 
 #GROWATT
@@ -21,7 +22,7 @@ from core.services.dados_inversor.growatt_client import (
 
 class PlantGrowattDebugView(LoginRequiredMixin, View):
     def get(self, request, pk):
-        plant = get_object_or_404(PVPlant, pk=pk, owner=request.user)
+        plant = get_object_or_404(plants_accessible_to(request.user), pk=pk)
         cred = plant.credentials.filter(provedor="GROWATT").first()
         if not cred:
             messages.error(request, "Nenhuma credencial Growatt cadastrada para esta planta.")
@@ -46,7 +47,7 @@ class PlantGrowattDebugView(LoginRequiredMixin, View):
 
 class PlantGrowattDailyJsonView(LoginRequiredMixin, View):
     def get(self, request, pk):
-        plant = get_object_or_404(PVPlant, pk=pk, owner=request.user)
+        plant = get_object_or_404(plants_accessible_to(request.user), pk=pk)
         cred = plant.credentials.filter(provedor="GROWATT").first()
         if not cred:
             return JsonResponse(

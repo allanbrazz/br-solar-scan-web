@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Dados operativos - Braz Solar Scan{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <h1 class="page-title">Dados operativos</h1>
+  <p class="page-sub">Selecione uma planta para consultar os dados salvos ou configurar a aquisicao Renovigi.</p>
+</header>
+
+<section class="card glass">
+  <div class="table-wrap">
+    <table class="glass-table">
+      <thead>
+        <tr>
+          <th>Planta</th>
+          <th>Registros salvos</th>
+          <th>Renovigi</th>
+          <th>Acoes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td><a href="{% url 'plants:detail' row.plant.pk %}">{{ row.plant.nome }}</a></td>
+            <td>{{ row.records_count }}</td>
+            <td>{% if row.has_renovigi_cred %}Configurada{% else %}Pendente{% endif %}</td>
+            <td class="table-actions">
+              <a class="btn btn-primary" href="{% url 'opdata_list' row.plant.pk %}">Ver dados salvos</a>
+              {% if row.has_renovigi_cred %}
+                <a class="btn btn-primary" href="{% url 'renovigi_console' row.plant.pk %}">Adquirir dados</a>
+              {% else %}
+                <a class="btn btn-primary" href="{% url 'plants:cred_save' row.plant.pk %}">Configurar credenciais</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="text-muted">Nenhuma planta disponivel para este usuario.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

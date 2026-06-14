@@ -111,6 +111,7 @@
                   <a href="{% url 'plants:edit' p.pk %}" class="btn btn-primary">Editar</a>
                   {% if p.pk %}
                     <a href="{% url 'plants:cred_save' p.pk %}" class="btn btn-primary">Credenciais</a>
+                    <a href="{% url 'opdata_list' p.pk %}" class="btn btn-primary">Dados operativos</a>
                   {% endif %}
                 </td>
               </tr>

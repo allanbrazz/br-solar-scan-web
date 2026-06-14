@@ -131,12 +131,12 @@
         <div>
           <label class="form-label">Start day</label>
           <input class="form-control" name="start_day" placeholder="YYYY-MM-DD"
-                 value="{{ request.POST.start_day|default:'2025-12-20' }}">
+                 value="{{ request.POST.start_day|default:default_start_day }}">
         </div>
         <div>
           <label class="form-label">End day</label>
           <input class="form-control" name="end_day" placeholder="YYYY-MM-DD"
-                 value="{{ request.POST.end_day|default:'2026-01-20' }}">
+                 value="{{ request.POST.end_day|default:default_end_day }}">
         </div>
 
         <div>

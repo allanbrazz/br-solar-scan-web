@@ -12,6 +12,7 @@ from core.services.dados_inversor.renovigi_gateway import (
 
 from datetime import datetime, timedelta, UTC
 from django.core.paginator import Paginator
+from django.db.models import Count
 from django.utils.dateparse import parse_date
 
 # Models
@@ -20,6 +21,7 @@ from core.models import (
     PlantMonitoringCredential,
     InverterOperationalData,
 )
+from core.access import plants_accessible_to
 
 # ---------------------------
 # RENOVIGI
@@ -160,6 +162,7 @@ class RenovigiConsoleView(LoginRequiredMixin, View):
                 f"{cred.shinemonitor_devaddr}|{cred.shinemonitor_sn}"
             )
 
+        today = date.today()
         return {
             "plant": plant,
             "cred": cred,
@@ -171,10 +174,12 @@ class RenovigiConsoleView(LoginRequiredMixin, View):
             "devices": devices_cache,
             "selected_plantid": getattr(cred, "shinemonitor_plantid", "") or "",
             "selected_device_key": selected_device_key,
+            "default_start_day": (today - timedelta(days=1)).isoformat(),
+            "default_end_day": today.isoformat(),
         }
 
     def get(self, request, pk):
-        plant = get_object_or_404(PVPlant, pk=pk, owner=request.user)
+        plant = get_object_or_404(plants_accessible_to(request.user), pk=pk)
         cred = self.get_cred(plant)
 
         if not cred:
@@ -184,7 +189,7 @@ class RenovigiConsoleView(LoginRequiredMixin, View):
         return render(request, self.template_name, self._ctx(plant, cred, result=None))
 
     def post(self, request, pk):
-        plant = get_object_or_404(PVPlant, pk=pk, owner=request.user)
+        plant = get_object_or_404(plants_accessible_to(request.user), pk=pk)
         cred = self.get_cred(plant)
 
         if not cred:
@@ -415,11 +420,39 @@ class RenovigiConsoleView(LoginRequiredMixin, View):
             return render(request, self.template_name, self._ctx(plant, cred, result=None))
 
 
+class OperationalDataIndexView(LoginRequiredMixin, View):
+    template_name = "plants/opdata_index.html"
+
+    def get(self, request):
+        plants = list(
+            plants_accessible_to(request.user)
+            .order_by("nome")
+            .prefetch_related("credentials")
+        )
+        counts = dict(
+            InverterOperationalData.objects.filter(plant__in=plants)
+            .values("plant_id")
+            .annotate(total=Count("id"))
+            .values_list("plant_id", "total")
+        )
+        rows = [
+            {
+                "plant": plant,
+                "has_renovigi_cred": any(
+                    cred.provedor == "RENOVIGI" for cred in plant.credentials.all()
+                ),
+                "records_count": counts.get(plant.pk, 0),
+            }
+            for plant in plants
+        ]
+        return render(request, self.template_name, {"rows": rows})
+
+
 class PlantOperationalDataListView(LoginRequiredMixin, View):
     template_name = "plants/opdata_list.html"
 
     def get(self, request, pk: int):
-        plant = get_object_or_404(PVPlant, pk=pk, owner=request.user)
+        plant = get_object_or_404(plants_accessible_to(request.user), pk=pk)
 
         # Defaults: últimos 7 dias (UTC)
         today_utc = datetime.now(UTC).date()
@@ -451,7 +484,10 @@ class PlantOperationalDataListView(LoginRequiredMixin, View):
         if sn:
             qs = qs.filter(sn=sn)
 
-        page_size = int(request.GET.get("page_size") or 200)
+        try:
+            page_size = int(request.GET.get("page_size") or 200)
+        except (TypeError, ValueError):
+            page_size = 200
         page_size = max(20, min(page_size, 1000))
 
         paginator = Paginator(qs, page_size)

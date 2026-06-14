@@ -18,7 +18,7 @@ services:
       - key: DJANGO_DEBUG
         value: "false"
       - key: DJANGO_ALLOW_PUBLIC_SIGNUP
-        value: "false"
+        value: "true"
       - key: DJANGO_SECRET_KEY
         generateValue: true
       - key: DATABASE_URL

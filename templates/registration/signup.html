@@ -18,6 +18,9 @@
   <section class="card glass">
     <form method="post" class="form-grid" novalidate>
       {% csrf_token %}
+      {% if form.non_field_errors %}
+        <ul class="messages"><li class="error">{{ form.non_field_errors|striptags }}</li></ul>
+      {% endif %}
       <div class="field">
         <label for="{{ form.username.id_for_label }}">Usuário</label>
         {{ form.username }}

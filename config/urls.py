@@ -32,8 +32,9 @@ from core.views.growatt import (
     PlantGrowattDailyJsonView,
  )
 from core.views.renovigi import (
-    RenovigiConsoleView, 
-    PlantOperationalDataListView, 
+    RenovigiConsoleView,
+    OperationalDataIndexView,
+    PlantOperationalDataListView,
 )
 from core.views.juntar import (
     merge_run_view,
@@ -111,6 +112,7 @@ urlpatterns = [
     path("plantas/",   include((plants_patterns,   "plants"),   namespace="plants")),
 
     # RENOVIGI
+    path("dados-operativos/", OperationalDataIndexView.as_view(), name="opdata_index"),
     path("plants/<int:pk>/renovigi/console/", RenovigiConsoleView.as_view(), name="renovigi_console"),
     # DADOS ARQUIVADOS RENOVIGI
     path("<int:pk>/opdata/", PlantOperationalDataListView.as_view(), name="opdata_list"),

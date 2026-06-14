@@ -270,13 +270,28 @@ PVStringConfigFormSet = inlineformset_factory(
 
 # ---------- Credenciais de Monitoramento ----------
 class PlantMonitoringCredentialForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["username"].required = True
+        self.fields["password"].required = not bool(self.instance and self.instance.pk)
+        if self.instance and self.instance.pk:
+            self.fields["password"].widget.attrs["placeholder"] = (
+                "Deixe em branco para manter a senha salva"
+            )
+
+    def clean_password(self):
+        password = self.cleaned_data.get("password", "")
+        if not password and self.instance and self.instance.pk:
+            return self.instance.password
+        return password
+
     class Meta:
         model = PlantMonitoringCredential
         fields = ["provedor", "username", "password"]
         widgets = {
             "provedor": forms.Select(attrs={"class": "form-control"}),
             "username": forms.TextInput(attrs={"class": "form-control"}),
-            "password": forms.PasswordInput(render_value=True, attrs={"class": "form-control"}),
+            "password": forms.PasswordInput(render_value=False, attrs={"class": "form-control"}),
         }
 
 class PlantCableSegmentForm(forms.ModelForm):
@@ -495,7 +510,7 @@ class MergeRunForm(forms.Form):
         super().__init__(*args, **kwargs)
 
         qs = PVPlant.objects.all().order_by("nome")
-        if user and user.is_authenticated:
+        if user and user.is_authenticated and not user.is_superuser:
             # se você usa owner, filtra; caso contrário, remove esse filtro
             qs = qs.filter(owner=user)
         self.fields["plant"].queryset = qs
