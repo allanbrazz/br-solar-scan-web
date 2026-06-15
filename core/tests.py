@@ -1,3 +1,7 @@
+from datetime import date
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase, override_settings
@@ -5,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.forms import MeteoRequestForm
+from core.services.fdd.report_pdf import build_mismatch_pdf_report
 from core.views.dashboard import paired_model_metrics
 from core.models import (
     AccountNotification,
@@ -251,7 +256,7 @@ class RenovigiWorkflowTests(TestCase):
         )
         self.plant = PVPlant.objects.create(
             owner=self.user,
-            nome="Berlarmino",
+            nome="Belarmino",
             latitude=-5.685,
             longitude=-35.287,
             timezone="America/Maceio",
@@ -283,6 +288,21 @@ class RenovigiWorkflowTests(TestCase):
         self.assertRedirects(
             response, reverse("renovigi_console", kwargs={"pk": self.plant.pk})
         )
+
+    @override_settings(RENOVIGI_COMPANY_KEY="bnrl_frRFjEz8Mkn")
+    def test_renovigi_console_displays_company_key(self):
+        PlantMonitoringCredential.objects.create(
+            plant=self.plant,
+            provedor="RENOVIGI",
+            username="monitor-user",
+            password="monitor-password",
+        )
+
+        response = self.client.get(
+            reverse("renovigi_console", kwargs={"pk": self.plant.pk})
+        )
+
+        self.assertContains(response, "bnrl_frRFjEz8Mkn")
 
     def test_credentials_link_opens_the_plant_credentials_section(self):
         response = self.client.get(
@@ -396,3 +416,63 @@ class RenovigiWorkflowTests(TestCase):
         self.assertContains(response, "diagnosticHourCanvas")
         self.assertContains(response, "diagnosticMonthCanvas")
         self.assertContains(response, "reorderPostHeatmapSections")
+        self.assertContains(response, "renderResidualCorrelationMatrix")
+        self.assertContains(response, "renderFddSankey")
+        self.assertContains(response, "vendor/chartjs/chart.umd.min.js")
+        self.assertContains(
+            response,
+            '<details class="card glass span-12 advanced-card" id="advancedParamsCard">',
+        )
+        self.assertNotContains(response, 'id="advancedParamsCard" open')
+
+    def test_home_operational_data_button_uses_system_style(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(response, "home-card-action")
+        self.assertContains(response, "Abrir dados operativos")
+
+    def test_mismatch_pdf_export_returns_branded_pdf(self):
+        payload = {
+            "ok": True,
+            "range": {"start": "2026-06-12", "end": "2026-06-14"},
+            "series": {"t_local": []},
+            "thresholds": {"dt_minutes": 15},
+            "sources": {},
+            "versions": {},
+        }
+        params = SimpleNamespace(
+            start=date(2026, 6, 12),
+            end=date(2026, 6, 14),
+            source_oper_raw=None,
+        )
+
+        with patch(
+            "core.views.fdd._build_payload_from_request",
+            return_value=(self.plant, params, payload),
+        ):
+            response = self.client.get(reverse("mismatch_fdd_export_pdf"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("mismatch_fdd_report_plant", response["Content-Disposition"])
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertGreater(len(response.content), 4_000)
+
+    def test_pdf_builder_handles_empty_period(self):
+        pdf = build_mismatch_pdf_report(
+            plant_name="Belarmino",
+            payload={
+                "ok": True,
+                "range": {"start": "2026-06-12", "end": "2026-06-14"},
+                "series": {"t_local": []},
+                "thresholds": {"dt_minutes": 15},
+                "sources": {},
+                "versions": {},
+            },
+            filters={"dt_minutes": 15},
+            generated_at_local="2026-06-14 12:00:00 -03",
+            user_label="renovigi-owner",
+        )
+
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertGreater(len(pdf), 4_000)

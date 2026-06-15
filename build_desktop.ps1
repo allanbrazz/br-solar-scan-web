@@ -27,6 +27,8 @@ try {
     & $Python manage.py collectstatic --no-input
     & $Python -m PyInstaller --noconfirm --clean BrazSolarScan.spec
 
+    Copy-Item -LiteralPath (Join-Path $Root "desktop.env.example") -Destination (Join-Path $Root "dist\BrazSolarScan\desktop.env.example") -Force
+
     $ArtifactDir = Join-Path $Root "artifacts"
     New-Item -ItemType Directory -Path $ArtifactDir -Force | Out-Null
     $ZipPath = Join-Path $ArtifactDir "BrazSolarScan-Windows.zip"

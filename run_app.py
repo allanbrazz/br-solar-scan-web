@@ -8,6 +8,8 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 
 APP_NAME = "BrazSolarScan"
 HOST = "127.0.0.1"
@@ -37,9 +39,18 @@ def _find_free_port(start: int = 8765, limit: int = 100) -> int:
     raise RuntimeError("Nenhuma porta local disponivel para iniciar o sistema.")
 
 
+def _load_desktop_environment(bundle_dir: Path, data_dir: Path) -> None:
+    executable_dir = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else bundle_dir
+    for candidate in (data_dir / "desktop.env", executable_dir / "desktop.env"):
+        if candidate.is_file():
+            load_dotenv(candidate, override=False)
+
+
 def _configure_environment(port: int) -> Path:
     bundle_dir = _bundle_dir()
     data_dir = _user_data_dir()
+    _load_desktop_environment(bundle_dir, data_dir)
+    local_url = f"http://{HOST}:{port}/"
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
     os.environ.setdefault("DJANGO_ENV", "desktop")
     os.environ.setdefault("DJANGO_DEBUG", "false")
@@ -49,6 +60,8 @@ def _configure_environment(port: int) -> Path:
         f"http://{HOST}:{port},http://localhost:{port}",
     )
     os.environ.setdefault("DJANGO_ALLOW_PUBLIC_SIGNUP", "true")
+    os.environ.setdefault("RENOVIGI_COMPANY_KEY", "bnrl_frRFjEz8Mkn")
+    os.environ.setdefault("ACCOUNT_LOGIN_URL", f"{local_url}accounts/login/")
     os.environ.setdefault("DJANGO_DB_NAME", str(data_dir / "braz-solar-scan.sqlite3"))
     os.environ.setdefault("SOLARCONTROL_DATA_DIR", str(data_dir / "data"))
     os.environ.setdefault("DJANGO_MEDIA_ROOT", str(data_dir / "media"))

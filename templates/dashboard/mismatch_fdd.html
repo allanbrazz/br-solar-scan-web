@@ -5,7 +5,7 @@
 {% block title %}FDD — Mismatch{% endblock %}
 
 {% block extra_head %}
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
 
   <style>
     .dash, .dash *{ box-sizing: border-box; }
@@ -108,6 +108,15 @@
       border-color: rgba(255,110,140,.55);
       background: linear-gradient(180deg, rgba(255,110,140,.26), rgba(255,110,140,.08));
     }
+    .btn-glow.export{
+      border-color: rgba(242,201,76,.48);
+      background: linear-gradient(180deg, rgba(242,201,76,.24), rgba(90,200,255,.10));
+      box-shadow: 0 10px 28px rgba(0,0,0,.22), 0 0 24px rgba(242,201,76,.08);
+    }
+    .btn-glow.export:hover{
+      border-color: rgba(242,201,76,.78);
+      background: linear-gradient(180deg, rgba(242,201,76,.32), rgba(90,200,255,.15));
+    }
     .btn-glow .icon{
       width: 18px;
       height: 18px;
@@ -144,11 +153,49 @@
 
     .chart-wrap{ position: relative; height: 330px; width: 100%; }
     .chart-wrap.sm{ height: 280px; }
-    .chapter-chart-wrap{ position:relative; min-height:360px; width:100%; overflow:auto; }
-    .chapter-chart-wrap canvas{ width:100%; min-width:760px; height:360px; }
+    .chapter-chart-wrap{
+      position:relative;
+      min-height:360px;
+      width:100%;
+      overflow:hidden;
+      padding:12px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px;
+      background:linear-gradient(180deg, rgba(10,20,40,.34), rgba(10,20,40,.18));
+    }
+    .chapter-chart-wrap canvas{ width:100%; max-width:100%; height:360px; }
+    .chapter-chart-wrap.matrix canvas{ height:auto; display:block; }
+    .chapter-chart-wrap.sankey{ min-height:430px; overflow-x:auto; }
     .chapter-grid{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:1rem; }
     .chapter-note{ opacity:.78; font-size:.88rem; line-height:1.45; margin-bottom:.75rem; }
-    .fdd-flow-svg{ width:100%; min-width:980px; height:360px; display:block; }
+    .fdd-flow-svg{ width:100%; min-width:1100px; height:auto; display:block; }
+    .advanced-card summary{
+      list-style:none;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:1rem;
+      user-select:none;
+    }
+    .advanced-card summary::-webkit-details-marker{ display:none; }
+    .advanced-toggle{
+      flex:0 0 auto;
+      display:inline-flex;
+      align-items:center;
+      gap:.45rem;
+      padding:.45rem .7rem;
+      border-radius:999px;
+      border:1px solid rgba(90,200,255,.28);
+      background:rgba(90,200,255,.08);
+      font-size:.82rem;
+      font-weight:800;
+    }
+    .advanced-toggle::after{ content:"Abrir"; }
+    .advanced-toggle .chevron{ transition:transform .18s ease; }
+    .advanced-card[open] .advanced-toggle::after{ content:"Recolher"; }
+    .advanced-card[open] .advanced-toggle .chevron{ transform:rotate(180deg); }
+    .advanced-body{ margin-top:1rem; padding-top:.9rem; border-top:1px solid rgba(255,255,255,.10); }
     @media (max-width: 900px){ .chapter-grid{ grid-template-columns:1fr; } }
 
     .hm-wrap{
@@ -564,7 +611,7 @@
             <span class="label">Executar + Salvar</span>
           </button>
 
-          <button class="btn-glow secondary" id="btnExportPdf" type="button" title="Exportar relatório PDF do FDD Mismatch">
+          <button class="btn-glow export" id="btnExportPdf" type="button" title="Exportar relatório PDF do FDD Mismatch">
             <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M12 3v12" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
               <path d="m7 10 5 5 5-5" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -592,13 +639,16 @@
     </div>
   </div>
 
-  <div class="card glass span-12" id="advancedParamsCard">
-    <div class="page-head">
+  <details class="card glass span-12 advanced-card" id="advancedParamsCard">
+    <summary>
       <div style="min-width:0;">
         <h2 style="margin:0; font-size:1.1rem;">Parâmetros avançados</h2>
         <div class="sub">Em branco = usa o padrão do backend. O random search atua no fluxo por <b>Tipologia de Falha</b>, carrega a melhor configuração encontrada nos campos abaixo e deixa a execução final sob controle do usuário.</div>
       </div>
-    </div>
+      <span class="advanced-toggle"><svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    </summary>
+
+    <div class="advanced-body">
 
     {% for grp in advanced_param_groups %}
       <div style="height:.35rem"></div>
@@ -651,7 +701,8 @@
     <div class="status" id="randomSearchResultBox" style="display:none;">
       <span id="randomSearchResultTxt">—</span>
     </div>
-  </div>
+    </div>
+  </details>
 
   <div class="card glass span-12">
     <div class="kpi" id="kpiGrid">
@@ -752,15 +803,15 @@
   </div>
 
   <div class="card glass span-12" id="chapter08MatrixCard">
-    <h3 style="margin-top:0">Matriz canal × hora com G<sub>POA</sub> sobreposta</h3>
-    <div class="chapter-note">A cor representa o resíduo relativo médio por canal e hora. A linha amarela mostra a irradiância mediana para o mesmo período.</div>
-    <div class="chapter-chart-wrap"><canvas id="residualMatrixCanvas" width="1200" height="420"></canvas></div>
+    <h3 style="margin-top:0">Matriz de correlação dos resíduos multicanais</h3>
+    <div class="chapter-note">Correlação de Pearson entre os resíduos relativos de potência CA/CC, tensão CC e corrente CC. Ciano indica associação positiva, rosa associação negativa e amarelo destaca a diagonal.</div>
+    <div class="chapter-chart-wrap matrix"><canvas id="residualMatrixCanvas" width="980" height="560"></canvas></div>
   </div>
 
   <div class="card glass span-12" id="chapter08FlowCard">
-    <h3 style="margin-top:0">Fluxo de elegibilidade, ativação estatística e diagnóstico</h3>
-    <div class="chapter-note">Síntese das exclusões sucessivas desde a malha carregada até a sinalização de anomalia residual.</div>
-    <div class="chapter-chart-wrap"><svg id="fddFlowSvg" class="fdd-flow-svg" viewBox="0 0 1200 360" role="img" aria-label="Fluxo de elegibilidade do detector"></svg></div>
+    <h3 style="margin-top:0">Sankey de elegibilidade, ativação estatística e diagnóstico</h3>
+    <div class="chapter-note">Fluxo ramificado no modelo do capítulo 08: a faixa superior mantém as amostras analisáveis e a inferior registra as exclusões sucessivas.</div>
+    <div class="chapter-chart-wrap sankey"><svg id="fddFlowSvg" class="fdd-flow-svg" viewBox="0 0 1500 560" role="img" aria-label="Sankey de elegibilidade do detector"></svg></div>
   </div>
 
   <div class="card glass span-12" id="chapter08DiagnosticsCard">
@@ -1699,6 +1750,200 @@
     });
   }
 
+  function pairedCorrelation(valuesA, valuesB){
+    const pairs = [];
+    const n = Math.min(valuesA?.length || 0, valuesB?.length || 0);
+    for (let i = 0; i < n; i++){
+      const a = finiteNumber(valuesA[i]);
+      const b = finiteNumber(valuesB[i]);
+      if (a !== null && b !== null) pairs.push([a, b]);
+    }
+    if (pairs.length < 2) return { r:null, n:pairs.length };
+    const meanA = pairs.reduce((sum, pair) => sum + pair[0], 0) / pairs.length;
+    const meanB = pairs.reduce((sum, pair) => sum + pair[1], 0) / pairs.length;
+    let numerator = 0, sumA = 0, sumB = 0;
+    pairs.forEach(([a, b]) => {
+      const da = a - meanA;
+      const db = b - meanB;
+      numerator += da * db;
+      sumA += da * da;
+      sumB += db * db;
+    });
+    const denominator = Math.sqrt(sumA * sumB);
+    return { r:denominator > 0 ? numerator / denominator : null, n:pairs.length };
+  }
+
+  function correlationCellColor(value, diagonal=false){
+    if (diagonal) return "rgb(166,132,42)";
+    if (!Number.isFinite(value)) return "rgb(19,35,57)";
+    const strength = Math.min(1, Math.abs(value));
+    if (value >= 0){
+      return `rgb(${Math.round(18 + 34*strength)},${Math.round(43 + 124*strength)},${Math.round(70 + 155*strength)})`;
+    }
+    return `rgb(${Math.round(42 + 174*strength)},${Math.round(38 + 42*strength)},${Math.round(64 + 63*strength)})`;
+  }
+
+  function roundedRect(ctx, x, y, width, height, radius){
+    const r = Math.min(radius, width/2, height/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+width, y, x+width, y+height, r);
+    ctx.arcTo(x+width, y+height, x, y+height, r);
+    ctx.arcTo(x, y+height, x, y, r);
+    ctx.arcTo(x, y, x+width, y, r);
+    ctx.closePath();
+  }
+
+  function renderResidualCorrelationMatrix(payload){
+    const canvas = $("residualMatrixCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const series = payload?.series || {};
+    const width = 980, height = 560;
+    canvas.width = width; canvas.height = height;
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = "#08182b";
+    roundedRect(ctx, 0, 0, width, height, 18);
+    ctx.fill();
+
+    const labels = CHAPTER_CHANNELS.map((channel) => channel.label);
+    const margin = { left:190, top:82, right:80, bottom:105 };
+    const size = Math.min(width-margin.left-margin.right, height-margin.top-margin.bottom);
+    const cell = size / labels.length;
+
+    ctx.font = "700 14px Chakra Petch, sans-serif";
+    ctx.fillStyle = "rgba(233,246,255,.88)";
+    labels.forEach((label, index) => {
+      ctx.textAlign = "center";
+      ctx.fillText(label, margin.left+(index+.5)*cell, margin.top-25);
+      ctx.save();
+      ctx.translate(margin.left-25, margin.top+(index+.5)*cell);
+      ctx.textAlign = "right";
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
+    });
+
+    CHAPTER_CHANNELS.forEach((rowChannel, row) => {
+      CHAPTER_CHANNELS.forEach((columnChannel, column) => {
+        const result = pairedCorrelation(series[rowChannel.key] || [], series[columnChannel.key] || []);
+        const diagonal = row === column;
+        const x = margin.left + column*cell + 4;
+        const y = margin.top + row*cell + 4;
+        ctx.fillStyle = correlationCellColor(result.r, diagonal);
+        roundedRect(ctx, x, y, cell-8, cell-8, 12);
+        ctx.fill();
+        ctx.strokeStyle = diagonal ? "rgba(242,201,76,.78)" : "rgba(255,255,255,.10)";
+        ctx.lineWidth = diagonal ? 2 : 1;
+        ctx.stroke();
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(255,255,255,.96)";
+        ctx.font = "800 20px Chakra Petch, sans-serif";
+        ctx.fillText(result.r === null ? "—" : result.r.toFixed(2), x+(cell-8)/2, y+(cell-8)/2-7);
+        ctx.fillStyle = "rgba(233,246,255,.66)";
+        ctx.font = "11px Chakra Petch, sans-serif";
+        ctx.fillText(`n=${result.n}`, x+(cell-8)/2, y+(cell-8)/2+18);
+      });
+    });
+
+    const gradientX = margin.left;
+    const gradientY = height-58;
+    const gradientW = size;
+    const gradient = ctx.createLinearGradient(gradientX, 0, gradientX+gradientW, 0);
+    gradient.addColorStop(0, "rgb(216,80,127)");
+    gradient.addColorStop(.5, "rgb(19,35,57)");
+    gradient.addColorStop(1, "rgb(52,167,225)");
+    ctx.fillStyle = gradient;
+    roundedRect(ctx, gradientX, gradientY, gradientW, 12, 6);
+    ctx.fill();
+    ctx.fillStyle = "rgba(233,246,255,.76)";
+    ctx.font = "12px Chakra Petch, sans-serif";
+    ctx.textAlign = "left"; ctx.fillText("-1 associação negativa", gradientX, gradientY+32);
+    ctx.textAlign = "center"; ctx.fillText("0", gradientX+gradientW/2, gradientY+32);
+    ctx.textAlign = "right"; ctx.fillText("+1 associação positiva", gradientX+gradientW, gradientY+32);
+  }
+
+  function renderFddSankey(payload){
+    const svg = $("fddFlowSvg");
+    if (!svg) return;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    const series = payload?.series || {};
+    const n = (series.t_local || []).length;
+    const ns = "http://www.w3.org/2000/svg";
+    const add = (tag, attrs={}) => {
+      const element = document.createElementNS(ns, tag);
+      Object.entries(attrs).forEach(([key, value]) => element.setAttribute(key, String(value)));
+      svg.appendChild(element);
+      return element;
+    };
+    const textBlock = (x, y, lines, attrs={}) => {
+      const text = add("text", {x, y, ...attrs});
+      lines.forEach((line, index) => {
+        const tspan = document.createElementNS(ns, "tspan");
+        tspan.setAttribute("x", String(x));
+        tspan.setAttribute("dy", index === 0 ? "0" : "17");
+        tspan.textContent = line;
+        text.appendChild(tspan);
+      });
+      return text;
+    };
+
+    if (!n){
+      textBlock(750, 270, ["Sem amostras no período selecionado."], {fill:"rgba(233,246,255,.75)", "text-anchor":"middle", "font-size":18});
+      return;
+    }
+
+    const count = (mask) => mask.filter(Boolean).length;
+    const apply = (mask, predicate) => mask.map((active, index) => active && predicate(index));
+    const stages = [
+      {title:["Fontes", "integradas"], criterion:["modelo + P AC", "medido"], predicate:(i) => finiteNumber(series.p_ac_model_w?.[i]) !== null && finiteNumber(series.p_ac_real_w?.[i]) !== null},
+      {title:["Mismatch", "calculável"], criterion:["resíduo relativo", "finito"], predicate:(i) => finiteNumber(series.p_ac_residual_rel?.[i]) !== null},
+      {title:["Período", "válido"], criterion:["qualidade +", "janela solar"], predicate:(i) => Boolean(series.valid_period?.[i])},
+      {title:["EWMA/CUSUM", "persistidos"], criterion:["estatística", "temporal"], predicate:(i) => finiteNumber(series.ewma_z?.[i]) !== null && finiteNumber(series.cusum_score?.[i]) !== null},
+      {title:["Diagnóstico", "refinado"], criterion:["fine_diag", "liberado"], predicate:(i) => Boolean(series.fine_diag_allowed?.[i])},
+      {title:["Anomalia", "residual"], criterion:["marcador residual", "persistido"], predicate:(i) => Boolean(series.ev_residual_anomaly?.[i])},
+    ];
+
+    let current = Array.from({length:n}, () => true);
+    const nodes = [{title:["Malha", "carregada"], count:n, loss:0, x:25, y:260, kind:"start"}];
+    stages.forEach((stage, index) => {
+      const next = apply(current, stage.predicate);
+      const retained = count(next);
+      nodes.push({title:stage.title, criterion:stage.criterion, count:retained, loss:count(current)-retained, x:230+index*205, y:205, lossY:385, kind:index === stages.length-1 ? "final" : "kept"});
+      current = next;
+    });
+
+    const widthFor = (value) => value > 0 ? 5 + 42*Math.sqrt(value/Math.max(1,n)) : 2;
+    for (let index = 1; index < nodes.length; index++){
+      const previous = nodes[index-1];
+      const node = nodes[index];
+      const previousX = previous.x + 145;
+      const previousY = previous.y + 43;
+      const keptPath = `M ${previousX} ${previousY} C ${previousX+55} ${previousY}, ${node.x-55} ${node.y+43}, ${node.x} ${node.y+43}`;
+      add("path", {d:keptPath, fill:"none", stroke:"rgba(242,201,76,.68)", "stroke-width":widthFor(node.count), "stroke-linecap":"round"});
+      const lossPath = `M ${previousX} ${previousY} C ${previousX+55} ${previousY+45}, ${node.x-55} ${node.lossY+35}, ${node.x} ${node.lossY+35}`;
+      add("path", {d:lossPath, fill:"none", stroke:"rgba(150,165,184,.48)", "stroke-width":widthFor(node.loss), "stroke-linecap":"round"});
+
+      add("rect", {x:node.x-10, y:35, width:165, height:80, rx:14, fill:"rgba(10,28,50,.94)", stroke:"rgba(90,200,255,.32)"});
+      textBlock(node.x+72, 60, [`${index}. ${node.criterion[0]}`, node.criterion[1]], {fill:"rgba(233,246,255,.82)", "text-anchor":"middle", "font-size":13, "font-weight":700});
+
+      add("rect", {x:node.x, y:node.lossY, width:145, height:72, rx:13, fill:"rgba(96,110,130,.20)", stroke:"rgba(160,172,190,.55)"});
+      textBlock(node.x+72, node.lossY+24, [`Exclusão ${index}`, `${node.loss} (${(100*node.loss/n).toFixed(1)}%)`], {fill:"rgba(233,246,255,.76)", "text-anchor":"middle", "font-size":13, "font-weight":700});
+    }
+
+    nodes.forEach((node) => {
+      const fill = node.kind === "final" ? "rgba(242,201,76,.22)" : node.kind === "start" ? "rgba(29,79,124,.55)" : "rgba(40,118,170,.36)";
+      const stroke = node.kind === "final" ? "#f2c94c" : "#55c2ff";
+      add("rect", {x:node.x, y:node.y, width:145, height:86, rx:15, fill, stroke, "stroke-width":2});
+      textBlock(node.x+72, node.y+25, node.title, {fill:"white", "text-anchor":"middle", "font-size":14, "font-weight":800});
+      textBlock(node.x+72, node.y+68, [`${node.count} (${(100*node.count/n).toFixed(1)}%)`], {fill:node.kind === "final" ? "#f2c94c" : "rgba(233,246,255,.82)", "text-anchor":"middle", "font-size":14, "font-weight":800});
+    });
+
+    add("rect", {x:430, y:510, width:18, height:12, rx:4, fill:"rgba(242,201,76,.68)"});
+    textBlock(458, 521, ["Fluxo mantido para análise"], {fill:"rgba(233,246,255,.78)", "font-size":13});
+    add("rect", {x:780, y:510, width:18, height:12, rx:4, fill:"rgba(150,165,184,.48)"});
+    textBlock(808, 521, ["Exclusões sucessivas"], {fill:"rgba(233,246,255,.78)", "font-size":13});
+  }
+
   function heatColor(value, maxValue){
     if (!Number.isFinite(value) || value <= 0) return "rgba(255,255,255,.035)";
     const ratio = Math.max(0, Math.min(1, value / Math.max(maxValue, 1)));
@@ -1786,8 +2031,8 @@
 
   function renderChapter08Charts(payload){
     renderResidualProfile(payload);
-    renderResidualMatrix(payload);
-    renderFddFlow(payload);
+    renderResidualCorrelationMatrix(payload);
+    renderFddSankey(payload);
     renderDiagnosticHeatmap("diagnosticHourCanvas", payload, "hour");
     renderDiagnosticHeatmap("diagnosticMonthCanvas", payload, "month");
   }

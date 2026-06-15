@@ -39,9 +39,12 @@ STATE_COLORS = {
 }
 
 SITE_COLORS = {
+    "bg": "#08182B",
+    "glass": "#102A46",
     "navy": "#0F2746",
     "blue": "#17395E",
     "cyan": "#5FB0FF",
+    "gold": "#F2C94C",
     "text": "#1E2D3B",
     "muted": "#425466",
     "line": "#D6E1EE",
@@ -228,8 +231,8 @@ def _make_table(
     left_cols = tuple(left_cols)
     ts = TableStyle(
         [
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(SITE_COLORS["head"])),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor(SITE_COLORS["blue"])),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(SITE_COLORS["glass"])),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTSIZE", (0, 0), (-1, -1), font_size),
             ("LEADING", (0, 0), (-1, -1), font_size + 2),
@@ -272,11 +275,87 @@ def _resolve_logo_path() -> Optional[Path]:
 
 def _header_footer(canvas, doc) -> None:
     canvas.saveState()
+    width, height = doc.pagesize
+    bg = colors.HexColor(SITE_COLORS["bg"])
+    cyan = colors.HexColor(SITE_COLORS["cyan"])
+    gold = colors.HexColor(SITE_COLORS["gold"])
+
+    canvas.setFillColor(bg)
+    canvas.rect(0, height - 12 * mm, width, 12 * mm, stroke=0, fill=1)
+    canvas.setFillColor(cyan)
+    canvas.rect(0, height - 12.8 * mm, width, 0.8 * mm, stroke=0, fill=1)
+    canvas.setFont("Helvetica-Bold", 9)
+    canvas.setFillColor(colors.white)
+    canvas.drawString(doc.leftMargin, height - 7.7 * mm, "BRAZ SOLAR SCAN")
+    canvas.setFillColor(gold)
+    canvas.drawRightString(width - doc.rightMargin, height - 7.7 * mm, "FDD MISMATCH")
+
+    canvas.setStrokeColor(colors.HexColor("#C7D7E8"))
+    canvas.setLineWidth(0.45)
+    canvas.line(doc.leftMargin, 12.5 * mm, width - doc.rightMargin, 12.5 * mm)
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.HexColor("#506375"))
-    canvas.drawString(doc.leftMargin, 11 * mm, "Braz Solar Scan - FDD Mismatch")
-    canvas.drawRightString(doc.pagesize[0] - doc.rightMargin, 11 * mm, f"Página {doc.page}")
+    canvas.drawString(doc.leftMargin, 8.6 * mm, "Relatório técnico de detecção e diagnóstico")
+    canvas.drawRightString(width - doc.rightMargin, 8.6 * mm, f"Página {doc.page}")
     canvas.restoreState()
+
+
+def _report_hero(
+    *,
+    plant_name: str,
+    generated_at_local: str,
+    user_label: str,
+    styles: Dict[str, ParagraphStyle],
+) -> Table:
+    title_style = ParagraphStyle(
+        "hero-title",
+        parent=styles["title"],
+        textColor=colors.white,
+        fontSize=18,
+        leading=22,
+        spaceAfter=3,
+    )
+    meta_style = ParagraphStyle(
+        "hero-meta",
+        parent=styles["subtitle"],
+        textColor=colors.HexColor("#D6E9F8"),
+        fontSize=8.5,
+        leading=11,
+        spaceAfter=0,
+    )
+    text_cell = [
+        _paragraph(f"FDD Mismatch - {_safe_text(plant_name)}", title_style),
+        _paragraph(
+            f"Relatório exportado em <b>{_safe_text(generated_at_local)}</b> por <b>{_safe_text(user_label)}</b>.",
+            meta_style,
+        ),
+    ]
+    logo = _resolve_logo_path()
+    logo_cell: Any = "BRAZ SOLAR SCAN"
+    if logo is not None:
+        try:
+            logo_cell = Image(str(logo), width=37 * mm, height=11 * mm)
+        except Exception:
+            pass
+    hero = Table([[logo_cell, text_cell]], colWidths=[48 * mm, 217 * mm])
+    hero.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(SITE_COLORS["bg"])),
+                ("BOX", (0, 0), (-1, -1), 1.1, colors.HexColor(SITE_COLORS["cyan"])),
+                ("LINEBELOW", (0, 0), (-1, -1), 3, colors.HexColor(SITE_COLORS["gold"])),
+                ("TEXTCOLOR", (0, 0), (0, 0), colors.white),
+                ("FONTNAME", (0, 0), (0, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (0, 0), 10),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+    return hero
 
 
 # ---------------------------------------------------------------------------
@@ -733,10 +812,10 @@ def build_mismatch_pdf_report(
         pagesize=landscape(A4),
         leftMargin=14 * mm,
         rightMargin=14 * mm,
-        topMargin=14 * mm,
+        topMargin=19 * mm,
         bottomMargin=16 * mm,
         title=f"FDD Mismatch - {plant_name}",
-        author="OpenAI / ChatGPT",
+        author="Braz Solar Scan",
         subject="Mismatch FDD",
     )
 
@@ -748,21 +827,15 @@ def build_mismatch_pdf_report(
     heat_png = _build_heatmap_png(points, dt_minutes)
 
     story: List[Any] = []
-    logo = _resolve_logo_path()
-    if logo is not None:
-        try:
-            story.append(Image(str(logo), width=34 * mm, height=10 * mm))
-            story.append(Spacer(1, 2 * mm))
-        except Exception:
-            pass
-
-    story.append(_paragraph(f"Braz Solar Scan - FDD Mismatch - {plant_name}", styles["title"]))
     story.append(
-        _paragraph(
-            f"Relatório exportado a partir da tela FDD Mismatch. Geração: <b>{_safe_text(generated_at_local)}</b>. Usuário: <b>{_safe_text(user_label)}</b>.",
-            styles["subtitle"],
+        _report_hero(
+            plant_name=plant_name,
+            generated_at_local=generated_at_local,
+            user_label=user_label,
+            styles=styles,
         )
     )
+    story.append(Spacer(1, 3 * mm))
 
     rng = payload.get("range") or {}
     thresholds = payload.get("thresholds") or {}
