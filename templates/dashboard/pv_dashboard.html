@@ -505,7 +505,7 @@
 
             <div class="hero-metrics" aria-label="Legenda de status do heatmap">
               <span class="hero-pill ok"><span class="dot"></span> OK</span>
-              <span class="hero-pill warn"><span class="dot"></span> WARN</span>
+              <span class="hero-pill warn"><span class="dot"></span> ATENÇÃO</span>
               <span class="hero-pill crit"><span class="dot"></span> CRIT/FAIL</span>
               <span class="hero-pill neutral"><span class="dot"></span> Intensidade por cobertura</span>
             </div>
@@ -602,7 +602,7 @@
       </article>
 
       <article class="card glass mini kpi accent-rose">
-        <h3>Mismatch médio</h3>
+        <h3>Desvio médio entre modelo e medição</h3>
         <div class="mini-val"><span id="kpiMismatchMean">—</span></div>
         <div class="mini-sub">(P<sub>real</sub>−P<sub>modelo</sub>)/P<sub>modelo</sub></div>
       </article>
@@ -683,7 +683,7 @@
 
     <article class="card glass trend accent-rose" style="grid-column: 1 / -1;">
       <h3>Diagnóstico (modelo físico e normalizações)</h3>
-      <div class="trend-legend muted">PR instantâneo, potência normalizada e mismatch.</div>
+      <div class="trend-legend muted">PR instantâneo, potência normalizada e desvio entre modelo e medição.</div>
       <div class="chart-wrap"><canvas id="chartDiag"></canvas></div>
     </article>
 

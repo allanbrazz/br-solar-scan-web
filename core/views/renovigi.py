@@ -12,7 +12,7 @@ from core.services.dados_inversor.renovigi_gateway import (
 
 from datetime import datetime, timedelta, UTC
 from django.core.paginator import Paginator
-from django.db.models import Count
+from django.db.models import Count, Max, Min
 from django.utils.dateparse import parse_date
 
 # Models
@@ -429,19 +429,23 @@ class OperationalDataIndexView(LoginRequiredMixin, View):
             .order_by("nome")
             .prefetch_related("credentials")
         )
-        counts = dict(
-            InverterOperationalData.objects.filter(plant__in=plants)
-            .values("plant_id")
-            .annotate(total=Count("id"))
-            .values_list("plant_id", "total")
-        )
+        stats = {
+            row["plant_id"]: row
+            for row in (
+                InverterOperationalData.objects.filter(plant__in=plants)
+                .values("plant_id")
+                .annotate(total=Count("id"), first_ts=Min("ts_utc"), last_ts=Max("ts_utc"))
+            )
+        }
         rows = [
             {
                 "plant": plant,
                 "has_renovigi_cred": any(
                     cred.provedor == "RENOVIGI" for cred in plant.credentials.all()
                 ),
-                "records_count": counts.get(plant.pk, 0),
+                "records_count": stats.get(plant.pk, {}).get("total", 0),
+                "first_ts": stats.get(plant.pk, {}).get("first_ts"),
+                "last_ts": stats.get(plant.pk, {}).get("last_ts"),
             }
             for plant in plants
         ]
@@ -511,5 +515,6 @@ class PlantOperationalDataListView(LoginRequiredMixin, View):
             "sn": sn,
             "page_size": page_size,
             "devices": devices,
+            "filtered_count": paginator.count,
         }
         return render(request, self.template_name, ctx)

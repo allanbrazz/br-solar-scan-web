@@ -25,10 +25,34 @@ STATE_WARN = 2
 STATE_CRIT = 3
 
 STATE_LABELS = {
-    STATE_NONE: "Sem diag. útil",
+    STATE_NONE: "Sem diagnóstico útil",
     STATE_OK: "Normal",
-    STATE_WARN: "Warn",
+    STATE_WARN: "Atenção",
     STATE_CRIT: "Falha",
+}
+
+DIAGNOSIS_LABELS_PT = {
+    "normal": "Operação normal",
+    "ok": "Operação normal",
+    "invalid": "Sem diagnóstico útil",
+    "unknown": "Causa não determinada",
+    "grid_overvoltage_trip": "Desligamento por sobretensão da rede",
+    "grid_overvoltage_derating": "Limitação por sobretensão da rede",
+    "grid_undervoltage_trip": "Desligamento por subtensão da rede",
+    "grid_undervoltage_derating": "Limitação por subtensão da rede",
+    "grid_overfrequency_trip": "Desligamento por sobrefrequência",
+    "grid_underfrequency_trip": "Desligamento por subfrequência",
+    "inverter_off_under_sun": "Inversor desligado com irradiância disponível",
+    "unknown_shutdown_with_sun": "Desligamento sem causa definida com sol",
+    "dc_side_partial_loss_probable": "Perda parcial provável no lado CC",
+    "dc_side_voltage_anomaly_probable": "Anomalia provável de tensão CC",
+    "partial_generation_loss_probable": "Perda parcial provável de geração",
+    "persistent_underperformance": "Desempenho persistentemente abaixo do esperado",
+    "curtailment_clipping": "Limitação de potência ou clipping",
+    "severe_power_mismatch": "Desvio severo de potência",
+    "power_mismatch_warning": "Desvio de potência em atenção",
+    "critical_operational_anomaly": "Anomalia operacional crítica",
+    "operational_anomaly_warning": "Anomalia operacional em atenção",
 }
 
 STATE_COLORS = {
@@ -64,6 +88,31 @@ def _safe_text(v: Any, default: str = "-") -> str:
         return default
     s = str(v).strip()
     return s if s else default
+
+
+def _translate_label(value: Any, default: str = "-") -> str:
+    raw = _safe_text(value, default)
+    return DIAGNOSIS_LABELS_PT.get(raw.strip().lower(), raw.replace("_", " ").capitalize())
+
+
+def _proportional_image(source: Any, *, max_width: float, max_height: float) -> Image:
+    original_pos = None
+    try:
+        if hasattr(source, "tell"):
+            original_pos = source.tell()
+            source.seek(0)
+        with PILImage.open(source) as img:
+            width_px, height_px = img.size
+        if hasattr(source, "seek"):
+            source.seek(0 if original_pos is None else original_pos)
+        ratio = min(max_width / max(width_px, 1), max_height / max(height_px, 1))
+        flowable = Image(source, width=width_px * ratio, height=height_px * ratio)
+        flowable.hAlign = "CENTER"
+        return flowable
+    except Exception:
+        if hasattr(source, "seek"):
+            source.seek(0)
+        return Image(source, width=max_width, height=max_height)
 
 
 def _safe_float(v: Any, default: Optional[float] = None) -> Optional[float]:
@@ -288,7 +337,7 @@ def _header_footer(canvas, doc) -> None:
     canvas.setFillColor(colors.white)
     canvas.drawString(doc.leftMargin, height - 7.7 * mm, "BRAZ SOLAR SCAN")
     canvas.setFillColor(gold)
-    canvas.drawRightString(width - doc.rightMargin, height - 7.7 * mm, "FDD MISMATCH")
+    canvas.drawRightString(width - doc.rightMargin, height - 7.7 * mm, "DETECÇÃO DE FALHAS")
 
     canvas.setStrokeColor(colors.HexColor("#C7D7E8"))
     canvas.setLineWidth(0.45)
@@ -324,7 +373,7 @@ def _report_hero(
         spaceAfter=0,
     )
     text_cell = [
-        _paragraph(f"FDD Mismatch - {_safe_text(plant_name)}", title_style),
+        _paragraph(f"Detecção e diagnóstico de falhas - {_safe_text(plant_name)}", title_style),
         _paragraph(
             f"Relatório exportado em <b>{_safe_text(generated_at_local)}</b> por <b>{_safe_text(user_label)}</b>.",
             meta_style,
@@ -334,7 +383,7 @@ def _report_hero(
     logo_cell: Any = "BRAZ SOLAR SCAN"
     if logo is not None:
         try:
-            logo_cell = Image(str(logo), width=37 * mm, height=11 * mm)
+            logo_cell = _proportional_image(str(logo), max_width=37 * mm, max_height=11 * mm)
         except Exception:
             pass
     hero = Table([[logo_cell, text_cell]], colWidths=[48 * mm, 217 * mm])
@@ -384,8 +433,8 @@ def _selected_heatmap_label(payload: Dict[str, Any], filters: Optional[Dict[str,
         raw = filters.get("heatmap_mode") or filters.get("display_mode")
         if raw:
             raw_norm = _normalize_heatmap_mode(raw)
-            return "Mismatch" if raw_norm == "mismatch" else "Tipologia de falha"
-    return "Mismatch" if mode == "mismatch" else "Tipologia de falha"
+            return "Desvio de desempenho" if raw_norm == "mismatch" else "Tipologia de falha"
+    return "Desvio de desempenho" if mode == "mismatch" else "Tipologia de falha"
 
 
 def _severity_from_point(code: Any, valid: Any, rca_code_to_sev: Dict[str, str]) -> int:
@@ -557,7 +606,7 @@ def _build_heatmap_png(points: List[Dict[str, Any]], dt_minutes: int) -> BytesIO
     if not points:
         img = PILImage.new("RGB", (1000, 220), "white")
         draw = ImageDraw.Draw(img)
-        draw.text((40, 100), "Sem dados suficientes para desenhar o mapa de bins.", fill="#2C3E50", font=ImageFont.load_default())
+        draw.text((40, 100), "Sem dados suficientes para desenhar o mapa temporal.", fill="#2C3E50", font=ImageFont.load_default())
         out = BytesIO()
         img.save(out, format="PNG")
         out.seek(0)
@@ -638,7 +687,7 @@ def _build_monthly_rows(points: List[Dict[str, Any]]) -> List[List[Any]]:
                 if v is not None:
                     monthly[month][bucket].append(v)
 
-    rows = [["Mês", "Normal", "Warn", "Falha", "Sem diag.", "Rótulo dominante", "Conf. dados", "Conf. detecção", "Conf. diagnóstico"]]
+    rows = [["Mês", "Normal", "Atenção", "Falha", "Sem diagnóstico", "Diagnóstico dominante", "Conf. dados", "Conf. detecção", "Conf. diagnóstico"]]
     for month in sorted(monthly.keys()):
         item = monthly[month]
         counts = item["counts"]
@@ -649,7 +698,7 @@ def _build_monthly_rows(points: List[Dict[str, Any]]) -> List[List[Any]]:
             counts.get(STATE_WARN, 0),
             counts.get(STATE_CRIT, 0),
             counts.get(STATE_NONE, 0),
-            dominant,
+            _translate_label(dominant),
             _fmt_pct(_mean(item["data"]), 1),
             _fmt_pct(_mean(item["det"]), 1),
             _fmt_pct(_mean(item["diagc"]), 1),
@@ -674,9 +723,9 @@ def _build_critical_days_rows(points: List[Dict[str, Any]], max_rows: int = 18) 
         ranked.append((day, crit, warn, max_mm, dom_lbl, avg_diag))
 
     ranked.sort(key=lambda x: (x[1], x[2], x[3], x[5] or 0.0), reverse=True)
-    rows = [["Data", "Falha", "Warn", "|mismatch|max", "Rótulo dominante", "Conf. diag. média"]]
+    rows = [["Data", "Falha", "Atenção", "|desvio|max", "Diagnóstico dominante", "Conf. diagnóstica média"]]
     for day, crit, warn, max_mm, dom_lbl, avg_diag in ranked[:max_rows]:
-        rows.append([day, crit, warn, f"{100.0 * max_mm:.1f}%", dom_lbl, _fmt_pct(avg_diag, 1)])
+        rows.append([day, crit, warn, f"{100.0 * max_mm:.1f}%", _translate_label(dom_lbl), _fmt_pct(avg_diag, 1)])
     return rows
 
 
@@ -690,13 +739,13 @@ def _build_top_bins_rows(points: List[Dict[str, Any]], max_rows: int = 30) -> Li
         ),
         reverse=True,
     )
-    rows = [["Instante local", "Estado", "Rótulo", "Mismatch", "Pac real [W]", "Pac modelo [W]", "GPOA [W/m²]", "Conf. diag."]]
+    rows = [["Instante local", "Estado", "Diagnóstico", "Desvio", "Potência CA medida [W]", "Potência CA modelada [W]", "Irradiância no plano [W/m²]", "Conf. diagnóstica"]]
     for point in points[:max_rows]:
         rows.append(
             [
                 _safe_text(point.get("ts_local")),
                 STATE_LABELS.get(int(point.get("state") or 0), "-"),
-                _safe_text(point.get("label")),
+                _translate_label(point.get("label")),
                 _fmt_pct(point.get("mismatch"), 1),
                 _fmt_float(point.get("pac_real_w"), 0),
                 _fmt_float(point.get("pac_model_w"), 0),
@@ -723,27 +772,27 @@ def _build_executive_bullets(payload: Dict[str, Any], points: List[Dict[str, Any
     thresholds = payload.get("thresholds") or {}
     filters = payload.get("range") or {}
 
-    label_txt = ", ".join([f"{lbl} ({cnt})" for lbl, cnt in summary["top_labels"][:3]]) or "sem rótulos diagnósticos dominantes"
-    domain_txt = ", ".join([f"{lbl} ({cnt})" for lbl, cnt in summary["top_domains"][:3]]) or "sem domínio predominante"
+    label_txt = ", ".join([f"{_translate_label(lbl)} ({cnt})" for lbl, cnt in summary["top_labels"][:3]]) or "sem diagnósticos dominantes"
+    domain_txt = ", ".join([f"{_translate_label(lbl)} ({cnt})" for lbl, cnt in summary["top_domains"][:3]]) or "sem domínio predominante"
 
     worst = summary["worst_points"]
-    worst_txt = "não houve bins warn/falha no intervalo"
+    worst_txt = "não houve intervalos em atenção ou falha no período"
     if worst:
         wp = worst[0]
         worst_txt = (
             f"o bin mais severo ocorreu em <b>{_safe_text(wp.get('ts_local'))}</b>, com rótulo "
-            f"<b>{_safe_text(wp.get('label'))}</b>, mismatch de <b>{_fmt_pct(wp.get('mismatch'), 1)}</b> "
+            f"<b>{_translate_label(wp.get('label'))}</b>, desvio de <b>{_fmt_pct(wp.get('mismatch'), 1)}</b> "
             f"e confiança diagnóstica de <b>{_fmt_pct(wp.get('diag_conf'), 1)}</b>."
         )
 
     evidence = [
         (
-            f"Foram processados <b>{n}</b> bins de 15 min no intervalo. Destes, <b>{valid}</b> ({_fmt_pct(_pct(valid, n), 1)}) "
+            f"Foram processados <b>{n}</b> intervalos de 15 minutos. Destes, <b>{valid}</b> ({_fmt_pct(_pct(valid, n), 1)}) "
             f"tiveram base operacional suficiente para classificação em nível de bin, enquanto <b>{none}</b> ({_fmt_pct(_pct(none, n), 1)}) "
             f"permaneceram fora da zona diagnóstica útil do algoritmo."
         ),
         (
-            f"Entre os bins válidos, a distribuição observada foi: <b>{ok}</b> normal, <b>{warn}</b> warn e <b>{crit}</b> falha. "
+            f"Entre os intervalos válidos, a distribuição observada foi: <b>{ok}</b> normal, <b>{warn}</b> em atenção e <b>{crit}</b> em falha. "
             f"Os rótulos diagnósticos mais recorrentes foram: <b>{label_txt}</b>."
         ),
         worst_txt,
@@ -752,16 +801,16 @@ def _build_executive_bullets(payload: Dict[str, Any], points: List[Dict[str, Any
     inference: List[str] = []
     if crit > 0:
         inference.append(
-            f"Houve ocorrência de bins classificados como <b>falha</b> ({crit} ocorrências), o que sustenta a existência de eventos de perda severa e não apenas dispersão estatística do mismatch."
+            f"Houve ocorrência de intervalos classificados como <b>falha</b> ({crit} ocorrências), o que sustenta a existência de eventos de perda severa e não apenas dispersão estatística do desvio."
         )
     else:
         inference.append(
-            "Não houve predominância de bins em estado de <b>falha</b>; o comportamento do período foi dominado por bins <b>warn</b>, compatível com perdas parciais ou deratings a serem confirmados por evidência complementar."
+            "Não houve predominância de intervalos em estado de <b>falha</b>; o comportamento do período foi dominado por ocorrências em <b>atenção</b>, compatíveis com perdas parciais ou limitações a serem confirmadas por evidência complementar."
         )
 
     if summary["direct_grid_points"] > 0:
         inference.append(
-            f"Foram observados <b>{summary['direct_grid_points']}</b> bins com evidência direta de rede, reforçando a interpretação de que parte das ocorrências mais severas está associada a restrições/perturbações elétricas e não apenas a variabilidade meteorológica."
+            f"Foram observados <b>{summary['direct_grid_points']}</b> intervalos com evidência direta de rede, reforçando a interpretação de que parte das ocorrências mais severas está associada a restrições ou perturbações elétricas e não apenas à variabilidade meteorológica."
         )
     else:
         inference.append(
@@ -770,7 +819,7 @@ def _build_executive_bullets(payload: Dict[str, Any], points: List[Dict[str, Any
 
     if summary["zero_inj_points"] > 0:
         inference.append(
-            f"Foram identificados <b>{summary['zero_inj_points']}</b> bins com indício de zero injection, o que é relevante para diferenciar indisponibilidade/inibição de injeção de simples perda parcial de geração."
+            f"Foram identificados <b>{summary['zero_inj_points']}</b> intervalos com indício de injeção nula, o que é relevante para diferenciar indisponibilidade ou inibição de simples perda parcial de geração."
         )
 
     limits = [
@@ -781,7 +830,7 @@ def _build_executive_bullets(payload: Dict[str, Any], points: List[Dict[str, Any
             f"O uso de <b>{_safe_text(sources.get('source_meteo'))}</b> como fonte meteorológica externa é tecnicamente adequado para supervisão de larga escala, mas não substitui instrumentação local; portanto, diagnósticos finos permanecem condicionados à qualidade do acoplamento entre operativos e meteo."
         ),
         (
-            f"Os limiares aplicados no relatório foram warn_abs=<b>{_safe_text(thresholds.get('warn_abs'))}</b>, fault_abs=<b>{_safe_text(thresholds.get('fault_abs'))}</b>, gate GPOA=<b>{_safe_text(thresholds.get('gpoa_gate'))}</b> W/m². Em intervalos longos, a alta parcela de bins fora da zona diagnóstica útil recomenda ler o heatmap como triagem operacional, não como verdade-terreno exaustiva."
+            f"Os limiares aplicados foram: atenção=<b>{_safe_text(thresholds.get('warn_abs'))}</b>, falha=<b>{_safe_text(thresholds.get('fault_abs'))}</b> e irradiância mínima no plano=<b>{_safe_text(thresholds.get('gpoa_gate'))}</b> W/m². Em períodos longos, a parcela fora da zona diagnóstica útil recomenda ler o mapa temporal como triagem operacional, não como confirmação isolada de falha."
         ),
     ]
     return {"evidence": evidence, "inference": inference, "limits": limits}
@@ -814,9 +863,9 @@ def build_mismatch_pdf_report(
         rightMargin=14 * mm,
         topMargin=19 * mm,
         bottomMargin=16 * mm,
-        title=f"FDD Mismatch - {plant_name}",
+        title=f"Relatório de detecção de falhas - {plant_name}",
         author="Braz Solar Scan",
-        subject="Mismatch FDD",
+        subject="Monitoramento e detecção de falhas fotovoltaicas",
     )
 
     points = _iter_points(payload)
@@ -847,12 +896,12 @@ def build_mismatch_pdf_report(
     scope_rows = [
         ["Campo", "Valor", "Campo", "Valor"],
         ["Planta", plant_name, "Período", f"{_safe_text(rng.get('start'))} -> {_safe_text(rng.get('end'))}"],
-        ["Bin [min]", _safe_text(filters.get("dt_minutes")), "Pipeline", _safe_text(filters.get("pipeline") or payload.get("pipeline"))],
-        ["Detector", _safe_text(versions.get("detector_version")), "source_meteo", _safe_text(sources.get("source_meteo"))],
-        ["Heatmap", _selected_heatmap_label(payload, filters), "política total", _safe_text(sources.get("total_policy"))],
-        ["warn_abs", _safe_text(filters.get("warn_abs") or thresholds.get("warn_abs")), "fault_abs", _safe_text(filters.get("fault_abs") or thresholds.get("fault_abs"))],
-        ["gpoa_min", _safe_text(filters.get("gpoa_min") or thresholds.get("gpoa_gate")), "pmin_w", _safe_text(filters.get("pmin_w") or thresholds.get("pmin_w"))],
-        ["source_oper", _safe_text(filters.get("source_oper")), "Heatmap nota", _safe_text((payload.get("heatmap_mode") or {}).get("selected_note"))],
+        ["Intervalo de análise [min]", _safe_text(filters.get("dt_minutes")), "Fluxo de processamento", "Modelo físico + detector estatístico + diagnóstico explicável"],
+        ["Versão do detector", _safe_text(versions.get("detector_version")), "Fonte meteorológica", _safe_text(sources.get("source_meteo"))],
+        ["Visualização temporal", _selected_heatmap_label(payload, filters), "Política de consolidação", "Soma preferencial das entradas MPPT"],
+        ["Limiar de atenção", _safe_text(filters.get("warn_abs") or thresholds.get("warn_abs")), "Limiar de falha", _safe_text(filters.get("fault_abs") or thresholds.get("fault_abs"))],
+        ["Irradiância mínima [W/m²]", _safe_text(filters.get("gpoa_min") or thresholds.get("gpoa_gate")), "Potência mínima [W]", _safe_text(filters.get("pmin_w") or thresholds.get("pmin_w"))],
+        ["Fonte operacional", _safe_text(filters.get("source_oper") or sources.get("selected_source")), "Critério visual", "Cores definidas pela tipologia diagnosticada"],
     ]
     story.append(_make_table(scope_rows, widths=[34 * mm, 76 * mm, 34 * mm, 120 * mm], font_size=8.0, left_cols=(0, 1, 2, 3)))
     story.append(Spacer(1, 4 * mm))
@@ -861,15 +910,16 @@ def build_mismatch_pdf_report(
     story.append(_paragraph("Resumo executivo do período", styles["section"]))
     kpi_rows = [
         ["Indicador", "Valor", "Indicador", "Valor"],
-        ["Pontos na série", _fmt_int(summary["n_points"]), "Bins válidos", _fmt_int(summary["valid_points"])],
-        ["Normal", _fmt_int(summary["state_counts"].get(STATE_OK)), "Warn", _fmt_int(summary["state_counts"].get(STATE_WARN))],
-        ["Falha", _fmt_int(summary["state_counts"].get(STATE_CRIT)), "Sem diag. útil", _fmt_int(summary["state_counts"].get(STATE_NONE))],
+        ["Pontos na série", _fmt_int(summary["n_points"]), "Intervalos válidos", _fmt_int(summary["valid_points"])],
+        ["Normal", _fmt_int(summary["state_counts"].get(STATE_OK)), "Atenção", _fmt_int(summary["state_counts"].get(STATE_WARN))],
+        ["Falha", _fmt_int(summary["state_counts"].get(STATE_CRIT)), "Sem diagnóstico útil", _fmt_int(summary["state_counts"].get(STATE_NONE))],
         ["Confiab. dados média", _fmt_pct(summary["data_rel_mean"]), "Conf. detecção média", _fmt_pct(summary["det_conf_mean"])],
         ["Conf. diagnóstico média", _fmt_pct(summary["diag_conf_mean"]), "Leitura global", _classify_level(summary["diag_conf_mean"])],
     ]
     story.append(_make_table(kpi_rows, widths=[46 * mm, 40 * mm, 46 * mm, 40 * mm], font_size=8.1, left_cols=(0, 2)))
     story.append(Spacer(1, 4 * mm))
 
+    story.append(PageBreak())
     story.append(_paragraph("Interpretação técnica do período", styles["section"]))
     _story_bullets(story, "1. Evidência observada", bullets["evidence"], styles)
     _story_bullets(story, "2. Inferência diagnóstica", bullets["inference"], styles)
@@ -877,17 +927,28 @@ def build_mismatch_pdf_report(
     story.append(Spacer(1, 3 * mm))
 
     notes_rows = [["Campo", "Valor"]]
-    notes_rows.append(["selected_sources", ", ".join(str(x) for x in (rng.get("selected_sources") or [])) or "-"])
-    notes_rows.append(["Topologias diagnósticas dominantes", ", ".join([f"{lbl} ({cnt})" for lbl, cnt in summary["top_domains"][:4]]) or "-"])
-    notes_rows.append(["Rótulos diagnósticos dominantes", ", ".join([f"{lbl} ({cnt})" for lbl, cnt in summary["top_labels"][:4]]) or "-"])
+    notes_rows.append(["Fontes operacionais selecionadas", ", ".join(str(x) for x in (rng.get("selected_sources") or [])) or "-"])
+    notes_rows.append(["Domínios diagnósticos dominantes", ", ".join([f"{_translate_label(lbl)} ({cnt})" for lbl, cnt in summary["top_domains"][:4]]) or "-"])
+    notes_rows.append(["Diagnósticos dominantes", ", ".join([f"{_translate_label(lbl)} ({cnt})" for lbl, cnt in summary["top_labels"][:4]]) or "-"])
     story.append(_make_table(notes_rows, widths=[54 * mm, 198 * mm], font_size=7.8, left_cols=(0, 1)))
 
+    story.append(Spacer(1, 4 * mm))
+    story.append(_paragraph("Orientação para monitoramento e manutenção", styles["section"]))
+    action_rows = [
+        ["Aspecto", "Leitura recomendada", "Ação sugerida"],
+        ["Qualidade dos dados", f"Confiabilidade média: {_fmt_pct(summary['data_rel_mean'], 1)}", "Revisar lacunas de telemetria e meteorologia antes de confirmar falhas."],
+        ["Eventos em atenção", f"{_fmt_int(summary['state_counts'].get(STATE_WARN))} intervalos", "Acompanhar persistência e comparar tensão, corrente, potência e irradiância."],
+        ["Eventos de falha", f"{_fmt_int(summary['state_counts'].get(STATE_CRIT))} intervalos", "Priorizar inspeção dos eventos persistentes e validar alarmes do inversor e condições de rede."],
+        ["Uso do diagnóstico", "Triagem automatizada baseada em modelo e medições", "Registrar a verificação de campo para aprimorar a configuração específica da planta."],
+    ]
+    story.append(_make_table(action_rows, widths=[42 * mm, 72 * mm, 138 * mm], font_size=7.7, left_cols=(0, 1, 2)))
+
     story.append(PageBreak())
-    story.append(_paragraph("Heatmap do período", styles["section"]))
-    story.append(_paragraph(f"Mapa dia x bin usando o modo de coloração selecionado: <b>{_selected_heatmap_label(payload, filters)}</b>. Cinza = sem diagnóstico útil, verde = normal, âmbar = warn, vermelho = falha.", styles["body"]))
+    story.append(_paragraph("Mapa temporal do período", styles["section"]))
+    story.append(_paragraph(f"Mapa dia x intervalo usando o modo de coloração selecionado: <b>{_selected_heatmap_label(payload, filters)}</b>. Cinza = sem diagnóstico útil, verde = normal, âmbar = atenção, vermelho = falha.", styles["body"]))
     story.append(Spacer(1, 2 * mm))
-    story.append(Image(heat_png, width=255 * mm, height=120 * mm))
-    story.append(_paragraph("Em intervalos longos, o heatmap deve ser lido como visão de triagem temporal: ele mostra persistência e sazonalidade dos estados, mas não substitui inspeção por evento nem análise com dados locais de referência.", styles["caption"]))
+    story.append(_proportional_image(heat_png, max_width=255 * mm, max_height=120 * mm))
+    story.append(_paragraph("Em períodos longos, o mapa deve ser lido como visão de triagem temporal: ele mostra persistência e sazonalidade dos estados, mas não substitui inspeção por evento nem análise com dados locais de referência.", styles["caption"]))
 
     story.append(PageBreak())
     story.append(_paragraph("Resumo agregado por mês", styles["section"]))
@@ -897,24 +958,24 @@ def build_mismatch_pdf_report(
 
     story.append(Spacer(1, 4 * mm))
     story.append(_paragraph("Dias de maior interesse operacional", styles["section"]))
-    story.append(_paragraph("Os dias abaixo foram priorizados por severidade, número de bins warn/falha e magnitude máxima de mismatch. Eles servem como trilha rápida para revisão histórica quando o período analisado é longo.", styles["body"]))
+    story.append(_paragraph("Os dias abaixo foram priorizados por severidade, número de intervalos em atenção/falha e magnitude máxima do desvio. Eles servem como trilha rápida para revisão histórica quando o período analisado é longo.", styles["body"]))
     story.append(Spacer(1, 2 * mm))
     story.append(_make_table(_build_critical_days_rows(points), widths=[24 * mm, 16 * mm, 16 * mm, 24 * mm, 112 * mm, 24 * mm], font_size=7.2, left_cols=(0, 4)))
 
     top_rows = _build_top_bins_rows(points)
     story.append(PageBreak())
     story.append(_paragraph("Bins de maior interesse diagnóstico", styles["section"]))
-    story.append(_paragraph("Lista priorizada pelos bins com maior severidade operacional, maior magnitude de mismatch e maior robustez diagnóstica. Ela separa a evidência observada no tempo da interpretação agregada do período.", styles["body"]))
+    story.append(_paragraph("Lista priorizada pelos intervalos com maior severidade operacional, maior magnitude do desvio e maior robustez diagnóstica. Ela separa a evidência observada no tempo da interpretação agregada do período.", styles["body"]))
     if len(top_rows) > 1:
         story.append(Spacer(1, 2 * mm))
         story.append(_make_table(top_rows, widths=[44 * mm, 20 * mm, 52 * mm, 18 * mm, 22 * mm, 24 * mm, 20 * mm, 18 * mm], font_size=7.0, left_cols=(0, 2)))
     else:
-        story.append(_paragraph("Não há bins classificados como warn/falha para o intervalo selecionado.", styles["body"]))
+        story.append(_paragraph("Não há intervalos classificados em atenção ou falha no período selecionado.", styles["body"]))
 
     story.append(Spacer(1, 4 * mm))
     story.append(_paragraph("Leitura recomendada do relatório", styles["section"]))
     story.append(_paragraph(
-        "<b>Evidência observada</b> corresponde ao que foi efetivamente medido/inferido no bin (potência, mismatch, estado, cobertura e qualidade de dados). "
+        "<b>Evidência observada</b> corresponde ao que foi efetivamente medido ou estimado no intervalo (potência, desvio, estado, cobertura e qualidade dos dados). "
         "<b>Inferência diagnóstica</b> corresponde ao rótulo atribuído pelo pipeline. "
         "<b>Limitações de confiabilidade</b> delimitam o quanto essa inferência deve ser tomada como hipótese operacional forte, moderada ou fraca.",
         styles["body"],

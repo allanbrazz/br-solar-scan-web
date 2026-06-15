@@ -9,25 +9,25 @@ import numpy as np
 @dataclass
 class DetectionParams:
     # elegibilidade radiométrica
-    sun_available_gpoa_wm2: float = 180.0
-    coarse_diag_gpoa_wm2: float = 320.0
-    fine_diag_gpoa_wm2: float = 500.0
+    sun_available_gpoa_wm2: float = 300.0
+    coarse_diag_gpoa_wm2: float = 650.0
+    fine_diag_gpoa_wm2: float = 850.0
 
     # qualidade meteorológica
-    stable_cv_max: float = 0.08
-    stable_ramp_max_wm2: float = 120.0
-    stable_window_points: int = 6  # 6*15min = 90min
+    stable_cv_max: float = 0.06
+    stable_ramp_max_wm2: float = 90.0
+    stable_window_points: int = 8
 
     # EWMA
-    ewma_lambda: float = 0.20
-    ewma_L: float = 3.0
+    ewma_lambda: float = 0.15
+    ewma_L: float = 3.5
 
     # CUSUM (em z-score)
-    cusum_k: float = 0.50
-    cusum_h: float = 8.0
+    cusum_k: float = 0.60
+    cusum_h: float = 10.0
 
     # baseline mínimo p/ estimar sigma
-    min_baseline_points: int = 24
+    min_baseline_points: int = 48
     contextual_min_points: int = 12
     sigma_floor: float = 0.08
 
@@ -39,7 +39,7 @@ class DetectionParams:
     fusion_min_effective_weight: float = 0.20
 
     # qualidade mínima de dados do inversor
-    inv_cov_min: float = 0.30
+    inv_cov_min: float = 0.70
 
     # inflação de sigma por incerteza
     confidence_sigma_gain: float = 1.00

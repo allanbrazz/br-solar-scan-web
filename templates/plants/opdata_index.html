@@ -1,43 +1,49 @@
 {% extends "base.html" %}
 {% block title %}Dados operativos - Braz Solar Scan{% endblock %}
-
+{% block extra_head %}
+<style>
+  .opdata-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(310px,1fr)); gap:1rem; }
+  .opdata-plant{ display:grid; gap:.85rem; min-width:0; }
+  .opdata-plant-head{ display:flex; justify-content:space-between; gap:.8rem; align-items:flex-start; }
+  .opdata-plant h3{ margin:0; overflow-wrap:anywhere; }
+  .opdata-state{ padding:.35rem .6rem; border-radius:999px; border:1px solid rgba(90,220,160,.35); background:rgba(60,190,125,.13); font-size:.76rem; font-weight:800; }
+  .opdata-state.pending{ border-color:rgba(255,201,84,.4); background:rgba(255,190,55,.12); }
+  .opdata-stats{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.6rem; }
+  .opdata-stat{ padding:.7rem; border:1px solid rgba(95,176,255,.14); border-radius:13px; background:rgba(10,35,65,.2); }
+  .opdata-stat span{ display:block; font-size:.72rem; opacity:.7; }
+  .opdata-stat strong{ display:block; margin-top:.18rem; overflow-wrap:anywhere; }
+  .opdata-actions{ display:flex; flex-wrap:wrap; gap:.55rem; margin-top:auto; }
+</style>
+{% endblock %}
 {% block content %}
 <header class="page-head">
   <h1 class="page-title">Dados operativos</h1>
-  <p class="page-sub">Selecione uma planta para consultar os dados salvos ou configurar a aquisicao Renovigi.</p>
+  <p class="page-sub">Consulte o histórico salvo e gerencie a aquisição Renovigi de cada planta.</p>
 </header>
-
-<section class="card glass">
-  <div class="table-wrap">
-    <table class="glass-table">
-      <thead>
-        <tr>
-          <th>Planta</th>
-          <th>Registros salvos</th>
-          <th>Renovigi</th>
-          <th>Acoes</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-          <tr>
-            <td><a href="{% url 'plants:detail' row.plant.pk %}">{{ row.plant.nome }}</a></td>
-            <td>{{ row.records_count }}</td>
-            <td>{% if row.has_renovigi_cred %}Configurada{% else %}Pendente{% endif %}</td>
-            <td class="table-actions">
-              <a class="btn btn-primary" href="{% url 'opdata_list' row.plant.pk %}">Ver dados salvos</a>
-              {% if row.has_renovigi_cred %}
-                <a class="btn btn-primary" href="{% url 'renovigi_console' row.plant.pk %}">Adquirir dados</a>
-              {% else %}
-                <a class="btn btn-primary" href="{% url 'plants:cred_save' row.plant.pk %}">Configurar credenciais</a>
-              {% endif %}
-            </td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="4" class="text-muted">Nenhuma planta disponivel para este usuario.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+<section class="opdata-grid">
+  {% for row in rows %}
+    <article class="card glass opdata-plant">
+      <div class="opdata-plant-head">
+        <div><h3>{{ row.plant.nome }}</h3><small>{{ row.plant.timezone }}</small></div>
+        <span class="opdata-state{% if not row.has_renovigi_cred %} pending{% endif %}">{% if row.has_renovigi_cred %}Renovigi configurada{% else %}Credenciais pendentes{% endif %}</span>
+      </div>
+      <div class="opdata-stats">
+        <div class="opdata-stat"><span>Registros salvos</span><strong>{{ row.records_count }}</strong></div>
+        <div class="opdata-stat"><span>Último registro</span><strong>{{ row.last_ts|date:"d/m/Y H:i"|default:"-" }}</strong></div>
+        <div class="opdata-stat"><span>Primeiro registro</span><strong>{{ row.first_ts|date:"d/m/Y H:i"|default:"-" }}</strong></div>
+        <div class="opdata-stat"><span>Fonte</span><strong>Renovigi / ShineMonitor</strong></div>
+      </div>
+      <div class="opdata-actions">
+        <a class="btn btn-primary" href="{% url 'opdata_list' row.plant.pk %}">Consultar dados</a>
+        {% if row.has_renovigi_cred %}
+          <a class="btn btn-secondary" href="{% url 'renovigi_console' row.plant.pk %}">Adquirir dados</a>
+        {% else %}
+          <a class="btn btn-secondary" href="{% url 'plants:cred_save' row.plant.pk %}">Configurar credenciais</a>
+        {% endif %}
+      </div>
+    </article>
+  {% empty %}
+    <article class="card glass"><p>Nenhuma planta disponível para este usuário.</p></article>
+  {% endfor %}
 </section>
 {% endblock %}

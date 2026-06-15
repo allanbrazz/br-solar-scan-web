@@ -22,14 +22,14 @@ class MismatchThresholds:
     Limiarização simples de mismatch.
     mismatch_rel = (Pac_real - Pac_model)/max(|Pac_model|, eps_w)
     """
-    gpoa_gate_wm2: float = 180.0
-    warn_abs: float = 0.40
-    fault_abs: float = 0.90
+    gpoa_gate_wm2: float = 250.0
+    warn_abs: float = 0.47
+    fault_abs: float = 0.95
     meteo_pos_abs: float = 0.25
     shading_std_abs: float = 0.22
-    shading_window_points: int = 6
+    shading_window_points: int = 8
     dt_minutes: float = 15.0
-    max_gap_minutes: float = 30.0
+    max_gap_minutes: float = 60.0
 
 
 def _safe_float(x: Any) -> Optional[float]:

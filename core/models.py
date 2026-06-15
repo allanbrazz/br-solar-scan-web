@@ -1328,3 +1328,40 @@ class FaultEventMPPT(models.Model):
 
     def __str__(self) -> str:
         return f"event={self.event_id} mppt={self.mppt} {self.pred_label}"
+
+
+class PlantDetectorConfiguration(models.Model):
+    """Configuracao reutilizavel do detector vinculada a uma planta."""
+
+    plant = models.ForeignKey(
+        "core.PVPlant",
+        on_delete=models.CASCADE,
+        related_name="detector_configurations",
+    )
+    name = models.CharField("Nome da configuracao", max_length=120)
+    config = models.JSONField(default=dict)
+    is_default = models.BooleanField("Configuracao padrao", default=False, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="detector_configurations_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-is_default", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["plant", "name"],
+                name="uniq_detector_config_plant_name",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["plant", "is_default"], name="idx_detector_cfg_default"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.plant_id} - {self.name}"
