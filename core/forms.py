@@ -343,6 +343,13 @@ class MeteoRequestForm(forms.Form):
         widget=forms.DateInput(attrs={"type": "date", "class": "form-control"})
     )
 
+    interval_min = forms.ChoiceField(
+        label="Intervalo esperado",
+        choices=((15, "15 minutos"), (30, "30 minutos"), (60, "60 minutos")),
+        initial=60,
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+
     include_gti = forms.BooleanField(
         label="Incluir GTI (POA) usando tilt/azimuth da planta",
         required=False,
@@ -571,7 +578,7 @@ class TimeseriesDashboardForm(forms.Form):
 
 
 OPENMETEO_MODEL_CHOICES = [
-    ("", "Best Match (padrão)"),
+    ("", "Melhor correspondência (padrão)"),
     ("era5", "ERA5"),
     ("era5_land", "ERA5-Land"),
     ("cerra", "CERRA"),
@@ -600,6 +607,13 @@ class MeteoRequestForm(forms.Form):
         required=False,
         initial=True,
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"})
+    )
+
+    interval_min = forms.ChoiceField(
+        label="Intervalo esperado",
+        choices=((15, "15 minutos"), (30, "30 minutos"), (60, "60 minutos")),
+        initial=60,
+        widget=forms.Select(attrs={"class": "form-control"}),
     )
 
     model = forms.ChoiceField(

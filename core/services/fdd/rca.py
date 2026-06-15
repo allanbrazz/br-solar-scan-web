@@ -15,23 +15,23 @@ CODE_CRIT2 = 4
 
 @dataclass
 class RCAParams:
-    sun_available_gpoa_wm2: float = 180.0
-    expected_power_min_w: float = 150.0
-    zero_abs_w: float = 15.0
-    zero_rel_model: float = 0.02
-    degraded_rel: float = 0.25
-    severe_rel: float = 0.65
-    low_i_ratio_warn: float = 0.35
-    low_i_ratio_crit: float = 0.15
-    low_v_ratio_warn: float = 0.80
-    low_v_ratio_crit: float = 0.60
+    sun_available_gpoa_wm2: float = 300.0
+    expected_power_min_w: float = 300.0
+    zero_abs_w: float = 75.0
+    zero_rel_model: float = 0.03
+    degraded_rel: float = 0.42
+    severe_rel: float = 0.80
+    low_i_ratio_warn: float = 0.60
+    low_i_ratio_crit: float = 0.40
+    low_v_ratio_warn: float = 0.70
+    low_v_ratio_crit: float = 0.50
     vac_low_ratio: float = 0.90
     vac_high_ratio: float = 1.10
     vac_abs_margin_v: float = 10.0
     freq_abs_tol_hz: float = 1.0
     clip_margin: float = 0.98
     clip_model_margin: float = 1.02
-    min_baseline_points: int = 24
+    min_baseline_points: int = 48
     dc_open_current_rel: float = -0.85
     dc_open_voltage_rel_low: float = -0.20
     dc_short_voltage_rel: float = -0.45

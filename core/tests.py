@@ -9,12 +9,17 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.forms import MeteoRequestForm
+from core.services.fdd.dashboard_runtime import get_mismatch_backend_param_defaults
+from core.services.fdd.param_catalog import DEFAULT_CONFIG_NAME
 from core.services.fdd.report_pdf import build_mismatch_pdf_report
 from core.views.dashboard import paired_model_metrics
 from core.models import (
     AccountNotification,
     InverterOperationalData,
+    MeteoRecord,
+    MeteoSource,
     PlantMonitoringCredential,
+    PlantDetectorConfiguration,
     PVInverter,
     PVModule,
     PVPlant,
@@ -411,10 +416,10 @@ class RenovigiWorkflowTests(TestCase):
         response = self.client.get(reverse("mismatch_fdd"))
 
         self.assertContains(response, "chartResidualProfile")
-        self.assertContains(response, "residualMatrixCanvas")
+        self.assertContains(response, "residualMatrixGrid")
         self.assertContains(response, "fddFlowSvg")
-        self.assertContains(response, "diagnosticHourCanvas")
-        self.assertContains(response, "diagnosticMonthCanvas")
+        self.assertContains(response, "diagnosticHourGrid")
+        self.assertContains(response, "diagnosticMonthGrid")
         self.assertContains(response, "reorderPostHeatmapSections")
         self.assertContains(response, "renderResidualCorrelationMatrix")
         self.assertContains(response, "renderFddSankey")
@@ -424,6 +429,69 @@ class RenovigiWorkflowTests(TestCase):
             '<details class="card glass span-12 advanced-card" id="advancedParamsCard">',
         )
         self.assertNotContains(response, 'id="advancedParamsCard" open')
+
+    def test_c18_detector_defaults_are_exposed_consistently(self):
+        defaults = get_mismatch_backend_param_defaults()
+        response = self.client.get(reverse("mismatch_fdd"))
+
+        self.assertEqual(DEFAULT_CONFIG_NAME, "C18_estabilidade_restritiva")
+        self.assertEqual(defaults["warn_abs"], 0.47)
+        self.assertEqual(defaults["fault_abs"], 0.95)
+        self.assertEqual(defaults["gpoa_gate"], 250.0)
+        self.assertEqual(defaults["pmin_w"], 300.0)
+        self.assertEqual(defaults["min_baseline_points"], 48)
+        self.assertContains(response, "C18_estabilidade_restritiva")
+        self.assertContains(response, "Gestão de configurações")
+
+    def test_detector_configuration_crud_is_scoped_to_plant(self):
+        url = reverse("mismatch_fdd_configurations_api")
+        create = self.client.post(
+            url,
+            data={
+                "action": "save",
+                "plant_id": self.plant.pk,
+                "name": "Configuração Belarmino",
+                "config": {"warn_abs": 0.52, "persist": True},
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(create.status_code, 200)
+        saved = PlantDetectorConfiguration.objects.get(plant=self.plant)
+        self.assertEqual(saved.config["warn_abs"], 0.52)
+        self.assertEqual(saved.config["detector_version"], "mismatch_runtime_v1")
+
+        default = self.client.post(
+            url,
+            data={"action": "set_default", "plant_id": self.plant.pk, "configuration_id": saved.pk},
+            content_type="application/json",
+        )
+        self.assertEqual(default.status_code, 200)
+        saved.refresh_from_db()
+        self.assertTrue(saved.is_default)
+
+        listing = self.client.get(url, {"plant_id": self.plant.pk})
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.json()["configurations"][0]["name"], "Configuração Belarmino")
+
+    def test_meteorology_page_manages_selected_plant_data(self):
+        MeteoRecord.objects.create(
+            plant=self.plant,
+            source=MeteoSource.OPENMETEO,
+            ts_utc=timezone.now(),
+            interval_min=60,
+            dataset_model="best_match",
+            ghi=500.0,
+        )
+        response = self.client.get(
+            reverse("open_meteo_view"),
+            {"plant": self.plant.pk, "start_date": timezone.now().date(), "end_date": timezone.now().date(), "interval_min": 60},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Gestão dos dados importados")
+        self.assertContains(response, "Registros salvos")
+        self.assertEqual(response.context["meteo_summary"]["total"], 1)
 
     def test_home_operational_data_button_uses_system_style(self):
         response = self.client.get(reverse("home"))

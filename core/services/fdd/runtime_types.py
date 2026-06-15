@@ -27,7 +27,7 @@ class MismatchDashboardParams:
     gpoa_plot_min: float
     pmodel_plot_min: float
     mismatch_clip_abs: float
-    display_mode: str = "mismatch"
+    display_mode: str = "tipologia"
 
     def get_float(self, key: str, default: float) -> float:
         raw = self.raw_data.get(key)

@@ -1,123 +1,69 @@
 {% extends "base.html" %}
-{% block title %}{{ plant.nome }} • Dados operativos{% endblock %}
-
+{% block title %}{{ plant.nome }} - Dados operativos{% endblock %}
+{% block extra_head %}
+<style>
+  .op-page,.op-page *{ box-sizing:border-box; min-width:0; }
+  .op-head{ display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; flex-wrap:wrap; }
+  .op-summary{ display:grid; grid-template-columns:repeat(3,minmax(120px,1fr)); gap:.7rem; margin-bottom:1rem; }
+  .op-kpi{ padding:.8rem; border:1px solid rgba(95,176,255,.15); border-radius:14px; background:rgba(10,35,65,.22); }
+  .op-kpi span{ display:block; font-size:.72rem; opacity:.72; }
+  .op-kpi strong{ display:block; margin-top:.2rem; font-size:1.05rem; }
+  .op-filters{ display:grid; grid-template-columns:repeat(5,minmax(150px,1fr)); gap:.75rem; align-items:end; }
+  .op-field{ display:grid; gap:.35rem; }
+  .op-field label{ font-size:.8rem; font-weight:700; opacity:.82; }
+  .op-field input,.op-field select{ width:100%; }
+  .op-table-wrap{ overflow:auto; border:1px solid rgba(95,176,255,.16); border-radius:15px; margin-top:1rem; }
+  .op-table{ width:100%; min-width:950px; border-collapse:collapse; }
+  .op-table th,.op-table td{ padding:.72rem; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; vertical-align:top; }
+  .op-table th{ position:sticky; top:0; background:rgba(8,28,52,.96); z-index:1; }
+  .op-table tbody tr:hover{ background:rgba(95,176,255,.055); }
+  .op-code{ max-width:440px; }
+  .op-code summary{ cursor:pointer; font-weight:800; color:#8edfff; }
+  .op-code pre{ max-height:230px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; margin:.6rem 0 0; padding:.65rem; border-radius:10px; background:rgba(0,0,0,.24); font-size:.72rem; }
+  .op-pagination{ display:flex; justify-content:space-between; gap:.7rem; flex-wrap:wrap; margin-top:1rem; }
+  @media(max-width:1050px){ .op-filters{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media(max-width:650px){ .op-summary,.op-filters{ grid-template-columns:1fr; } }
+</style>
+{% endblock %}
 {% block content %}
-<header class="page-head">
-  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
-    <div>
-      <h1 class="page-title">{{ plant.nome }} — Dados operativos</h1>
-      <p class="page-sub">
-        Dados já salvos no banco (UTC). Use filtros para reduzir volume e acelerar.
-      </p>
+<div class="op-page">
+  <header class="page-head op-head">
+    <div><h1 class="page-title">{{ plant.nome }} - Dados operativos</h1><p class="page-sub">Histórico em UTC, com filtros por período e dispositivo.</p></div>
+    <div class="action-group"><a class="btn btn-secondary" href="{% url 'opdata_index' %}">Todas as plantas</a><a class="btn btn-secondary" href="{% url 'plants:detail' plant.pk %}">Detalhes da planta</a></div>
+  </header>
+
+  <article class="card glass">
+    <div class="op-summary">
+      <div class="op-kpi"><span>Registros filtrados</span><strong>{{ filtered_count }}</strong></div>
+      <div class="op-kpi"><span>Dispositivos conhecidos</span><strong>{{ devices|length }}</strong></div>
+      <div class="op-kpi"><span>Página atual</span><strong>{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</strong></div>
     </div>
-    <div style="display:flex; gap:8px; align-items:center;">
-      <a class="btn" href="{% url 'plants:detail' plant.pk %}">Voltar</a>
-    </div>
-  </div>
-</header>
-
-<section class="dash" style="--cols:12;">
-  <article class="card glass" style="grid-column:1 / -1;">
-    <h3 class="mb-2">Filtros</h3>
-
-    <form method="get" class="grid-form" style="margin-bottom:12px;">
-      <div>
-        <label class="form-label">Start (YYYY-MM-DD)</label>
-        <input class="form-control" name="start" value="{{ start }}">
-      </div>
-      <div>
-        <label class="form-label">End (YYYY-MM-DD)</label>
-        <input class="form-control" name="end" value="{{ end }}">
-      </div>
-
-      <div>
-        <label class="form-label">pn (opcional)</label>
-        <input class="form-control" name="pn" value="{{ pn }}" placeholder="ex: Q0D...">
-      </div>
-      <div>
-        <label class="form-label">sn (opcional)</label>
-        <input class="form-control" name="sn" value="{{ sn }}" placeholder="ex: 1402...">
-      </div>
-
-      <div>
-        <label class="form-label">Page size</label>
-        <input class="form-control" name="page_size" value="{{ page_size }}">
-      </div>
-
-      <div style="display:flex; justify-content:flex-end; align-items:flex-end;">
-        <button class="btn btn-primary" type="submit">Aplicar filtros</button>
-      </div>
+    <form method="get" class="op-filters">
+      <div class="op-field"><label for="opStart">Data inicial</label><input id="opStart" class="form-control" type="date" name="start" value="{{ start }}"></div>
+      <div class="op-field"><label for="opEnd">Data final</label><input id="opEnd" class="form-control" type="date" name="end" value="{{ end }}"></div>
+      <div class="op-field"><label for="opPn">Identificador PN</label><input id="opPn" class="form-control" name="pn" value="{{ pn }}" placeholder="Opcional"></div>
+      <div class="op-field"><label for="opSn">Número de série</label><input id="opSn" class="form-control" name="sn" value="{{ sn }}" placeholder="Opcional"></div>
+      <div class="op-field"><label for="opPageSize">Registros por página</label><select id="opPageSize" class="form-control" name="page_size"><option{% if page_size == 50 %} selected{% endif %}>50</option><option{% if page_size == 100 %} selected{% endif %}>100</option><option{% if page_size == 200 %} selected{% endif %}>200</option><option{% if page_size == 500 %} selected{% endif %}>500</option></select></div>
+      <div class="action-group"><button class="btn btn-primary" type="submit">Aplicar filtros</button><a class="btn btn-secondary" href="{% url 'opdata_list' plant.pk %}">Limpar</a></div>
     </form>
 
-    <div class="text-muted" style="margin-bottom:10px;">
-      Total nesta página: {{ page_obj.object_list|length }} • Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
-    </div>
-
-    <div style="overflow:auto; border:1px solid rgba(255,255,255,.12); border-radius:12px;">
-      <table style="border-collapse:collapse; width:100%; min-width:980px;">
-        <thead>
-          <tr>
-            <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(255,255,255,.12);">ts_utc</th>
-            <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(255,255,255,.12);">pn</th>
-            <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(255,255,255,.12);">devcode</th>
-            <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(255,255,255,.12);">devaddr</th>
-            <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(255,255,255,.12);">sn</th>
-            <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(255,255,255,.12);">payload (compacto)</th>
-          </tr>
-        </thead>
+    <div class="op-table-wrap">
+      <table class="op-table">
+        <thead><tr><th>Data e hora (UTC)</th><th>PN</th><th>Código do dispositivo</th><th>Endereço</th><th>Número de série</th><th>Dados recebidos</th></tr></thead>
         <tbody>
           {% for o in page_obj.object_list %}
             <tr>
-              <td style="padding:6px; border-bottom:1px solid rgba(255,255,255,.08); white-space:nowrap;">
-                {{ o.ts_utc|date:"Y-m-d H:i:s" }}
-              </td>
-              <td style="padding:6px; border-bottom:1px solid rgba(255,255,255,.08); white-space:nowrap;">{{ o.pn }}</td>
-              <td style="padding:6px; border-bottom:1px solid rgba(255,255,255,.08); white-space:nowrap;">{{ o.devcode }}</td>
-              <td style="padding:6px; border-bottom:1px solid rgba(255,255,255,.08); white-space:nowrap;">{{ o.devaddr }}</td>
-              <td style="padding:6px; border-bottom:1px solid rgba(255,255,255,.08); white-space:nowrap;">{{ o.sn }}</td>
-              <td style="padding:6px; border-bottom:1px solid rgba(255,255,255,.08);">
-                <code style="white-space:pre-wrap; word-break:break-word;">
-                  {{ o.payload|safe }}
-                </code>
-              </td>
+              <td>{{ o.ts_utc|date:"d/m/Y H:i:s" }}</td><td>{{ o.pn }}</td><td>{{ o.devcode }}</td><td>{{ o.devaddr }}</td><td>{{ o.sn }}</td>
+              <td class="op-code"><details><summary>Ver medições</summary><pre>{{ o.payload }}</pre></details></td>
             </tr>
-          {% empty %}
-            <tr>
-              <td colspan="6" class="text-muted" style="padding:10px;">Nenhum dado encontrado no período.</td>
-            </tr>
-          {% endfor %}
+          {% empty %}<tr><td colspan="6">Nenhum dado encontrado no período.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
-
-    <div style="display:flex; gap:10px; justify-content:space-between; margin-top:12px; flex-wrap:wrap;">
-      <div>
-        {% if page_obj.has_previous %}
-          <a class="btn" href="?start={{ start }}&end={{ end }}&pn={{ pn }}&sn={{ sn }}&page_size={{ page_size }}&page={{ page_obj.previous_page_number }}">Anterior</a>
-        {% endif %}
-      </div>
-      <div>
-        {% if page_obj.has_next %}
-          <a class="btn" href="?start={{ start }}&end={{ end }}&pn={{ pn }}&sn={{ sn }}&page_size={{ page_size }}&page={{ page_obj.next_page_number }}">Próxima</a>
-        {% endif %}
-      </div>
-    </div>
-
+    <nav class="op-pagination" aria-label="Paginação dos dados operativos">
+      <div>{% if page_obj.has_previous %}<a class="btn btn-secondary" href="?start={{ start }}&end={{ end }}&pn={{ pn }}&sn={{ sn }}&page_size={{ page_size }}&page={{ page_obj.previous_page_number }}">Página anterior</a>{% endif %}</div>
+      <div>{% if page_obj.has_next %}<a class="btn btn-secondary" href="?start={{ start }}&end={{ end }}&pn={{ pn }}&sn={{ sn }}&page_size={{ page_size }}&page={{ page_obj.next_page_number }}">Próxima página</a>{% endif %}</div>
+    </nav>
   </article>
-</section>
-
-<style>
-  .grid-form{
-    display:grid;
-    grid-template-columns: repeat(6, minmax(160px, 1fr));
-    gap:12px;
-    align-items:end;
-  }
-  @media (max-width: 1100px){
-    .grid-form{ grid-template-columns: repeat(2, minmax(160px, 1fr)); }
-  }
-  @media (max-width: 680px){
-    .grid-form{ grid-template-columns: 1fr; }
-  }
-</style>
+</div>
 {% endblock %}

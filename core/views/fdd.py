@@ -16,11 +16,24 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods
 from django.contrib.auth.decorators import login_required
+from django.db import IntegrityError, transaction
 
-from core.models import PVPlant, FaultEvent, GroundTruthEvent
+from core.models import PVPlant, FaultEvent, GroundTruthEvent, PlantDetectorConfiguration
 from core.services.fdd.dashboard_common import MISMATCH_VERSION_SUMMARY, DashboardServiceError
 from core.services.fdd.dashboard_runtime import build_mismatch_dashboard_payload, parse_dashboard_params
-from core.services.fdd.param_catalog import BASIC_PARAM_DEFAULTS, ADVANCED_PARAM_KEYS, advanced_groups, RANDOM_SEARCH_DEFAULT_TRIALS, RANDOM_SEARCH_DEFAULT_SEED
+from core.services.fdd.param_catalog import (
+    ADVANCED_PARAM_KEYS,
+    BASIC_PARAM_DEFAULTS,
+    DEFAULT_CONFIG_NAME,
+    DEFAULT_DETECTOR_VERSION,
+    DEFAULT_DISPLAY_MODE,
+    DEFAULT_PERSIST,
+    DEFAULT_SOURCE_METEO,
+    DEFAULT_SOURCE_OPER,
+    RANDOM_SEARCH_DEFAULT_SEED,
+    RANDOM_SEARCH_DEFAULT_TRIALS,
+    advanced_groups,
+)
 from core.services.fdd.random_search import run_typology_random_search
 from core.services.fdd.validation import compute_validation_report_from_db, infer_truth_group
 
@@ -228,13 +241,129 @@ def mismatch_fdd_view(request: HttpRequest):
             "api_url": reverse("mismatch_fdd_api"),
             "export_pdf_url": reverse("mismatch_fdd_export_pdf"),
             "random_search_url": reverse("mismatch_fdd_random_search_api"),
-            "display_mode": (request.GET.get("display_mode") or "mismatch"),
+            "display_mode": (request.GET.get("display_mode") or DEFAULT_DISPLAY_MODE),
+            "config_name": request.GET.get("config_name") or DEFAULT_CONFIG_NAME,
+            "detector_version": DEFAULT_DETECTOR_VERSION,
+            "source_oper": request.GET.get("source_oper") or DEFAULT_SOURCE_OPER,
+            "source_meteo": request.GET.get("source_meteo") or DEFAULT_SOURCE_METEO,
+            "persist": DEFAULT_PERSIST,
             "version_summary": MISMATCH_VERSION_SUMMARY,
             "advanced_param_groups": advanced_groups(),
             "advanced_param_keys": ADVANCED_PARAM_KEYS,
+            "configurations_url": reverse("mismatch_fdd_configurations_api"),
             "random_search_defaults": {"trials": RANDOM_SEARCH_DEFAULT_TRIALS, "seed": RANDOM_SEARCH_DEFAULT_SEED},
         },
     )
+
+
+def _detector_configuration_payload(item: PlantDetectorConfiguration) -> Dict[str, Any]:
+    return {
+        "id": item.id,
+        "name": item.name,
+        "is_default": item.is_default,
+        "config": item.config or {},
+        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+    }
+
+
+def _read_json_body(request: HttpRequest) -> Dict[str, Any]:
+    try:
+        body = json.loads((request.body or b"{}").decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise DashboardServiceError("Conteudo JSON invalido", status_code=400)
+    if not isinstance(body, dict):
+        raise DashboardServiceError("Conteudo JSON invalido", status_code=400)
+    return body
+
+
+def _clean_saved_detector_config(raw: Any) -> Dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise DashboardServiceError("A configuracao deve ser um objeto JSON", status_code=400)
+    allowed = set(ADVANCED_PARAM_KEYS) | {
+        "config_name", "detector_version", "source_oper", "source_meteo",
+        "display_mode", "persist", "warn_abs", "fault_abs", "gpoa_gate",
+        "gpoa_min", "pmin_w",
+    }
+    cleaned = {str(key): value for key, value in raw.items() if str(key) in allowed}
+    cleaned["detector_version"] = DEFAULT_DETECTOR_VERSION
+    cleaned.setdefault("source_oper", DEFAULT_SOURCE_OPER)
+    cleaned.setdefault("source_meteo", DEFAULT_SOURCE_METEO)
+    cleaned.setdefault("display_mode", DEFAULT_DISPLAY_MODE)
+    cleaned.setdefault("persist", DEFAULT_PERSIST)
+    return _json_sanitize(cleaned)
+
+
+@require_http_methods(["GET", "POST"])
+@login_required
+def mismatch_fdd_configurations_api(request: HttpRequest) -> JsonResponse:
+    try:
+        data = request.GET if request.method == "GET" else _read_json_body(request)
+        plant = _load_authorized_plant(request, _parse_plant_id(data))
+        queryset = PlantDetectorConfiguration.objects.filter(plant=plant)
+
+        if request.method == "GET":
+            return _json_response_strict({
+                "ok": True,
+                "plant_id": plant.id,
+                "configurations": [_detector_configuration_payload(item) for item in queryset],
+            })
+
+        action = str(data.get("action") or "save").strip().lower()
+        config_id = data.get("configuration_id") or data.get("id")
+        item = queryset.filter(pk=config_id).first() if config_id else None
+
+        if action == "delete":
+            if item is None:
+                raise DashboardServiceError("Configuracao nao encontrada", status_code=404)
+            item.delete()
+        elif action == "set_default":
+            if item is None:
+                raise DashboardServiceError("Configuracao nao encontrada", status_code=404)
+            with transaction.atomic():
+                queryset.exclude(pk=item.pk).update(is_default=False)
+                item.is_default = True
+                item.save(update_fields=["is_default", "updated_at"])
+        elif action in {"save", "update"}:
+            name = str(data.get("name") or "").strip()
+            if not name:
+                raise DashboardServiceError("Informe um nome para a configuracao", status_code=400)
+            if len(name) > 120:
+                raise DashboardServiceError("O nome deve ter no maximo 120 caracteres", status_code=400)
+            config = _clean_saved_detector_config(data.get("config"))
+            config["config_name"] = name
+            make_default = bool(data.get("is_default"))
+            with transaction.atomic():
+                if make_default:
+                    queryset.update(is_default=False)
+                if action == "update":
+                    if item is None:
+                        raise DashboardServiceError("Configuracao nao encontrada", status_code=404)
+                    item.name = name
+                    item.config = config
+                    item.is_default = make_default or item.is_default
+                    item.save()
+                else:
+                    item = PlantDetectorConfiguration.objects.create(
+                        plant=plant,
+                        name=name,
+                        config=config,
+                        is_default=make_default,
+                        created_by=request.user,
+                    )
+        else:
+            raise DashboardServiceError("Acao de configuracao invalida", status_code=400)
+
+        return _json_response_strict({
+            "ok": True,
+            "configurations": [_detector_configuration_payload(saved) for saved in queryset],
+        })
+    except DashboardServiceError as exc:
+        return _json_response_strict({"ok": False, "error": exc.message}, status=exc.status_code)
+    except IntegrityError:
+        return _json_response_strict({"ok": False, "error": "Ja existe uma configuracao com esse nome para a planta."}, status=409)
+    except Exception as exc:
+        logger.exception("mismatch_fdd_configurations_api failed")
+        return _json_response_strict({"ok": False, "error": f"Erro interno: {type(exc).__name__}: {exc}"}, status=500)
 
 
 @require_http_methods(["GET", "POST"])
@@ -430,7 +559,7 @@ def mismatch_fdd_export_pdf(request: HttpRequest) -> HttpResponse:
             "source_oper": request.GET.get("source_oper") or request.GET.get("src_oper") or params.source_oper_raw or None,
             "source_meteo": request.GET.get("source_meteo") or request.GET.get("src_meteo") or payload.get("sources", {}).get("source_meteo"),
             "pipeline": payload.get("pipeline"),
-            "display_mode": request.GET.get("display_mode") or payload.get("display_mode") or "mismatch",
+            "display_mode": request.GET.get("display_mode") or payload.get("display_mode") or DEFAULT_DISPLAY_MODE,
         }
 
         generated_at_local = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S %Z")

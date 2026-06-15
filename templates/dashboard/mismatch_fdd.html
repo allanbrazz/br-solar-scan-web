@@ -196,7 +196,30 @@
     .advanced-card[open] .advanced-toggle::after{ content:"Recolher"; }
     .advanced-card[open] .advanced-toggle .chevron{ transform:rotate(180deg); }
     .advanced-body{ margin-top:1rem; padding-top:.9rem; border-top:1px solid rgba(255,255,255,.10); }
+    .config-manager{ padding:1rem; border:1px solid rgba(95,176,255,.22); border-radius:16px; background:linear-gradient(135deg, rgba(25,75,120,.24), rgba(10,28,51,.28)); }
+    .config-manager-grid{ display:grid; grid-template-columns:minmax(220px,1.2fr) minmax(220px,1fr); gap:.8rem; align-items:end; }
+    .config-manager-actions{ display:flex; flex-wrap:wrap; gap:.55rem; margin-top:.8rem; }
+    .config-manager-status{ min-height:1.3rem; margin-top:.65rem; font-size:.85rem; opacity:.82; }
+    .interactive-matrix{ overflow:auto; border:1px solid rgba(95,176,255,.16); border-radius:16px; background:rgba(5,18,35,.3); padding:.75rem; }
+    .corr-grid{ display:grid; gap:4px; min-width:max-content; align-items:stretch; }
+    .corr-corner,.corr-head,.corr-row-head{ display:flex; align-items:center; justify-content:center; min-height:44px; padding:.35rem; font-size:.72rem; font-weight:800; color:rgba(233,246,255,.82); text-align:center; }
+    .corr-row-head{ justify-content:flex-end; text-align:right; min-width:150px; }
+    .corr-cell{ min-width:66px; min-height:58px; border:1px solid rgba(255,255,255,.1); border-radius:11px; color:#fff; cursor:help; display:grid; place-content:center; gap:2px; transition:transform .14s ease, box-shadow .14s ease, filter .14s ease; }
+    .corr-cell:hover,.corr-cell:focus-visible{ transform:translateY(-2px) scale(1.03); box-shadow:0 10px 24px rgba(0,0,0,.28), 0 0 0 2px rgba(95,176,255,.32); filter:brightness(1.12); outline:none; z-index:2; }
+    .corr-value{ font:800 .95rem "Chakra Petch", sans-serif; }
+    .corr-count{ font-size:.65rem; opacity:.72; }
+    .matrix-legend{ display:flex; align-items:center; gap:.7rem; margin-top:.8rem; font-size:.78rem; opacity:.84; }
+    .matrix-legend-bar{ flex:1; max-width:420px; height:10px; border-radius:999px; background:linear-gradient(90deg, rgb(216,80,127), rgb(19,35,57), rgb(52,167,225)); }
+    .diagnostic-board{ overflow:auto; min-height:320px; border:1px solid rgba(95,176,255,.16); border-radius:16px; background:rgba(5,18,35,.3); padding:.8rem; }
+    .diagnostic-title{ text-align:center; font-weight:800; margin-bottom:.7rem; }
+    .diagnostic-grid{ display:grid; gap:4px; min-width:max-content; }
+    .diagnostic-head,.diagnostic-row-head{ display:flex; align-items:center; justify-content:center; min-height:34px; padding:.25rem; font-size:.69rem; font-weight:800; opacity:.86; }
+    .diagnostic-row-head{ justify-content:flex-end; width:190px; text-align:right; }
+    .diagnostic-cell{ min-width:30px; min-height:34px; border:1px solid rgba(255,255,255,.08); border-radius:7px; color:#fff; font-size:.61rem; font-weight:800; cursor:help; transition:transform .12s ease, filter .12s ease; }
+    .diagnostic-cell:hover,.diagnostic-cell:focus-visible{ transform:scale(1.12); filter:brightness(1.15); outline:2px solid rgba(95,176,255,.45); z-index:2; }
+    .empty-visual{ display:grid; place-items:center; min-height:250px; opacity:.72; text-align:center; }
     @media (max-width: 900px){ .chapter-grid{ grid-template-columns:1fr; } }
+    @media (max-width: 700px){ .config-manager-grid{ grid-template-columns:1fr; } .corr-cell{ min-width:58px; } }
 
     .hm-wrap{
       width:100%;
@@ -504,11 +527,11 @@
 {% endblock %}
 
 {% block content %}
-<div id="fddPage" class="dash" data-api="{% url 'mismatch_fdd_api' %}" data-export="{{ export_pdf_url|default:'' }}" data-random-search="{{ random_search_url|default:'' }}" data-review-api="{% url 'mismatch_fdd_review_event_api' %}" data-truth-api="{% url 'mismatch_fdd_create_truth_event_api' %}" data-validation-api="{% url 'mismatch_fdd_validation_api' %}">
+<div id="fddPage" class="dash" data-api="{% url 'mismatch_fdd_api' %}" data-export="{{ export_pdf_url|default:'' }}" data-random-search="{{ random_search_url|default:'' }}" data-configurations="{{ configurations_url|default:'' }}" data-review-api="{% url 'mismatch_fdd_review_event_api' %}" data-truth-api="{% url 'mismatch_fdd_create_truth_event_api' %}" data-validation-api="{% url 'mismatch_fdd_validation_api' %}">
   <div class="card glass span-12">
     <div class="page-head">
       <div style="min-width:0;">
-        <h1>FDD — Mismatch</h1>
+        <h1>Detecção e diagnóstico de falhas</h1>
         <div class="sub">Clique num quadrado para ver os dados daquele instante (mesmo se não houver dados operativos do inversor).</div>
       </div>
 
@@ -562,14 +585,14 @@
       </div>
 
       <div class="ctl sm">
-        <label for="warn_abs">Limiar WARN (|mismatch|)</label>
-        <input id="warn_abs" type="number" step="0.01" min="0" value="{{ warn_abs|default_if_none:0.35 }}">
+        <label for="warn_abs">Limiar de atenção (|desvio|)</label>
+        <input id="warn_abs" type="number" step="0.01" min="0" value="{{ warn_abs|default_if_none:0.47 }}">
       </div>
 
       <div class="ctl sm">
         <label for="display_mode">Exibir bins por</label>
         <select id="display_mode">
-          <option value="mismatch" {% if display_mode|default:'mismatch' == 'mismatch' %}selected{% endif %}>Mismatch</option>
+          <option value="mismatch" {% if display_mode == 'mismatch' %}selected{% endif %}>Desvio de desempenho</option>
           <option value="tipologia" {% if display_mode == 'tipologia' %}selected{% endif %}>Tipologia de falha</option>
         </select>
       </div>
@@ -577,18 +600,18 @@
 
 
       <div class="ctl sm">
-        <label for="fault_abs">Limiar FALHA (mismatch ≤ −)</label>
-        <input id="fault_abs" type="number" step="0.01" min="0" value="{{ fault_abs|default_if_none:0.90 }}">
+        <label for="fault_abs">Limiar de falha (desvio negativo)</label>
+        <input id="fault_abs" type="number" step="0.01" min="0" value="{{ fault_abs|default_if_none:0.95 }}">
       </div>
 
       <div class="ctl sm">
-        <label for="gpoa_min">GPOA gate (W/m²)</label>
-        <input id="gpoa_min" type="number" step="1" min="0" value="{{ gpoa_min|default_if_none:50 }}">
+        <label for="gpoa_min">Irradiância mínima no plano (W/m²)</label>
+        <input id="gpoa_min" type="number" step="1" min="0" value="{{ gpoa_min|default_if_none:250 }}">
       </div>
 
       <div class="ctl sm">
         <label for="pmin_w">Potência mínima (W)</label>
-        <input id="pmin_w" type="number" step="1" min="0" value="{{ pmin_w|default_if_none:0 }}">
+        <input id="pmin_w" type="number" step="1" min="0" value="{{ pmin_w|default_if_none:300 }}">
       </div>
 
       <div class="ctl" style="min-width: 320px;">
@@ -625,7 +648,7 @@
               <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
               <path d="M21 4v6h-6" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span class="label">Reset</span>
+            <span class="label">Limpar</span>
           </button>
         </div>
       </div>
@@ -650,6 +673,29 @@
 
     <div class="advanced-body">
 
+    <section class="config-manager" aria-labelledby="configManagerTitle">
+      <h3 id="configManagerTitle" style="margin:0 0 .35rem;">Gestão de configurações</h3>
+      <p class="sub" style="margin:0 0 .8rem;">Salve os parâmetros que melhor representam esta planta. A configuração marcada como padrão será carregada automaticamente ao selecionar a planta.</p>
+      <div class="config-manager-grid">
+        <div class="ctl">
+          <label for="savedConfigurationSelect">Configurações salvas</label>
+          <select id="savedConfigurationSelect"><option value="">Nenhuma configuração salva</option></select>
+        </div>
+        <div class="ctl">
+          <label for="configurationName">Nome da configuração</label>
+          <input id="configurationName" type="text" maxlength="120" value="{{ config_name|default:'C18_estabilidade_restritiva' }}">
+        </div>
+      </div>
+      <div class="config-manager-actions">
+        <button class="btn-glow secondary" id="btnLoadConfiguration" type="button">Carregar</button>
+        <button class="btn-glow" id="btnSaveConfiguration" type="button">Salvar nova</button>
+        <button class="btn-glow secondary" id="btnUpdateConfiguration" type="button">Atualizar</button>
+        <button class="btn-glow secondary" id="btnDefaultConfiguration" type="button">Definir como padrão</button>
+        <button class="btn-glow danger" id="btnDeleteConfiguration" type="button">Excluir</button>
+      </div>
+      <div id="configurationStatus" class="config-manager-status" role="status"></div>
+    </section>
+
     {% for grp in advanced_param_groups %}
       <div style="height:.35rem"></div>
       <h3 style="margin:.2rem 0 .4rem; font-size:1rem;">{{ grp.title }}</h3>
@@ -663,6 +709,7 @@
               step="{{ ctl.step }}"
               {% if ctl.min %}min="{{ ctl.min }}"{% endif %}
               {% if ctl.max %}max="{{ ctl.max }}"{% endif %}
+              value="{{ ctl.default }}"
               placeholder="Automático: {{ ctl.auto_text }}"
               data-auto="{{ ctl.auto_text }}"
             >
@@ -674,11 +721,11 @@
     <div style="height:.8rem"></div>
     <div class="ctl-row">
       <div class="ctl sm">
-        <label for="rs_trials">Random search — tentativas</label>
+        <label for="rs_trials">Busca aleatória — tentativas</label>
         <input id="rs_trials" type="number" step="1" min="1" max="120" value="{{ random_search_defaults.trials }}">
       </div>
       <div class="ctl sm">
-        <label for="rs_seed">Random search — semente</label>
+        <label for="rs_seed">Busca aleatória — semente</label>
         <input id="rs_seed" type="number" step="1" value="{{ random_search_defaults.seed }}">
       </div>
       <div class="ctl" style="min-width:320px;">
@@ -708,7 +755,7 @@
     <div class="kpi" id="kpiGrid">
       <div class="tile"><p class="t">Pontos</p><p class="v" id="kpiPts">—</p><p class="s">na série</p></div>
       <div class="tile"><p class="t">Normal</p><p class="v" id="kpiOk">—</p><p class="s">verde</p></div>
-      <div class="tile"><p class="t">Warn</p><p class="v" id="kpiWarn">—</p><p class="s">amarelo</p></div>
+      <div class="tile"><p class="t">Atenção</p><p class="v" id="kpiWarn">—</p><p class="s">amarelo</p></div>
       <div class="tile"><p class="t">Falha</p><p class="v" id="kpiCrit">—</p><p class="s">vermelho</p></div>
       <div class="tile"><p class="t">Sem operativos</p><p class="v" id="kpiNoData">—</p><p class="s">cinza</p></div>
       <div class="tile"><p class="t">Intervalo</p><p class="v" id="kpiRange">—</p><p class="s">start → end</p></div>
@@ -772,7 +819,7 @@
   <div class="card glass span-12" id="mainHeatmapCard">
     <div class="hm-head">
       <div style="min-width:0;">
-        <h3 style="margin-top:0">Heatmap — dia × bin (canvas)</h3>
+        <h3 style="margin-top:0">Mapa temporal — dia × intervalo</h3>
         <div class="hm-sub">
           Linhas = dias • Colunas = bins de <b id="hmBinLbl">15</b> min •
           cinza=sem dados operativos do inversor, verde=normal, amarelo=warn, vermelho=falha.
@@ -803,9 +850,9 @@
   </div>
 
   <div class="card glass span-12" id="chapter08MatrixCard">
-    <h3 style="margin-top:0">Matriz de correlação dos resíduos multicanais</h3>
-    <div class="chapter-note">Correlação de Pearson entre os resíduos relativos de potência CA/CC, tensão CC e corrente CC. Ciano indica associação positiva, rosa associação negativa e amarelo destaca a diagonal.</div>
-    <div class="chapter-chart-wrap matrix"><canvas id="residualMatrixCanvas" width="980" height="560"></canvas></div>
+    <h3 style="margin-top:0">Matriz interativa de correlação do sistema</h3>
+    <div class="chapter-note">Compara medidas, estimativas do modelo, resíduos, irradiância no plano e temperaturas. Passe o cursor ou use o teclado sobre uma célula para consultar o coeficiente e o número de amostras.</div>
+    <div id="residualMatrixGrid" class="interactive-matrix" aria-live="polite"></div>
   </div>
 
   <div class="card glass span-12" id="chapter08FlowCard">
@@ -818,8 +865,8 @@
     <h3 style="margin-top:0">Distribuição temporal das classes diagnósticas</h3>
     <div class="chapter-note">Percentual de ocorrência de cada classe diagnóstica por hora do dia e por mês, normalizado pelo total de amostras em cada coluna.</div>
     <div class="chapter-grid">
-      <div class="chapter-chart-wrap"><canvas id="diagnosticHourCanvas" width="900" height="480"></canvas></div>
-      <div class="chapter-chart-wrap"><canvas id="diagnosticMonthCanvas" width="900" height="480"></canvas></div>
+      <div id="diagnosticHourGrid" class="diagnostic-board" aria-live="polite"></div>
+      <div id="diagnosticMonthGrid" class="diagnostic-board" aria-live="polite"></div>
     </div>
   </div>
 
@@ -874,7 +921,7 @@
       <button type="button" class="drawer-tab-btn" data-tab="compare">Modelo × medido</button>
       <button type="button" class="drawer-tab-btn" data-tab="curve">Curva do dia</button>
       <button type="button" class="drawer-tab-btn" data-tab="validation">Validação</button>
-      <button type="button" class="drawer-tab-btn" data-tab="dump">Dump</button>
+      <button type="button" class="drawer-tab-btn" data-tab="dump">Dados completos</button>
     </div>
 
     <div class="drawer-tab-panel active" data-panel="mppt">
@@ -924,7 +971,7 @@
       <h4 style="margin:.2rem 0 .6rem;">Principais variáveis</h4>
       <table class="kv" id="detailAll"></table>
       <div style="height:.8rem"></div>
-      <h4 style="margin:.2rem 0 .6rem;">Dump</h4>
+      <h4 style="margin:.2rem 0 .6rem;">Dados completos</h4>
       <pre class="dump" id="detailDump">{}</pre>
     </div>
   </div>
@@ -935,6 +982,14 @@
 <script>
   const $ = (id) => document.getElementById(id);
   const ADVANCED_PARAM_KEYS = JSON.parse(document.getElementById("advancedParamKeysData")?.textContent || "[]");
+  let detectorMetadata = {
+    config_name: "{{ config_name|default:'C18_estabilidade_restritiva'|escapejs }}",
+    detector_version: "{{ detector_version|default:'mismatch_runtime_v1'|escapejs }}",
+    source_oper: "{{ source_oper|default:'SHINEMONITOR'|escapejs }}",
+    source_meteo: "{{ source_meteo|default:'OPENMETEO'|escapejs }}",
+    persist: true,
+  };
+  let savedDetectorConfigurations = [];
 
 
   function setStatus(on, txt){
@@ -994,6 +1049,111 @@
       const el = $(k);
       if (!el || v === undefined || v === null) continue;
       el.value = String(v);
+    }
+    detectorMetadata = { ...detectorMetadata, ...params };
+    if (params.config_name && $("configurationName")) $("configurationName").value = String(params.config_name);
+  }
+
+  function detectorConfigurationPayload(){
+    return {
+      ...detectorMetadata,
+      config_name: String($("configurationName")?.value || detectorMetadata.config_name || "").trim(),
+      detector_version: "mismatch_runtime_v1",
+      source_oper: detectorMetadata.source_oper || "SHINEMONITOR",
+      source_meteo: detectorMetadata.source_meteo || "OPENMETEO",
+      display_mode: currentDisplayMode(),
+      persist: true,
+      warn_abs: getNum("warn_abs", 0.47),
+      fault_abs: getNum("fault_abs", 0.95),
+      gpoa_gate: getNum("gpoa_min", 250),
+      gpoa_min: getNum("gpoa_min", 250),
+      pmin_w: getNum("pmin_w", 300),
+      ...collectAdvancedPayload(),
+    };
+  }
+
+  function selectedSavedConfiguration(){
+    const id = Number($("savedConfigurationSelect")?.value || 0);
+    return savedDetectorConfigurations.find((item) => Number(item.id) === id) || null;
+  }
+
+  function renderSavedConfigurations(items){
+    savedDetectorConfigurations = Array.isArray(items) ? items : [];
+    const select = $("savedConfigurationSelect");
+    if (!select) return;
+    const previous = Number(select.value || 0);
+    select.replaceChildren();
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = savedDetectorConfigurations.length ? "Selecione uma configuração" : "Nenhuma configuração salva";
+    select.appendChild(empty);
+    savedDetectorConfigurations.forEach((item) => {
+      const option = document.createElement("option");
+      option.value = String(item.id);
+      option.textContent = `${item.name}${item.is_default ? " (padrão)" : ""}`;
+      if (Number(item.id) === previous) option.selected = true;
+      select.appendChild(option);
+    });
+  }
+
+  function setConfigurationStatus(message, isError=false){
+    const status = $("configurationStatus");
+    if (!status) return;
+    status.textContent = message || "";
+    status.style.color = isError ? "#ff9aa8" : "#9fe7ff";
+  }
+
+  async function loadSavedConfigurations({ applyDefault=false } = {}){
+    const page = $("fddPage");
+    const url = page?.dataset.configurations;
+    const plantId = Number($("plant_id")?.value || 0);
+    if (!url || !plantId) return;
+    try{
+      const response = await fetch(`${url}?plant_id=${plantId}`, {headers:{"Accept":"application/json"}, credentials:"same-origin"});
+      const data = await response.json();
+      if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
+      renderSavedConfigurations(data.configurations);
+      const defaultItem = savedDetectorConfigurations.find((item) => item.is_default);
+      if (applyDefault && defaultItem){
+        $("savedConfigurationSelect").value = String(defaultItem.id);
+        applyParamsToForm(defaultItem.config || {});
+        setConfigurationStatus(`Configuração padrão carregada: ${defaultItem.name}.`);
+      } else {
+        setConfigurationStatus(savedDetectorConfigurations.length ? `${savedDetectorConfigurations.length} configuração(ões) disponível(is).` : "Use a configuração C18 inicial ou salve uma configuração própria para esta planta.");
+      }
+    }catch(error){
+      setConfigurationStatus(`Falha ao carregar configurações: ${String(error.message || error)}`, true);
+    }
+  }
+
+  async function mutateSavedConfiguration(action){
+    const page = $("fddPage");
+    const url = page?.dataset.configurations;
+    const selected = selectedSavedConfiguration();
+    const name = String($("configurationName")?.value || "").trim();
+    if (!url) return;
+    if (["update", "delete", "set_default"].includes(action) && !selected){
+      setConfigurationStatus("Selecione uma configuração salva.", true);
+      return;
+    }
+    if (["save", "update"].includes(action) && !name){
+      setConfigurationStatus("Informe um nome para a configuração.", true);
+      return;
+    }
+    try{
+      const data = await postJson(url, {
+        action,
+        plant_id: Number($("plant_id")?.value || 0),
+        configuration_id: selected?.id,
+        name,
+        config: detectorConfigurationPayload(),
+      });
+      renderSavedConfigurations(data.configurations);
+      const matched = savedDetectorConfigurations.find((item) => item.name === name) || savedDetectorConfigurations.find((item) => item.id === selected?.id);
+      if (matched) $("savedConfigurationSelect").value = String(matched.id);
+      setConfigurationStatus(action === "delete" ? "Configuração excluída." : action === "set_default" ? "Configuração definida como padrão." : "Configuração salva com sucesso.");
+    }catch(error){
+      setConfigurationStatus(`Falha: ${String(error.message || error)}`, true);
     }
   }
 
@@ -1067,10 +1227,10 @@
       if (!hasS) s.value = toYMD(start);
     }
 
-    normalizeNumberInput("warn_abs", 0.35);
-    normalizeNumberInput("fault_abs", 0.90);
-    normalizeNumberInput("gpoa_min", 50);
-    normalizeNumberInput("pmin_w", 0);
+    normalizeNumberInput("warn_abs", 0.47);
+    normalizeNumberInput("fault_abs", 0.95);
+    normalizeNumberInput("gpoa_min", 250);
+    normalizeNumberInput("pmin_w", 300);
   }
 
   const FIELD_LABELS = {
@@ -1130,9 +1290,34 @@
     mppt4_idc_a: "MPPT4 Idc [A]",
   };
 
+  const DIAGNOSIS_LABELS_PT = {
+    normal: "Operação normal",
+    ok: "Operação normal",
+    invalid: "Sem diagnóstico útil",
+    unknown: "Causa não determinada",
+    grid_overvoltage_trip: "Desligamento por sobretensão da rede",
+    grid_overvoltage_derating: "Limitação por sobretensão da rede",
+    grid_undervoltage_trip: "Desligamento por subtensão da rede",
+    grid_undervoltage_derating: "Limitação por subtensão da rede",
+    grid_overfrequency_trip: "Desligamento por sobrefrequência",
+    grid_underfrequency_trip: "Desligamento por subfrequência",
+    inverter_off_under_sun: "Inversor desligado com irradiância disponível",
+    unknown_shutdown_with_sun: "Desligamento sem causa definida com sol",
+    dc_side_partial_loss_probable: "Perda parcial provável no lado CC",
+    dc_side_voltage_anomaly_probable: "Anomalia provável de tensão CC",
+    partial_generation_loss_probable: "Perda parcial provável de geração",
+    persistent_underperformance: "Desempenho persistentemente abaixo do esperado",
+    curtailment_clipping: "Limitação de potência ou clipping",
+    severe_power_mismatch: "Desvio severo de potência",
+    power_mismatch_warning: "Desvio de potência em atenção",
+    critical_operational_anomaly: "Anomalia operacional crítica",
+    operational_anomaly_warning: "Anomalia operacional em atenção",
+  };
+
   function humanizeKey(s){
     const k = String(s || "");
     if (!k) return "—";
+    if (DIAGNOSIS_LABELS_PT[k.toLowerCase()]) return DIAGNOSIS_LABELS_PT[k.toLowerCase()];
     const base = k.replace(/[_\-]+/g, " ").trim();
     if (!base) return k;
     return base.charAt(0).toUpperCase() + base.slice(1);
@@ -1529,6 +1714,24 @@
     { key: "p_dc_residual_rel", label: "r PDC", color: "#75e6a8" },
     { key: "v_dc_residual_rel", label: "r VDC", color: "#ffd166" },
     { key: "i_dc_residual_rel", label: "r IDC", color: "#ff758f" },
+  ];
+
+  const CORRELATION_CHANNELS = [
+    { key: "p_ac_real_w", label: "Potência CA medida" },
+    { key: "p_ac_model_w", label: "Potência CA modelada" },
+    { key: "p_ac_residual_rel", label: "Resíduo de potência CA" },
+    { key: "p_dc_w", label: "Potência CC medida" },
+    { key: "p_dc_model_w", label: "Potência CC modelada" },
+    { key: "p_dc_residual_rel", label: "Resíduo de potência CC" },
+    { key: "v_dc_v", label: "Tensão CC medida" },
+    { key: "v_dc_model_v", label: "Tensão CC modelada" },
+    { key: "v_dc_residual_rel", label: "Resíduo de tensão CC" },
+    { key: "i_dc_a", label: "Corrente CC medida" },
+    { key: "i_dc_model_a", label: "Corrente CC modelada" },
+    { key: "i_dc_residual_rel", label: "Resíduo de corrente CC" },
+    { key: "g_poa_used", fallback: "g_poa", label: "Irradiância no plano" },
+    { key: "tcell_c", label: "Temperatura da célula" },
+    { key: "temp_air", label: "Temperatura ambiente" },
   ];
 
   function finiteNumber(value){
@@ -2029,12 +2232,155 @@
     columns.forEach((column, index) => ctx.fillText(String(column), margin.left+(index+.5)*cellWidth, height-22));
   }
 
+  function renderResidualCorrelationMatrix(payload){
+    const host = $("residualMatrixGrid");
+    if (!host) return;
+    const series = payload?.series || {};
+    host.replaceChildren();
+    const channels = CORRELATION_CHANNELS.filter((channel) => {
+      const values = series[channel.key] || series[channel.fallback] || [];
+      return values.some((value) => finiteNumber(value) !== null);
+    });
+    if (!channels.length){
+      const empty = document.createElement("div");
+      empty.className = "empty-visual";
+      empty.textContent = "Sem variáveis suficientes para calcular a matriz neste período.";
+      host.appendChild(empty);
+      return;
+    }
+    const grid = document.createElement("div");
+    grid.className = "corr-grid";
+    grid.style.gridTemplateColumns = `minmax(150px, 1.7fr) repeat(${channels.length}, minmax(66px, 1fr))`;
+    const corner = document.createElement("div");
+    corner.className = "corr-corner";
+    corner.textContent = "Variável";
+    grid.appendChild(corner);
+    channels.forEach((channel) => {
+      const head = document.createElement("div");
+      head.className = "corr-head";
+      head.textContent = channel.label;
+      head.title = channel.label;
+      grid.appendChild(head);
+    });
+    channels.forEach((rowChannel, row) => {
+      const rowHead = document.createElement("div");
+      rowHead.className = "corr-row-head";
+      rowHead.textContent = rowChannel.label;
+      grid.appendChild(rowHead);
+      channels.forEach((columnChannel, column) => {
+        const rowValues = series[rowChannel.key] || series[rowChannel.fallback] || [];
+        const columnValues = series[columnChannel.key] || series[columnChannel.fallback] || [];
+        const result = pairedCorrelation(rowValues, columnValues);
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "corr-cell";
+        cell.style.background = correlationCellColor(result.r, row === column);
+        cell.title = `${rowChannel.label} × ${columnChannel.label}: correlação ${result.r === null ? "indisponível" : result.r.toFixed(4)}, ${result.n} amostras pareadas.`;
+        cell.setAttribute("aria-label", cell.title);
+        const value = document.createElement("span");
+        value.className = "corr-value";
+        value.textContent = result.r === null ? "—" : result.r.toFixed(2);
+        const count = document.createElement("span");
+        count.className = "corr-count";
+        count.textContent = `n=${result.n}`;
+        cell.append(value, count);
+        grid.appendChild(cell);
+      });
+    });
+    host.appendChild(grid);
+    const legend = document.createElement("div");
+    legend.className = "matrix-legend";
+    legend.innerHTML = '<span>-1 negativa</span><span class="matrix-legend-bar"></span><span>+1 positiva</span>';
+    host.appendChild(legend);
+  }
+
+  function renderDiagnosticHeatmap(hostId, payload, dimension){
+    const host = $(hostId);
+    if (!host) return;
+    host.replaceChildren();
+    const series = payload?.series || {};
+    const times = series.t_local || [];
+    const labels = series.diagnosis_label || [];
+    const excluded = new Set(["ok", "normal", "invalid", "unknown", ""]);
+    const countsByLabel = new Map();
+    labels.forEach((label) => {
+      const key = String(label || "").trim();
+      if (!excluded.has(key.toLowerCase())) countsByLabel.set(key, (countsByLabel.get(key) || 0) + 1);
+    });
+    const rowLabels = Array.from(countsByLabel.entries()).sort((a,b) => b[1]-a[1]).slice(0, 9).map(([label]) => label);
+    const columns = dimension === "hour" ? Array.from({length:24}, (_, i) => i) : Array.from({length:12}, (_, i) => i+1);
+    const denom = new Map(columns.map((column) => [column, 0]));
+    const matrix = rowLabels.map(() => columns.map(() => 0));
+    for (let i = 0; i < times.length; i++){
+      const parts = localDateParts(times[i]);
+      if (!parts) continue;
+      const columnValue = dimension === "hour" ? parts.hour : parts.month;
+      const columnIndex = columns.indexOf(columnValue);
+      if (columnIndex < 0) continue;
+      denom.set(columnValue, (denom.get(columnValue) || 0) + 1);
+      const rowIndex = rowLabels.indexOf(String(labels[i] || ""));
+      if (rowIndex >= 0) matrix[rowIndex][columnIndex] += 1;
+    }
+    const percentages = matrix.map((row) => row.map((count, index) => {
+      const total = denom.get(columns[index]) || 0;
+      return total ? 100 * count / total : null;
+    }));
+    const finite = percentages.flat().filter((value) => Number.isFinite(value));
+    const maxValue = finite.length ? Math.max(...finite, 1) : 1;
+    const title = document.createElement("div");
+    title.className = "diagnostic-title";
+    title.textContent = dimension === "hour" ? "Classes por hora do dia" : "Classes por mês";
+    host.appendChild(title);
+    if (!rowLabels.length){
+      const empty = document.createElement("div");
+      empty.className = "empty-visual";
+      empty.textContent = "Sem classes anômalas no período selecionado.";
+      host.appendChild(empty);
+      return;
+    }
+    const grid = document.createElement("div");
+    grid.className = "diagnostic-grid";
+    grid.style.gridTemplateColumns = `190px repeat(${columns.length}, minmax(30px, 1fr))`;
+    const corner = document.createElement("div");
+    corner.className = "diagnostic-head";
+    corner.textContent = "Classe diagnóstica";
+    grid.appendChild(corner);
+    columns.forEach((column) => {
+      const head = document.createElement("div");
+      head.className = "diagnostic-head";
+      head.textContent = dimension === "hour" ? `${String(column).padStart(2, "0")}h` : String(column).padStart(2, "0");
+      grid.appendChild(head);
+    });
+    rowLabels.forEach((label, row) => {
+      const rowHead = document.createElement("div");
+      rowHead.className = "diagnostic-row-head";
+      rowHead.textContent = humanizeKey(label);
+      rowHead.title = humanizeKey(label);
+      grid.appendChild(rowHead);
+      columns.forEach((column, col) => {
+        const value = percentages[row][col];
+        const count = matrix[row][col];
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "diagnostic-cell";
+        cell.style.background = heatColor(value, maxValue);
+        cell.style.color = Number.isFinite(value) && value/maxValue > .58 ? "#071321" : "#fff";
+        cell.textContent = Number.isFinite(value) && value > 0 ? `${value.toFixed(1)}%` : "";
+        const period = dimension === "hour" ? `${String(column).padStart(2, "0")}:00` : `mês ${column}`;
+        cell.title = `${humanizeKey(label)} em ${period}: ${count} amostras (${Number.isFinite(value) ? value.toFixed(2) : "0.00"}%).`;
+        cell.setAttribute("aria-label", cell.title);
+        grid.appendChild(cell);
+      });
+    });
+    host.appendChild(grid);
+  }
+
   function renderChapter08Charts(payload){
     renderResidualProfile(payload);
     renderResidualCorrelationMatrix(payload);
     renderFddSankey(payload);
-    renderDiagnosticHeatmap("diagnosticHourCanvas", payload, "hour");
-    renderDiagnosticHeatmap("diagnosticMonthCanvas", payload, "month");
+    renderDiagnosticHeatmap("diagnosticHourGrid", payload, "hour");
+    renderDiagnosticHeatmap("diagnosticMonthGrid", payload, "month");
   }
 
   function reorderPostHeatmapSections(){
@@ -2181,10 +2527,10 @@
   }
 
   function overrideByMismatchOrPower(payload, idx){
-    const warnAbs  = Math.max(0, getNum("warn_abs", 0.35));
-    const faultAbs = Math.max(0, getNum("fault_abs", 0.90));
-    const gpoaMin  = Math.max(0, getNum("gpoa_min", 50));
-    const pminW    = Math.max(0, getNum("pmin_w", 0));
+    const warnAbs  = Math.max(0, getNum("warn_abs", 0.47));
+    const faultAbs = Math.max(0, getNum("fault_abs", 0.95));
+    const gpoaMin  = Math.max(0, getNum("gpoa_min", 250));
+    const pminW    = Math.max(0, getNum("pmin_w", 300));
 
     let mm = Number(seriesAt(payload, "mismatch_rel", idx));
     if (!Number.isFinite(mm)){
@@ -3474,12 +3820,18 @@
       plant_id: Number(plantId),
       start,
       end,
-      warn_abs: getNum("warn_abs", 0.35),
-      fault_abs: getNum("fault_abs", 0.90),
-      gpoa_min: getNum("gpoa_min", 50),
-      pmin_w: getNum("pmin_w", 0),
+      warn_abs: getNum("warn_abs", 0.47),
+      fault_abs: getNum("fault_abs", 0.95),
+      gpoa_min: getNum("gpoa_min", 250),
+      gpoa_gate: getNum("gpoa_min", 250),
+      pmin_w: getNum("pmin_w", 300),
       dt_minutes: Math.max(1, Number($("dt_minutes")?.value || 15)),
       display_mode: currentDisplayMode(),
+      config_name: String($("configurationName")?.value || detectorMetadata.config_name || "C18_estabilidade_restritiva").trim(),
+      detector_version: "mismatch_runtime_v1",
+      source_oper: detectorMetadata.source_oper || "SHINEMONITOR",
+      source_meteo: detectorMetadata.source_meteo || "OPENMETEO",
+      persist: 1,
     };
     Object.assign(payload, collectAdvancedPayload());
     return payload;
@@ -3637,6 +3989,21 @@
     $("btnExportPdf")?.addEventListener("click", exportPdf);
     $("btnReset")?.addEventListener("click", resetUi);
     $("btnRandomSearch")?.addEventListener("click", runRandomSearch);
+    $("btnLoadConfiguration")?.addEventListener("click", () => {
+      const selected = selectedSavedConfiguration();
+      if (!selected){ setConfigurationStatus("Selecione uma configuração salva.", true); return; }
+      applyParamsToForm(selected.config || {});
+      setConfigurationStatus(`Configuração carregada: ${selected.name}.`);
+    });
+    $("btnSaveConfiguration")?.addEventListener("click", () => mutateSavedConfiguration("save"));
+    $("btnUpdateConfiguration")?.addEventListener("click", () => mutateSavedConfiguration("update"));
+    $("btnDefaultConfiguration")?.addEventListener("click", () => mutateSavedConfiguration("set_default"));
+    $("btnDeleteConfiguration")?.addEventListener("click", () => mutateSavedConfiguration("delete"));
+    $("savedConfigurationSelect")?.addEventListener("change", () => {
+      const selected = selectedSavedConfiguration();
+      if (selected && $("configurationName")) $("configurationName").value = selected.name;
+    });
+    $("plant_id")?.addEventListener("change", () => loadSavedConfigurations({applyDefault:true}));
 
     $("dt_minutes")?.addEventListener("change", () => {
       if (hmState.payload) renderHeatmapCanvas(hmState.payload);
@@ -3652,6 +4019,7 @@
     bindDetailButtons();
     bindHeatmapFit();
     renderValidationDashboard({ summary: { validation: {}, events: [] } });
+    loadSavedConfigurations({applyDefault:true});
 
     document.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape") closeDetailDrawer();

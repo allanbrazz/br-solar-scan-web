@@ -1,218 +1,143 @@
 {% extends "base.html" %}
-{% block title %}Meteorologia (Open-Meteo){% endblock %}
+{% block title %}Meteorologia - Braz Solar Scan{% endblock %}
 
 {% block extra_head %}
 <style>
-  /* Layout simples (não interfere na Home) */
-  .dash-simple{
-    display:grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 16px;
-    align-items:start;
-  }
-  .span-4{ grid-column: span 4; }
-  .span-8{ grid-column: span 8; }
-  .span-12{ grid-column: 1 / -1; }
-
-  @media (max-width: 1024px){
-    .span-4, .span-8 { grid-column: 1 / -1; }
-  }
-
-  /* Form */
-  .form-row{ margin-top: 10px; }
-  .form-row label{ display:block; font-weight:600; margin-bottom: 6px; }
-
-  /* Se seu projeto já tem .form-control e .btn, isto só reforça; se não tiver, resolve */
-  .form-control{
-    width:100%;
-    padding:.55rem .65rem;
-    border-radius:12px;
-    border:1px solid rgba(255,255,255,.18);
-    background: rgba(10,25,55,.35);
-    color:#e9f6ff;
-    outline:none;
-    backdrop-filter: blur(6px);
-  }
-  .form-control:focus{ border-color: rgba(120,180,255,.55); }
-
-  .btn{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    padding:.55rem .9rem;
-    border-radius:12px;
-    border:1px solid rgba(255,255,255,.18);
-    background: rgba(30,60,120,.35);
-    color:#e9f6ff;
-    cursor:pointer;
-    backdrop-filter: blur(6px);
-    text-decoration:none;
-  }
-  .btn:hover{ background: rgba(30,60,120,.50); }
-
-  .actions{
-    margin-top: 12px;
-    display:flex;
-    flex-wrap:wrap;
-    gap:10px;
-    align-items:center;
-  }
-  .linkish{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    padding:.45rem .75rem;
-    border-radius:12px;
-    border:1px solid rgba(255,255,255,.12);
-    background: rgba(10,25,55,.20);
-    color:#e9f6ff;
-    text-decoration:none;
-  }
-  .linkish:hover{ background: rgba(10,25,55,.35); }
-
-  .kpi{
-    display:flex;
-    gap:14px;
-    flex-wrap:wrap;
-    margin-top:10px;
-  }
-  .kpi .pill{
-    padding:.45rem .7rem;
-    border-radius:999px;
-    border:1px solid rgba(255,255,255,.14);
-    background: rgba(10,25,55,.22);
-    color:#e9f6ff;
-    font-size:.95rem;
-  }
-
-  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-  .muted{ opacity:.85; }
+  .meteo-layout{ display:grid; grid-template-columns:minmax(300px, 4fr) minmax(420px, 8fr); gap:1rem; align-items:start; }
+  .meteo-card,.meteo-card *{ box-sizing:border-box; min-width:0; }
+  .meteo-form{ display:grid; gap:.8rem; }
+  .meteo-field{ display:grid; gap:.35rem; }
+  .meteo-field label{ font-weight:700; font-size:.88rem; opacity:.88; }
+  .meteo-field .form-control{ width:100%; max-width:100%; min-width:0; box-sizing:border-box; }
+  .meteo-inline-check{ display:flex; gap:.55rem; align-items:flex-start; padding:.7rem; border:1px solid rgba(95,176,255,.16); border-radius:13px; background:rgba(10,35,65,.22); }
+  .meteo-actions{ display:flex; flex-wrap:wrap; gap:.6rem; margin-top:.25rem; }
+  .meteo-summary{ display:grid; grid-template-columns:repeat(4, minmax(120px,1fr)); gap:.7rem; margin:.8rem 0 1rem; }
+  .meteo-kpi{ padding:.8rem; border-radius:14px; border:1px solid rgba(95,176,255,.16); background:rgba(10,35,65,.24); }
+  .meteo-kpi span{ display:block; font-size:.76rem; opacity:.72; }
+  .meteo-kpi strong{ display:block; margin-top:.2rem; font-size:1.05rem; overflow-wrap:anywhere; }
+  .meteo-management{ display:grid; gap:.7rem; }
+  .meteo-range{ padding:.8rem; border:1px solid rgba(255,255,255,.1); border-radius:13px; background:rgba(255,255,255,.035); }
+  .meteo-missing{ max-height:230px; overflow:auto; margin:.5rem 0 0; padding-left:1.1rem; }
+  .meteo-muted{ opacity:.76; line-height:1.45; }
+  @media (max-width:1000px){ .meteo-layout{ grid-template-columns:1fr; } }
+  @media (max-width:700px){ .meteo-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
 </style>
 {% endblock %}
 
 {% block content %}
 <header class="page-head">
   <h1 class="page-title">Meteorologia</h1>
-  <p class="page-sub">
-    Selecione a planta e o período. O sistema calcula a cobertura no banco e permite importar/atualizar.
-  </p>
+  <p class="page-sub">Importe, atualize e gerencie os dados meteorológicos usados no modelo e na detecção de falhas.</p>
 </header>
 
-<section class="dash-simple">
-
-  <!-- COLUNA ESQUERDA: FORM -->
-  <article class="card glass span-4">
-    <h3>Solicitar / Atualizar Registros</h3>
-
-    <form method="post">
+<section class="meteo-layout">
+  <article class="card glass meteo-card">
+    <h3>Importar ou atualizar</h3>
+    <form method="post" class="meteo-form" id="meteoForm">
       {% csrf_token %}
+      {% if form.non_field_errors %}<div class="flash flash-error">{{ form.non_field_errors }}</div>{% endif %}
 
-      {% if form.non_field_errors %}
-        <div class="flash flash-error">{{ form.non_field_errors }}</div>
-      {% endif %}
-
-      <div class="form-row">
+      <div class="meteo-field">
         <label for="{{ form.plant.id_for_label }}">{{ form.plant.label }}</label>
         {{ form.plant }}
-        {% if form.plant.errors %}<div class="flash flash-error">{{ form.plant.errors }}</div>{% endif %}
+        {{ form.plant.errors }}
       </div>
-
-      <div class="form-row">
+      <div class="meteo-field">
         <label for="{{ form.start_date.id_for_label }}">{{ form.start_date.label }}</label>
         {{ form.start_date }}
-        {% if form.start_date.errors %}<div class="flash flash-error">{{ form.start_date.errors }}</div>{% endif %}
+        {{ form.start_date.errors }}
       </div>
-
-      <div class="form-row">
+      <div class="meteo-field">
         <label for="{{ form.end_date.id_for_label }}">{{ form.end_date.label }}</label>
         {{ form.end_date }}
-        {% if form.end_date.errors %}<div class="flash flash-error">{{ form.end_date.errors }}</div>{% endif %}
+        {{ form.end_date.errors }}
       </div>
-
-      <div class="form-row">
+      <div class="meteo-field">
         <label for="{{ form.interval_min.id_for_label }}">{{ form.interval_min.label }}</label>
         {{ form.interval_min }}
-        {% if form.interval_min.errors %}<div class="flash flash-error">{{ form.interval_min.errors }}</div>{% endif %}
       </div>
-
-      <div class="actions">
-        <button type="submit" class="btn">Importar/Atualizar</button>
-
-        {% if form.plant.value and form.start_date.value and form.end_date.value and form.interval_min.value %}
-          <a class="linkish"
-             href="{% url 'open_meteo_view' %}?plant={{ form.plant.value }}&start_date={{ form.start_date.value }}&end_date={{ form.end_date.value }}&interval_min={{ form.interval_min.value }}">
-            Ver cobertura
-          </a>
-
-          <a class="linkish"
-             href="{% url 'open_meteo_view_api_json' %}?plant={{ form.plant.value }}&start_date={{ form.start_date.value }}&end_date={{ form.end_date.value }}&interval_min={{ form.interval_min.value }}">
-            API (JSON)
-          </a>
-        {% endif %}
+      <div class="meteo-field">
+        <label for="{{ form.model.id_for_label }}">{{ form.model.label }}</label>
+        {{ form.model }}
+        <small class="meteo-muted">{{ form.model.help_text }}</small>
       </div>
+      <label class="meteo-inline-check" for="{{ form.include_gti.id_for_label }}">
+        {{ form.include_gti }}
+        <span>{{ form.include_gti.label }}</span>
+      </label>
 
-      <p class="page-sub muted" style="margin-top:12px;">
-        Dica: use <strong>Ver cobertura</strong> para checar lacunas antes de importar.
-      </p>
+      <div class="meteo-actions">
+        <button type="submit" name="action" value="import" class="btn btn-primary">Importar / atualizar período</button>
+        <a class="btn btn-secondary" href="{% url 'open_meteo_view_api_json' %}?plant={{ form.plant.value }}&start_date={{ form.start_date.value }}&end_date={{ form.end_date.value }}&interval_min={{ form.interval_min.value }}">Consultar JSON</a>
+      </div>
     </form>
   </article>
 
-  <!-- COLUNA DIREITA: STATUS / COBERTURA -->
-  {% if coverage %}
-    <article class="card glass span-8">
-      <h3>Status e Cobertura</h3>
-
-      <div class="kpi">
-        <div class="pill"><strong>{{ coverage.coverage_pct|floatformat:2 }}%</strong> cobertura</div>
-        <div class="pill">Esperado: <strong>{{ coverage.expected_count }}</strong></div>
-        <div class="pill">Existente: <strong>{{ coverage.existing_count }}</strong></div>
-        <div class="pill">Faltante: <strong>{{ coverage.missing_count }}</strong></div>
-        <div class="pill">Intervalo: <strong>{{ coverage.interval_min }}</strong> min</div>
+  <article class="card glass meteo-card">
+    <h3>Gestão dos dados importados</h3>
+    {% if meteo_summary %}
+      <p class="meteo-muted">Síntese de <strong>{{ meteo_summary.plant.nome }}</strong>, fuso <strong>{{ meteo_summary.plant.timezone }}</strong>.</p>
+      <div class="meteo-summary">
+        <div class="meteo-kpi"><span>Registros salvos</span><strong>{{ meteo_summary.total|default:0 }}</strong></div>
+        <div class="meteo-kpi"><span>Primeiro registro</span><strong>{{ meteo_summary.first_ts|date:"d/m/Y H:i"|default:"-" }}</strong></div>
+        <div class="meteo-kpi"><span>Último registro</span><strong>{{ meteo_summary.last_ts|date:"d/m/Y H:i"|default:"-" }}</strong></div>
+        <div class="meteo-kpi"><span>Modelos</span><strong>{{ meteo_summary.models|join:", "|default:"-" }}</strong></div>
       </div>
 
-      <p class="page-sub muted" style="margin-top:10px;">
-        UTC: <span class="mono">{{ coverage.start_utc }}</span> → <span class="mono">{{ coverage.end_utc }}</span>
-      </p>
+      {% if coverage %}
+        <div class="meteo-management">
+          <div class="meteo-range">
+            <strong>Cobertura do período selecionado</strong>
+            <div class="meteo-summary">
+              <div class="meteo-kpi"><span>Cobertura</span><strong>{{ coverage.coverage_pct|floatformat:2 }}%</strong></div>
+              <div class="meteo-kpi"><span>Esperados</span><strong>{{ coverage.expected_count }}</strong></div>
+              <div class="meteo-kpi"><span>Existentes</span><strong>{{ coverage.existing_count }}</strong></div>
+              <div class="meteo-kpi"><span>Faltantes</span><strong>{{ coverage.missing_count }}</strong></div>
+            </div>
+            {% if missing_ranges_local %}
+              <details>
+                <summary>Ver intervalos faltantes</summary>
+                <ul class="meteo-missing">
+                  {% for start_missing, end_missing in missing_ranges_local %}
+                    <li>{{ start_missing|date:"d/m/Y H:i" }} até {{ end_missing|date:"d/m/Y H:i" }}</li>
+                  {% endfor %}
+                </ul>
+              </details>
+            {% else %}
+              <p class="meteo-muted">Não há lacunas no período selecionado.</p>
+            {% endif %}
+          </div>
 
-      <hr style="border:none;border-top:1px solid rgba(255,255,255,.10); margin:14px 0;">
-
-      <h3>Intervalos faltantes (horário local da planta)</h3>
-
-      {% if coverage.missing_count == 0 %}
-        <ul class="alert-list">
-          <li class="ok">Cobertura completa no período selecionado.</li>
-        </ul>
+          <form method="post" class="meteo-actions" onsubmit="return confirm('Excluir os dados meteorológicos deste período? Esta ação não pode ser desfeita.');">
+            {% csrf_token %}
+            <input type="hidden" name="plant" value="{{ form.plant.value }}">
+            <input type="hidden" name="start_date" value="{{ form.start_date.value }}">
+            <input type="hidden" name="end_date" value="{{ form.end_date.value }}">
+            <input type="hidden" name="interval_min" value="{{ form.interval_min.value }}">
+            <input type="hidden" name="model" value="{{ form.model.value|default:'' }}">
+            <input type="hidden" name="include_gti" value="on">
+            <button type="submit" name="action" value="delete_range" class="btn btn-danger">Excluir período selecionado</button>
+          </form>
+        </div>
       {% else %}
-        <ul class="alert-list">
-          {% for a, b in missing_ranges_local %}
-            <li><span class="mono">{{ a|date:"Y-m-d H:i" }}</span> → <span class="mono">{{ b|date:"Y-m-d H:i" }}</span></li>
-          {% empty %}
-            <li>Sem detalhes de intervalos faltantes (limite/sem dados).</li>
-          {% endfor %}
-        </ul>
-
-        <p class="page-sub muted" style="margin-top:10px;">
-          Observação: os intervalos são agrupados em blocos contíguos.
-        </p>
+        <p class="meteo-muted">Selecione um período para calcular a cobertura e liberar as opções de gestão.</p>
       {% endif %}
-    </article>
-
-  {% else %}
-    <article class="card glass span-8">
-      <h3>Status</h3>
-      <p class="page-sub" style="margin:0;">
-        Selecione a planta e o período e clique em <strong>Ver cobertura</strong> para visualizar lacunas,
-        ou em <strong>Importar/Atualizar</strong> para buscar os dados na API e preencher o banco.
-      </p>
-
-      <hr style="border:none;border-top:1px solid rgba(255,255,255,.10); margin:14px 0;">
-
-      <ul class="alert-list">
-        <li class="ok">Dica: mantenha <strong>ts_utc</strong> como canônico para casar com dados operativos.</li>
-        <li>Garanta que a planta tenha <strong>PVPlantDetails</strong> com <strong>tilt_deg</strong> e <strong>azimuth_deg</strong>.</li>
-      </ul>
-    </article>
-  {% endif %}
-
+    {% else %}
+      <p class="meteo-muted">Nenhuma planta disponível para consulta.</p>
+    {% endif %}
+  </article>
 </section>
+
+<script>
+  document.getElementById("id_plant")?.addEventListener("change", (event) => {
+    const form = document.getElementById("meteoForm");
+    const params = new URLSearchParams({
+      plant: event.target.value,
+      start_date: document.getElementById("id_start_date")?.value || "",
+      end_date: document.getElementById("id_end_date")?.value || "",
+      interval_min: document.getElementById("id_interval_min")?.value || "60",
+    });
+    window.location.href = `${form.action || window.location.pathname}?${params.toString()}`;
+  });
+</script>
 {% endblock %}

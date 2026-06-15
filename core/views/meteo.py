@@ -1,11 +1,13 @@
 #core/views/meteo
 from __future__ import annotations
 from core.views._imports import *
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from core.services.dados_satelite.openmeteo import ingest_openmeteo_range
 from django.utils.timezone import make_aware
 from core.services.coverage import compute_time_coverage
 from zoneinfo import ZoneInfo
+from django.db.models import Count, Max, Min
+from django.urls import reverse
 # Forms
 from core.forms import (
     MeteoRequestForm,
@@ -50,7 +52,7 @@ def _local_dates_to_utc_range(*, plant_tz: str | None, start_date, end_date):
         timezone=tz_local,
     )
 
-    return start_local.astimezone(UTC), end_local_excl.astimezone(UTC), tz_local
+    return start_local.astimezone(dt_timezone.utc), end_local_excl.astimezone(dt_timezone.utc), tz_local
 
 
 def _align_utc_range_to_interval(*, start_utc, end_utc, interval_min: int):
@@ -81,7 +83,7 @@ def _align_utc_range_to_interval(*, start_utc, end_utc, interval_min: int):
 
 @require_http_methods(["GET", "POST"])
 @login_required
-def open_meteo_view(request):
+def _open_meteo_view_legacy(request):
     """
     Mantive o nome da view/URL para não quebrar a rota.
     Opera com Open-Meteo (ingest).
@@ -116,6 +118,115 @@ def open_meteo_view(request):
             messages.error(request, f"Falha ao ingerir dados meteorológicos da Open-Meteo: {e}")
 
     return render(request, "meteo/open_meteo_request.html", {"form": form})
+
+@require_http_methods(["GET", "POST"])
+@login_required
+def open_meteo_view(request):
+    visible_plants = list(MeteoRequestForm(user=request.user).fields["plant"].queryset)
+    selected_id = request.POST.get("plant") if request.method == "POST" else request.GET.get("plant")
+    selected_plant = next((plant for plant in visible_plants if str(plant.pk) == str(selected_id)), None)
+    if selected_plant is None and visible_plants:
+        selected_plant = visible_plants[0]
+
+    today = date.today()
+    initial = {
+        "plant": selected_plant,
+        "start_date": today - timedelta(days=30),
+        "end_date": today,
+        "interval_min": "60",
+        "include_gti": True,
+        "model": "",
+    }
+    if request.method == "POST":
+        form = MeteoRequestForm(request.POST, user=request.user)
+    elif request.GET.get("plant"):
+        query_data = request.GET.copy()
+        query_data.setdefault("start_date", initial["start_date"].isoformat())
+        query_data.setdefault("end_date", initial["end_date"].isoformat())
+        query_data.setdefault("interval_min", "60")
+        form = MeteoRequestForm(query_data, user=request.user)
+    else:
+        form = MeteoRequestForm(initial=initial, user=request.user)
+
+    if request.method == "POST" and form.is_valid():
+        plant = form.cleaned_data["plant"]
+        start_date = form.cleaned_data["start_date"]
+        end_date = form.cleaned_data["end_date"]
+        interval_min = form.cleaned_data["interval_min"]
+        action = (request.POST.get("action") or "import").strip().lower()
+
+        if action == "delete_range":
+            start_utc, end_utc, _ = _local_dates_to_utc_range(
+                plant_tz=getattr(plant, "timezone", None),
+                start_date=start_date,
+                end_date=end_date,
+            )
+            deleted, _ = MeteoRecord.objects.filter(
+                plant=plant,
+                source=MeteoSource.OPENMETEO,
+                ts_utc__gte=start_utc,
+                ts_utc__lt=end_utc,
+            ).delete()
+            messages.success(request, f"Foram excluídos {deleted} registros meteorológicos do período selecionado.")
+            return redirect(f"{reverse('open_meteo_view')}?plant={plant.pk}&start_date={start_date}&end_date={end_date}&interval_min={interval_min}")
+
+        include_gti = form.cleaned_data["include_gti"]
+        model = (form.cleaned_data.get("model") or "").strip() or None
+        try:
+            count, _meta = ingest_openmeteo_range(
+                plant=plant,
+                start_date=start_date,
+                end_date=end_date,
+                include_gti=include_gti,
+                model=model,
+            )
+            messages.success(
+                request,
+                f"Open-Meteo: {count} registros importados ou atualizados. Modelo: {model or 'melhor correspondência'}.",
+            )
+            return redirect(f"{reverse('open_meteo_view')}?plant={plant.pk}&start_date={start_date}&end_date={end_date}&interval_min={interval_min}")
+        except Exception as exc:
+            messages.error(request, f"Falha ao importar dados meteorológicos da Open-Meteo: {exc}")
+
+    meteo_summary = None
+    coverage = None
+    missing_ranges_local = []
+    if form.is_bound and form.is_valid():
+        selected_plant = form.cleaned_data["plant"]
+
+    if selected_plant is not None:
+        qs = MeteoRecord.objects.filter(plant=selected_plant, source=MeteoSource.OPENMETEO)
+        stats = qs.aggregate(total=Count("id"), first_ts=Min("ts_utc"), last_ts=Max("ts_utc"))
+        meteo_summary = {
+            **stats,
+            "plant": selected_plant,
+            "models": list(qs.exclude(dataset_model="").values_list("dataset_model", flat=True).distinct().order_by("dataset_model")),
+            "intervals": list(qs.values_list("interval_min", flat=True).distinct().order_by("interval_min")),
+        }
+        if form.is_bound and form.is_valid():
+            start_utc, end_utc, tz_local = _local_dates_to_utc_range(
+                plant_tz=getattr(selected_plant, "timezone", None),
+                start_date=form.cleaned_data["start_date"],
+                end_date=form.cleaned_data["end_date"],
+            )
+            coverage = compute_time_coverage(
+                queryset=qs,
+                start_utc=start_utc,
+                end_utc=end_utc,
+                interval_min=int(form.cleaned_data["interval_min"]),
+            )
+            missing_ranges_local = [
+                (a.astimezone(tz_local), b.astimezone(tz_local))
+                for a, b in coverage.missing_ranges_utc[:50]
+            ]
+
+    return render(request, "meteo/open_meteo_request.html", {
+        "form": form,
+        "meteo_summary": meteo_summary,
+        "coverage": coverage,
+        "missing_ranges_local": missing_ranges_local,
+    })
+
 
 @require_GET
 @login_required

@@ -25,57 +25,32 @@ from core.services.fdd.runtime_types import MismatchDashboardParams
 from core.services.fdd_mismatch import MismatchThresholds
 from core.services.residuals.facade import compute_residual_series_from_observations
 from core.services.fdd.validation import build_dashboard_validation_context
+from core.services.fdd.param_catalog import (
+    ADVANCED_PARAM_DEFAULTS,
+    BASIC_PARAM_DEFAULTS,
+    DEFAULT_DISPLAY_MODE,
+    DEFAULT_PERSIST,
+    DEFAULT_SOURCE_METEO,
+    DEFAULT_SOURCE_OPER,
+)
 
 
-def get_mismatch_backend_param_defaults(gpoa_gate: float = 180.0, pmin_w: float = 0.0) -> Dict[str, Any]:
+def get_mismatch_backend_param_defaults(gpoa_gate: float = 250.0, pmin_w: float = 300.0) -> Dict[str, Any]:
     try:
         gpoa_gate = float(gpoa_gate)
     except Exception:
-        gpoa_gate = 180.0
+        gpoa_gate = BASIC_PARAM_DEFAULTS["gpoa_min"]
     try:
         pmin_w = float(pmin_w)
     except Exception:
-        pmin_w = 0.0
+        pmin_w = BASIC_PARAM_DEFAULTS["pmin_w"]
 
     return {
-        "warn_abs": 0.40,
-        "fault_abs": 0.90,
+        "warn_abs": BASIC_PARAM_DEFAULTS["warn_abs"],
+        "fault_abs": BASIC_PARAM_DEFAULTS["fault_abs"],
         "gpoa_gate": gpoa_gate,
         "pmin_w": pmin_w,
-        "meteo_pos_abs": 0.25,
-        "shading_std_abs": 0.22,
-        "shading_window_points": 6,
-        "max_gap_minutes": 30.0,
-        "gpoa_plot_min": max(700.0, gpoa_gate),
-        "pmodel_plot_min": max(200.0, pmin_w),
-        "mismatch_clip_abs": 2.0,
-        "sun_available_gpoa_wm2": max(180.0, gpoa_gate),
-        "coarse_diag_gpoa_wm2": max(320.0, gpoa_gate),
-        "fine_diag_gpoa_wm2": max(500.0, gpoa_gate),
-        "stable_cv_max": 0.08,
-        "stable_ramp_max_wm2": 120.0,
-        "stable_window_points": 6,
-        "ewma_lambda": 0.20,
-        "ewma_L": 3.0,
-        "cusum_k": 0.50,
-        "cusum_h": 8.0,
-        "min_baseline_points": 24,
-        "inv_cov_min": 0.30,
-        "zero_abs_w": 15.0,
-        "zero_rel_model": 0.02,
-        "degraded_rel": 0.25,
-        "severe_rel": 0.65,
-        "low_i_ratio_warn": 0.35,
-        "low_i_ratio_crit": 0.15,
-        "low_v_ratio_warn": 0.80,
-        "low_v_ratio_crit": 0.60,
-        "vac_low_ratio": 0.90,
-        "vac_high_ratio": 1.10,
-        "vac_abs_margin_v": 10.0,
-        "freq_abs_tol_hz": 1.0,
-        "clip_margin": 0.98,
-        "clip_model_margin": 1.02,
-        "rca_min_baseline_points": 24,
+        **ADVANCED_PARAM_DEFAULTS,
     }
 
 
@@ -420,7 +395,7 @@ def parse_dashboard_params(data: Mapping[str, Any], tz_name: str) -> MismatchDas
 
     backend_default_root = get_mismatch_backend_param_defaults()
     gpoa_gate = _gf("gpoa_gate", _gf("gpoa_min", float(backend_default_root["gpoa_gate"])))
-    pmin_w = _gf("pmin_w", 0.0)
+    pmin_w = _gf("pmin_w", float(BASIC_PARAM_DEFAULTS["pmin_w"]))
     backend_defaults = get_mismatch_backend_param_defaults(gpoa_gate=gpoa_gate, pmin_w=pmin_w)
     thr = MismatchThresholds(
         gpoa_gate_wm2=gpoa_gate,
@@ -433,9 +408,15 @@ def parse_dashboard_params(data: Mapping[str, Any], tz_name: str) -> MismatchDas
         max_gap_minutes=_gf("max_gap_minutes", backend_defaults["max_gap_minutes"]),
     )
 
-    display_mode = str(data.get("display_mode") or "mismatch").strip().lower()
+    display_mode = str(data.get("display_mode") or DEFAULT_DISPLAY_MODE).strip().lower()
     if display_mode not in {"mismatch", "tipologia"}:
-        display_mode = "mismatch"
+        display_mode = DEFAULT_DISPLAY_MODE
+
+    def _gb(key: str, default: bool) -> bool:
+        raw = data.get(key)
+        if raw in (None, ""):
+            return default
+        return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
     return MismatchDashboardParams(
         raw_data=data,
@@ -445,13 +426,13 @@ def parse_dashboard_params(data: Mapping[str, Any], tz_name: str) -> MismatchDas
         tz=tz,
         dt0_utc=dt0_utc,
         dt1_utc=dt1_utc,
-        source_oper_raw=(data.get("source_oper") or data.get("src_oper") or "").strip(),
-        source_meteo=((data.get("source_meteo") or data.get("src_meteo") or "").strip() or None),
+        source_oper_raw=(data.get("source_oper") or data.get("src_oper") or DEFAULT_SOURCE_OPER).strip(),
+        source_meteo=((data.get("source_meteo") or data.get("src_meteo") or DEFAULT_SOURCE_METEO).strip() or None),
         gpoa_gate=gpoa_gate,
         pmin_w=pmin_w,
         thr=thr,
         use_legacy=(str(data.get("legacy") or data.get("use_legacy") or "").strip().lower() in ("1", "true", "yes", "on")),
-        persist=(str(data.get("persist") or data.get("save") or "").strip().lower() in ("1", "true", "yes", "on")),
+        persist=_gb("persist", DEFAULT_PERSIST),
         gpoa_plot_min=_gf("gpoa_plot_min", backend_defaults["gpoa_plot_min"]),
         pmodel_plot_min=_gf("pmodel_plot_min", backend_defaults["pmodel_plot_min"]),
         mismatch_clip_abs=_gf("mismatch_clip_abs", backend_defaults["mismatch_clip_abs"]),
