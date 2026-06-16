@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 DEFAULT_CONFIG_NAME = "C18_estabilidade_restritiva"
 DEFAULT_DETECTOR_VERSION = "mismatch_runtime_v1"
-DEFAULT_SOURCE_OPER = "SHINEMONITOR"
+DEFAULT_SOURCE_OPER = "ALL"
 DEFAULT_SOURCE_METEO = "OPENMETEO"
 DEFAULT_DISPLAY_MODE = "tipologia"
 DEFAULT_PERSIST = True

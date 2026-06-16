@@ -985,7 +985,7 @@
   let detectorMetadata = {
     config_name: "{{ config_name|default:'C18_estabilidade_restritiva'|escapejs }}",
     detector_version: "{{ detector_version|default:'mismatch_runtime_v1'|escapejs }}",
-    source_oper: "{{ source_oper|default:'SHINEMONITOR'|escapejs }}",
+    source_oper: "ALL",
     source_meteo: "{{ source_meteo|default:'OPENMETEO'|escapejs }}",
     persist: true,
   };
@@ -1059,7 +1059,7 @@
       ...detectorMetadata,
       config_name: String($("configurationName")?.value || detectorMetadata.config_name || "").trim(),
       detector_version: "mismatch_runtime_v1",
-      source_oper: detectorMetadata.source_oper || "SHINEMONITOR",
+      source_oper: "ALL",
       source_meteo: detectorMetadata.source_meteo || "OPENMETEO",
       display_mode: currentDisplayMode(),
       persist: true,
@@ -3829,7 +3829,7 @@
       display_mode: currentDisplayMode(),
       config_name: String($("configurationName")?.value || detectorMetadata.config_name || "C18_estabilidade_restritiva").trim(),
       detector_version: "mismatch_runtime_v1",
-      source_oper: detectorMetadata.source_oper || "SHINEMONITOR",
+      source_oper: "ALL",
       source_meteo: detectorMetadata.source_meteo || "OPENMETEO",
       persist: 1,
     };
