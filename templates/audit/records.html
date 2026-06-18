@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Auditoria de Registros - Braz Solar Scan{% endblock %}
+
+{% block extra_head %}
+<style>
+  .audit-page,.audit-page *{ box-sizing:border-box; min-width:0; }
+  .audit-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; }
+  .audit-tabs{ display:flex; flex-wrap:wrap; gap:.55rem; margin:0 0 1rem; }
+  .audit-tab{ display:inline-flex; align-items:center; min-height:38px; padding:.55rem .75rem; border-radius:13px; border:1px solid rgba(95,176,255,.16); color:var(--ink); text-decoration:none; background:rgba(10,35,65,.22); font-weight:800; }
+  .audit-tab.active{ border-color:rgba(255,217,94,.55); background:rgba(255,217,94,.14); color:#fff; }
+  .audit-filter-grid{ display:grid; grid-template-columns:repeat(6,minmax(135px,1fr)); gap:.7rem; align-items:end; }
+  .audit-field{ display:grid; gap:.35rem; }
+  .audit-field label{ font-size:.8rem; font-weight:800; opacity:.82; }
+  .audit-field input,.audit-field select{ width:100%; }
+  .audit-actions{ display:flex; flex-wrap:wrap; gap:.55rem; align-items:center; }
+  .audit-summary{ display:grid; grid-template-columns:repeat(3,minmax(130px,1fr)); gap:.7rem; margin:.85rem 0 0; }
+  .audit-kpi{ padding:.72rem; border-radius:13px; border:1px solid rgba(95,176,255,.15); background:rgba(5,20,38,.28); }
+  .audit-kpi span{ display:block; font-size:.75rem; opacity:.72; }
+  .audit-kpi strong{ display:block; margin-top:.18rem; font-size:1rem; }
+  .audit-table-wrap{ overflow:auto; border:1px solid rgba(95,176,255,.16); border-radius:15px; margin-top:1rem; }
+  .audit-table{ width:100%; min-width:1100px; border-collapse:collapse; font-size:.9rem; }
+  .audit-table th,.audit-table td{ padding:.68rem; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; vertical-align:top; }
+  .audit-table th{ position:sticky; top:0; z-index:1; background:rgba(8,28,52,.96); color:#dff4ff; }
+  .audit-table tbody tr:hover{ background:rgba(95,176,255,.055); }
+  .audit-select-col{ width:48px; text-align:center; }
+  .audit-details{ min-width:190px; }
+  .audit-details summary{ cursor:pointer; color:#8edfff; font-weight:800; }
+  .audit-detail-grid{ display:grid; grid-template-columns:minmax(140px,220px) minmax(220px,1fr); gap:0; margin-top:.6rem; border:1px solid rgba(255,255,255,.08); border-radius:12px; overflow:hidden; background:rgba(0,0,0,.16); }
+  .audit-detail-grid dt,.audit-detail-grid dd{ margin:0; padding:.5rem .6rem; border-bottom:1px solid rgba(255,255,255,.07); overflow-wrap:anywhere; }
+  .audit-detail-grid dt{ color:#dff4ff; background:rgba(255,255,255,.035); font-weight:800; }
+  .audit-detail-grid dd pre{ margin:0; white-space:pre-wrap; font-size:.78rem; }
+  .audit-pagination{ display:flex; justify-content:space-between; gap:.7rem; flex-wrap:wrap; margin-top:1rem; }
+  .audit-empty{ padding:1.2rem; color:var(--ink-dim); }
+  @media(max-width:1200px){ .audit-filter-grid{ grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  @media(max-width:760px){ .audit-filter-grid,.audit-summary{ grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="audit-page">
+  <header class="page-head audit-head">
+    <div>
+      <h1 class="page-title">Auditoria de registros</h1>
+      <p class="page-sub">Revise, filtre, edite, exclua, crie manualmente e exporte registros salvos no sistema.</p>
+    </div>
+    <div class="audit-actions">
+      <a class="btn btn-primary" href="{% url 'audit_record_create' config.key %}">Novo {{ config.singular_label }}</a>
+      <a class="btn btn-secondary" href="{{ export_url }}">Exportar filtro atual</a>
+    </div>
+  </header>
+
+  <nav class="audit-tabs" aria-label="Tipos de registros auditaveis">
+    {% for tab in dataset_tabs %}
+      <a class="audit-tab{% if tab.active %} active{% endif %}" href="{{ tab.url }}">{{ tab.label }}</a>
+    {% endfor %}
+  </nav>
+
+  <article class="card glass">
+    <form method="get" class="audit-filter-grid">
+      <input type="hidden" name="dataset" value="{{ config.key }}">
+      <div class="audit-field">
+        <label for="auditPlant">Planta</label>
+        <select id="auditPlant" name="plant" class="form-control">
+          <option value="">Todas</option>
+          {% for plant in plants %}
+            <option value="{{ plant.pk }}"{% if filters.plant == plant.pk|stringformat:"s" %} selected{% endif %}>{{ plant.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="audit-field">
+        <label for="auditStart">Inicio UTC</label>
+        <input id="auditStart" type="date" name="start_date" value="{{ filters.start_date }}" class="form-control">
+      </div>
+      <div class="audit-field">
+        <label for="auditEnd">Fim UTC</label>
+        <input id="auditEnd" type="date" name="end_date" value="{{ filters.end_date }}" class="form-control">
+      </div>
+      {% for source_filter in source_filters %}
+        <div class="audit-field">
+          <label for="auditSource{{ forloop.counter }}">{{ source_filter.label }}</label>
+          <select id="auditSource{{ forloop.counter }}" name="{{ source_filter.field }}" class="form-control">
+            <option value="">Todos</option>
+            {% for option in source_filter.options %}
+              <option value="{{ option }}"{% if source_filter.value == option %} selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      {% endfor %}
+      <div class="audit-field">
+        <label for="auditSearch">Busca</label>
+        <input id="auditSearch" type="search" name="q" value="{{ filters.q }}" class="form-control" placeholder="Fonte, dispositivo ou planta">
+      </div>
+      <div class="audit-field">
+        <label for="auditPageSize">Por pagina</label>
+        <select id="auditPageSize" name="page_size" class="form-control">
+          <option value="20"{% if page_size == 20 %} selected{% endif %}>20</option>
+          <option value="50"{% if page_size == 50 %} selected{% endif %}>50</option>
+          <option value="100"{% if page_size == 100 %} selected{% endif %}>100</option>
+          <option value="250"{% if page_size == 250 %} selected{% endif %}>250</option>
+          <option value="500"{% if page_size == 500 %} selected{% endif %}>500</option>
+        </select>
+      </div>
+      <div class="audit-actions">
+        <button class="btn btn-primary" type="submit">Aplicar</button>
+        <a class="btn btn-secondary" href="{% url 'audit_records' %}?dataset={{ config.key }}">Limpar</a>
+      </div>
+    </form>
+
+    <div class="audit-summary">
+      <div class="audit-kpi"><span>Conjunto</span><strong>{{ config.label }}</strong></div>
+      <div class="audit-kpi"><span>Registros filtrados</span><strong>{{ filtered_count }}</strong></div>
+      <div class="audit-kpi"><span>Pagina</span><strong>{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</strong></div>
+    </div>
+  </article>
+
+  <form method="post" action="?{{ pagination_query }}">
+    {% csrf_token %}
+    <article class="card glass" style="margin-top:1rem;">
+      <div class="audit-actions">
+        <button class="btn btn-secondary" type="submit" name="action" value="export_selected">Exportar selecionados</button>
+        <button class="btn btn-danger" type="submit" name="action" value="delete_selected" onclick="return confirm('Excluir os registros selecionados? Esta acao nao pode ser desfeita.');">Excluir selecionados</button>
+      </div>
+
+      <div class="audit-table-wrap">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th class="audit-select-col"><input type="checkbox" aria-label="Selecionar todos" onclick="document.querySelectorAll('.audit-row-check').forEach((box) => box.checked = this.checked);"></th>
+              <th>ID</th>
+              {% for header in display_headers %}<th>{{ header }}</th>{% endfor %}
+              <th>Detalhes</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td class="audit-select-col"><input class="audit-row-check" type="checkbox" name="selected" value="{{ row.obj.pk }}" aria-label="Selecionar registro {{ row.obj.pk }}"></td>
+                <td>{{ row.obj.pk }}</td>
+                {% for item in row.display_values %}
+                  <td>
+                    {% if item.is_json %}
+                      <details class="audit-details"><summary>{{ item.value }}</summary><pre>{{ item.full_value }}</pre></details>
+                    {% else %}
+                      {{ item.value }}
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td>
+                  <details class="audit-details">
+                    <summary>Ver registro</summary>
+                    <dl class="audit-detail-grid">
+                      {% for item in row.detail_values %}
+                        <dt>{{ item.label }}</dt>
+                        <dd><pre>{{ item.value }}</pre></dd>
+                      {% endfor %}
+                    </dl>
+                  </details>
+                </td>
+                <td><a class="btn btn-sm btn-secondary" href="{% url 'audit_record_edit' config.key row.obj.pk %}">Editar</a></td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="99" class="audit-empty">Nenhum registro encontrado para os filtros atuais.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <nav class="audit-pagination" aria-label="Paginacao de auditoria">
+        <div>
+          {% if page_obj.has_previous %}
+            <a class="btn btn-secondary" href="?{{ pagination_query }}&page={{ page_obj.previous_page_number }}">Pagina anterior</a>
+          {% endif %}
+        </div>
+        <div>
+          {% if page_obj.has_next %}
+            <a class="btn btn-secondary" href="?{{ pagination_query }}&page={{ page_obj.next_page_number }}">Proxima pagina</a>
+          {% endif %}
+        </div>
+      </nav>
+    </article>
+  </form>
+</div>
+{% endblock %}

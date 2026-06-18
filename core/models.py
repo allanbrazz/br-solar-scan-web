@@ -542,6 +542,7 @@ from django.db.models import Q, F
 class MeteoSource(models.TextChoices):
     OPENMETEO = "OPENMETEO", "Open-Meteo"
     NSRDB = "NSRDB", "NSRDB (NREL)"
+    USER_CSV = "USER_CSV", "CSV do usuario"
 
 
 class MeteoDataTypology(models.TextChoices):
@@ -826,6 +827,7 @@ class MergedSourceOper(models.TextChoices):
 class MergedSourceMeteo(models.TextChoices):
     OPENMETEO = "OPENMETEO", "Open-Meteo"
     NSRDB = "NSRDB", "NSRDB (NREL)"
+    USER_CSV = "USER_CSV", "CSV do usuario"
 
 
 class PVPlantMergedRecord15m(models.Model):

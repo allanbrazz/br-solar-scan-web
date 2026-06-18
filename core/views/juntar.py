@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from core.services.series_juntar.build_merged_dataset import build_plant_merged_dataset
 from core.services.series_juntar.time_shift_alignment import TimeShiftAlignmentConfig
+from core.services.series_juntar.timeseries_io import FetchConfig
 
 # Forms
 from core.forms import MergeRunForm
@@ -125,6 +126,7 @@ def merge_run_view(request: HttpRequest) -> HttpResponse:
             want_hourly = bool(form.cleaned_data.get("want_hourly"))
             source_oper = (form.cleaned_data.get("source_oper") or "SHINEMONITOR").strip()
             source_meteo = (form.cleaned_data.get("source_meteo") or "OPENMETEO").strip()
+            fetch_cfg = FetchConfig(meteo_source=source_meteo)
 
             time_shift_mode = (form.cleaned_data.get("time_shift_mode") or "none").strip().lower()
             time_shift_target = (form.cleaned_data.get("time_shift_target") or "operational").strip().lower()
@@ -158,6 +160,7 @@ def merge_run_view(request: HttpRequest) -> HttpResponse:
                 dt_start_utc=dt_start_utc,
                 dt_end_utc=dt_end_utc,
                 want_hourly=want_hourly,
+                fetch_cfg=fetch_cfg,
                 persist=persist,
                 source_oper=source_oper,
                 source_meteo=source_meteo,

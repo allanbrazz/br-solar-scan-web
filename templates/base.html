@@ -228,6 +228,18 @@
       <span>Merge</span>
     </a>
 
+    <a href="{% url 'audit_records' %}"
+      class="nav-item {% if rm and rm.url_name == 'audit_records' or rm and rm.url_name == 'audit_record_create' or rm and rm.url_name == 'audit_record_edit' %}active{% endif %}"
+      aria-label="Auditoria de registros">
+      <svg class="icon" viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="10" y="12" width="44" height="40" rx="5" fill="#4aa3ff"/>
+        <path d="M20 24h24M20 32h24M20 40h14" stroke="#e6f2ff" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="48" cy="44" r="7" fill="#ffd95e"/>
+        <path d="M45 44l2 2 4-5" fill="none" stroke="#10233a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Auditoria</span>
+    </a>
+
     {% endwith %}
   </nav>
 
@@ -244,13 +256,16 @@
       <span class="theme-toggle-label">Modo escuro</span>
     </button>
 
-    <a href="#" class="nav-item" aria-label="Configurações">
+    <a href="{% url 'user_manual' %}"
+       class="nav-item {% if rm and rm.url_name == 'user_manual' %}active{% endif %}"
+       {% if rm and rm.url_name == 'user_manual' %}aria-current="page"{% endif %}
+       aria-label="Manual de utilização">
       <svg class="icon" viewBox="0 0 64 64" aria-hidden="true">
-        <circle cx="32" cy="32" r="7" fill="#ffd95e"/>
-        <path d="M32 12v6M32 46v6M12 32h6M46 32h6M19 19l4 4M41 41l4 4M19 45l4-4M41 23l4-4"
-              stroke="#e6f2ff" stroke-width="2" stroke-linecap="round"/>
+        <rect x="14" y="10" width="36" height="44" rx="4" fill="#4aa3ff"/>
+        <path d="M22 20h20M22 28h20M22 36h14" stroke="#e6f2ff" stroke-width="3" stroke-linecap="round"/>
+        <path d="M44 10v44" stroke="#ffd95e" stroke-width="3" opacity=".9"/>
       </svg>
-      <span>Configurações</span>
+      <span>Manual</span>
     </a>
 
     <form method="post" action="{% url 'logout' %}" class="nav-item nav-logout">

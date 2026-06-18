@@ -3,6 +3,7 @@ from __future__ import annotations
 from core.views._imports import *
 from datetime import datetime, timedelta, timezone as dt_timezone
 from core.services.dados_satelite.openmeteo import ingest_openmeteo_range
+from core.services.dados_satelite.csv_import import ingest_user_meteo_csv
 from django.utils.timezone import make_aware
 from core.services.coverage import compute_time_coverage
 from zoneinfo import ZoneInfo
@@ -10,6 +11,7 @@ from django.db.models import Count, Max, Min
 from django.urls import reverse
 # Forms
 from core.forms import (
+    MeteoCSVUploadForm,
     MeteoRequestForm,
 
 )
@@ -137,7 +139,8 @@ def open_meteo_view(request):
         "include_gti": True,
         "model": "",
     }
-    if request.method == "POST":
+    action = (request.POST.get("action") or "import").strip().lower() if request.method == "POST" else ""
+    if request.method == "POST" and action != "upload_csv":
         form = MeteoRequestForm(request.POST, user=request.user)
     elif request.GET.get("plant"):
         query_data = request.GET.copy()
@@ -148,12 +151,61 @@ def open_meteo_view(request):
     else:
         form = MeteoRequestForm(initial=initial, user=request.user)
 
+    csv_initial = {"plant": selected_plant, "interval_min": "15", "timestamp_timezone": "UTC"}
+    csv_form = (
+        MeteoCSVUploadForm(request.POST, request.FILES, user=request.user)
+        if request.method == "POST" and action == "upload_csv"
+        else MeteoCSVUploadForm(initial=csv_initial, user=request.user)
+    )
+
+    if request.method == "POST" and action == "upload_csv":
+        if csv_form.is_valid():
+            plant = csv_form.cleaned_data["plant"]
+            column_map = {
+                "ghi": csv_form.cleaned_data.get("ghi_col") or "",
+                "dni": csv_form.cleaned_data.get("dni_col") or "",
+                "dhi": csv_form.cleaned_data.get("dhi_col") or "",
+                "gti": csv_form.cleaned_data.get("gti_col") or "",
+                "temp_air": csv_form.cleaned_data.get("temp_air_col") or "",
+                "wind_speed": csv_form.cleaned_data.get("wind_speed_col") or "",
+                "rh": csv_form.cleaned_data.get("rh_col") or "",
+                "pressure": csv_form.cleaned_data.get("pressure_col") or "",
+            }
+            try:
+                result = ingest_user_meteo_csv(
+                    plant=plant,
+                    uploaded_file=csv_form.cleaned_data["arquivo"],
+                    interval_min=int(csv_form.cleaned_data["interval_min"]),
+                    delimiter=csv_form.cleaned_data["delimiter"],
+                    decimal_separator=csv_form.cleaned_data["decimal_separator"],
+                    timestamp_col=csv_form.cleaned_data["timestamp_col"],
+                    timestamp_timezone=csv_form.cleaned_data["timestamp_timezone"],
+                    dayfirst=bool(csv_form.cleaned_data.get("dayfirst")),
+                    dataset_model=csv_form.cleaned_data.get("dataset_model") or "USER_CSV",
+                    data_typology=csv_form.cleaned_data.get("data_typology"),
+                    column_map=column_map,
+                    update_existing=bool(csv_form.cleaned_data.get("update_existing")),
+                )
+                messages.success(
+                    request,
+                    (
+                        f"CSV meteorologico importado: {result.rows_imported} registros "
+                        f"({result.rows_skipped} linhas ignoradas), fonte USER_CSV."
+                    ),
+                )
+                return redirect(
+                    f"{reverse('open_meteo_view')}?plant={plant.pk}"
+                    f"&start_date={initial['start_date']}&end_date={initial['end_date']}"
+                    f"&interval_min={csv_form.cleaned_data['interval_min']}"
+                )
+            except Exception as exc:
+                messages.error(request, f"Falha ao importar CSV meteorologico: {exc}")
+
     if request.method == "POST" and form.is_valid():
         plant = form.cleaned_data["plant"]
         start_date = form.cleaned_data["start_date"]
         end_date = form.cleaned_data["end_date"]
         interval_min = form.cleaned_data["interval_min"]
-        action = (request.POST.get("action") or "import").strip().lower()
 
         if action == "delete_range":
             start_utc, end_utc, _ = _local_dates_to_utc_range(
@@ -225,6 +277,7 @@ def open_meteo_view(request):
         "meteo_summary": meteo_summary,
         "coverage": coverage,
         "missing_ranges_local": missing_ranges_local,
+        "csv_form": csv_form,
     })
 
 

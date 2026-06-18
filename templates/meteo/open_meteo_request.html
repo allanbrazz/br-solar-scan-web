@@ -19,8 +19,15 @@
   .meteo-range{ padding:.8rem; border:1px solid rgba(255,255,255,.1); border-radius:13px; background:rgba(255,255,255,.035); }
   .meteo-missing{ max-height:230px; overflow:auto; margin:.5rem 0 0; padding-left:1.1rem; }
   .meteo-muted{ opacity:.76; line-height:1.45; }
+  .meteo-csv-card{ margin-top:1rem; }
+  .meteo-csv-card > summary{ cursor:pointer; font-weight:900; color:#dff4ff; list-style-position:inside; }
+  .meteo-csv-grid{ display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:.75rem; margin-top:1rem; }
+  .meteo-csv-grid .meteo-wide{ grid-column:1 / -1; }
+  .meteo-csv-checks{ display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; }
+  .meteo-csv-note{ margin-top:.7rem; padding:.75rem; border-radius:13px; border:1px solid rgba(255,217,94,.18); background:rgba(255,217,94,.07); color:var(--ink-dim); }
   @media (max-width:1000px){ .meteo-layout{ grid-template-columns:1fr; } }
-  @media (max-width:700px){ .meteo-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  @media (max-width:900px){ .meteo-csv-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:700px){ .meteo-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); } .meteo-csv-grid{ grid-template-columns:1fr; } }
 </style>
 {% endblock %}
 
@@ -127,6 +134,108 @@
     {% endif %}
   </article>
 </section>
+
+<details class="card glass meteo-card meteo-csv-card">
+  <summary>Importar meteorologia por CSV do usuario</summary>
+  <form method="post" enctype="multipart/form-data" class="meteo-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="upload_csv">
+    {% if csv_form.non_field_errors %}<div class="flash flash-error">{{ csv_form.non_field_errors }}</div>{% endif %}
+
+    <div class="meteo-csv-grid">
+      <div class="meteo-field">
+        <label for="{{ csv_form.plant.id_for_label }}">{{ csv_form.plant.label }}</label>
+        {{ csv_form.plant }}
+        {{ csv_form.plant.errors }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.arquivo.id_for_label }}">{{ csv_form.arquivo.label }}</label>
+        {{ csv_form.arquivo }}
+        {{ csv_form.arquivo.errors }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.interval_min.id_for_label }}">{{ csv_form.interval_min.label }}</label>
+        {{ csv_form.interval_min }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.dataset_model.id_for_label }}">{{ csv_form.dataset_model.label }}</label>
+        {{ csv_form.dataset_model }}
+      </div>
+
+      <div class="meteo-field">
+        <label for="{{ csv_form.delimiter.id_for_label }}">{{ csv_form.delimiter.label }}</label>
+        {{ csv_form.delimiter }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.decimal_separator.id_for_label }}">{{ csv_form.decimal_separator.label }}</label>
+        {{ csv_form.decimal_separator }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.timestamp_col.id_for_label }}">{{ csv_form.timestamp_col.label }}</label>
+        {{ csv_form.timestamp_col }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.timestamp_timezone.id_for_label }}">{{ csv_form.timestamp_timezone.label }}</label>
+        {{ csv_form.timestamp_timezone }}
+      </div>
+
+      <div class="meteo-field">
+        <label for="{{ csv_form.data_typology.id_for_label }}">{{ csv_form.data_typology.label }}</label>
+        {{ csv_form.data_typology }}
+      </div>
+      <label class="meteo-inline-check" for="{{ csv_form.dayfirst.id_for_label }}">
+        {{ csv_form.dayfirst }}
+        <span>{{ csv_form.dayfirst.label }}</span>
+      </label>
+      <label class="meteo-inline-check" for="{{ csv_form.update_existing.id_for_label }}">
+        {{ csv_form.update_existing }}
+        <span>{{ csv_form.update_existing.label }}</span>
+      </label>
+
+      <div class="meteo-field">
+        <label for="{{ csv_form.ghi_col.id_for_label }}">{{ csv_form.ghi_col.label }}</label>
+        {{ csv_form.ghi_col }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.dni_col.id_for_label }}">{{ csv_form.dni_col.label }}</label>
+        {{ csv_form.dni_col }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.dhi_col.id_for_label }}">{{ csv_form.dhi_col.label }}</label>
+        {{ csv_form.dhi_col }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.gti_col.id_for_label }}">{{ csv_form.gti_col.label }}</label>
+        {{ csv_form.gti_col }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.temp_air_col.id_for_label }}">{{ csv_form.temp_air_col.label }}</label>
+        {{ csv_form.temp_air_col }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.wind_speed_col.id_for_label }}">{{ csv_form.wind_speed_col.label }}</label>
+        {{ csv_form.wind_speed_col }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.rh_col.id_for_label }}">{{ csv_form.rh_col.label }}</label>
+        {{ csv_form.rh_col }}
+      </div>
+      <div class="meteo-field">
+        <label for="{{ csv_form.pressure_col.id_for_label }}">{{ csv_form.pressure_col.label }}</label>
+        {{ csv_form.pressure_col }}
+      </div>
+    </div>
+
+    <div class="meteo-csv-note">
+      A importacao grava os dados como fonte <strong>USER_CSV</strong>. Depois disso, use a Auditoria para revisar registro a registro e selecione USER_CSV no Merge quando quiser casar essa meteorologia com os dados operativos.
+    </div>
+
+    <div class="meteo-actions">
+      <button type="submit" class="btn btn-primary">Subir CSV meteorologico</button>
+      <a class="btn btn-secondary" href="{% url 'audit_records' %}?dataset=meteo">Auditar meteorologia</a>
+    </div>
+  </form>
+</details>
 
 <script>
   document.getElementById("id_plant")?.addEventListener("change", (event) => {

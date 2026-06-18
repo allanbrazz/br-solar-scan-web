@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{% if is_create %}Novo{% else %}Editar{% endif %} {{ config.singular_label }} - Braz Solar Scan{% endblock %}
+
+{% block extra_head %}
+<style>
+  .audit-form-page,.audit-form-page *{ box-sizing:border-box; min-width:0; }
+  .audit-form-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; }
+  .audit-form-grid{ display:grid; grid-template-columns:repeat(3,minmax(180px,1fr)); gap:.85rem; align-items:start; }
+  .audit-form-field{ display:grid; gap:.35rem; }
+  .audit-form-field label{ font-size:.82rem; font-weight:800; opacity:.84; }
+  .audit-form-field textarea{ font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:.86rem; }
+  .audit-form-field.audit-wide{ grid-column:1 / -1; }
+  .audit-form-errors{ padding:.7rem; border-radius:12px; border:1px solid rgba(255,120,120,.45); background:rgba(255,70,90,.12); }
+  .audit-form-help{ font-size:.78rem; opacity:.74; line-height:1.35; }
+  .audit-form-actions{ display:flex; flex-wrap:wrap; gap:.6rem; margin-top:1rem; }
+  .audit-delete{ margin-top:1rem; padding-top:1rem; border-top:1px solid rgba(255,255,255,.1); }
+  @media(max-width:980px){ .audit-form-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media(max-width:640px){ .audit-form-grid{ grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="audit-form-page">
+  <header class="page-head audit-form-head">
+    <div>
+      <h1 class="page-title">{% if is_create %}Novo{% else %}Editar{% endif %} {{ config.singular_label }}</h1>
+      <p class="page-sub">{{ config.label }} - timestamps devem ser informados em UTC.</p>
+    </div>
+    <div class="action-group">
+      <a class="btn btn-secondary" href="{% url 'audit_records' %}?dataset={{ config.key }}">Voltar para auditoria</a>
+    </div>
+  </header>
+
+  <article class="card glass">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="audit-form-errors">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="audit-form-grid">
+        {% for field in form.visible_fields %}
+          <div class="audit-form-field{% if field.field.widget.input_type == 'textarea' %} audit-wide{% endif %}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<span class="audit-form-help">{{ field.help_text }}</span>{% endif %}
+            {% if field.errors %}<div class="audit-form-errors">{{ field.errors }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="audit-form-actions">
+        <button class="btn btn-primary" type="submit" name="action" value="save">Salvar registro</button>
+        <a class="btn btn-secondary" href="{% url 'audit_records' %}?dataset={{ config.key }}">Cancelar</a>
+      </div>
+    </form>
+
+    {% if not is_create %}
+      <form method="post" class="audit-delete" onsubmit="return confirm('Excluir este registro? Esta acao nao pode ser desfeita.');">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit" name="action" value="delete">Excluir este registro</button>
+      </form>
+    {% endif %}
+  </article>
+</div>
+{% endblock %}

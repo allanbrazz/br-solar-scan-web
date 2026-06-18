@@ -16,7 +16,18 @@ try:
 except Exception:
     available_timezones = lambda: set()
 
-from .models import PVModule, PVPlant, PlantMonitoringCredential, PVInverter, PlantCableSegment, PVPlantDetails, PVPlantStringConfig
+from .models import (
+    MeteoDataTypology,
+    MeteoRecord,
+    MeteoSource,
+    PVModule,
+    PVPlant,
+    PlantMonitoringCredential,
+    PVInverter,
+    PlantCableSegment,
+    PVPlantDetails,
+    PVPlantStringConfig,
+)
 
 
 class SignupForm(UserCreationForm):
@@ -452,11 +463,12 @@ class MergeRunForm(forms.Form):
         initial="SHINEMONITOR",
         widget=forms.TextInput(attrs={"class": "form-control"}),
     )
-    source_meteo = forms.CharField(
+    source_meteo = forms.ChoiceField(
         label="Fonte meteo (tag)",
         required=False,
-        initial="OPENMETEO",
-        widget=forms.TextInput(attrs={"class": "form-control"}),
+        initial=MeteoSource.OPENMETEO,
+        choices=[],
+        widget=forms.Select(attrs={"class": "form-control"}),
     )
 
     time_shift_mode = forms.ChoiceField(
@@ -521,6 +533,25 @@ class MergeRunForm(forms.Form):
             # se você usa owner, filtra; caso contrário, remove esse filtro
             qs = qs.filter(owner=user)
         self.fields["plant"].queryset = qs
+
+        meteo_label_map = dict(MeteoSource.choices)
+        known_sources = list(
+            MeteoRecord.objects
+            .filter(plant__in=qs)
+            .exclude(source="")
+            .values_list("source", flat=True)
+            .distinct()
+            .order_by("source")
+        )
+        source_values = []
+        for value in [MeteoSource.OPENMETEO.value, MeteoSource.USER_CSV.value, MeteoSource.NSRDB.value, *known_sources]:
+            value = str(value)
+            if value and value not in source_values:
+                source_values.append(value)
+        self.fields["source_meteo"].choices = [
+            (value, meteo_label_map.get(value, value))
+            for value in source_values
+        ]
 
         # defaults (últimos 7 dias no fuso do servidor; serve para teste)
         if not self.initial.get("start_date") and not self.initial.get("end_date"):
@@ -641,3 +672,91 @@ class MeteoRequestForm(forms.Form):
         if s and e and (e - s).days > 370:
             raise forms.ValidationError("Intervalo muito grande. Quebre em janelas (ex.: 60-120 dias).")
         return cleaned
+
+
+class MeteoCSVUploadForm(forms.Form):
+    plant = forms.ModelChoiceField(
+        queryset=PVPlant.objects.none(),
+        label="Planta",
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    arquivo = forms.FileField(
+        label="Arquivo CSV",
+        widget=forms.ClearableFileInput(attrs={"class": "form-control", "accept": ".csv,text/csv"}),
+    )
+    interval_min = forms.ChoiceField(
+        label="Malha temporal",
+        choices=(("5", "5 minutos"), ("15", "15 minutos")),
+        initial="15",
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    delimiter = forms.ChoiceField(
+        label="Separador",
+        choices=(("auto", "Detectar automaticamente"), (",", "Virgula"), (";", "Ponto e virgula"), ("\t", "Tabulacao")),
+        initial="auto",
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    decimal_separator = forms.ChoiceField(
+        label="Separador decimal",
+        choices=((".", "Ponto"), (",", "Virgula")),
+        initial=".",
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    timestamp_col = forms.CharField(
+        label="Coluna de timestamp",
+        initial="ts_utc",
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex.: ts_utc, datetime, data_hora"}),
+    )
+    timestamp_timezone = forms.ChoiceField(
+        label="Fuso do timestamp",
+        choices=(("UTC", "UTC"), ("PLANT_TZ", "Fuso da planta")),
+        initial="UTC",
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    dayfirst = forms.BooleanField(
+        label="Datas em formato dia/mes/ano",
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+    dataset_model = forms.CharField(
+        label="Nome/rotulo da base",
+        required=False,
+        initial="USER_CSV",
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex.: Estacao local, Sensor POA"}),
+    )
+    data_typology = forms.ChoiceField(
+        label="Tipologia dos dados",
+        choices=MeteoDataTypology.choices,
+        initial=MeteoDataTypology.MEASURED,
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    update_existing = forms.BooleanField(
+        label="Atualizar registros existentes com mesmo timestamp",
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
+    ghi_col = forms.CharField(label="Coluna GHI", required=False, widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "ghi"}))
+    dni_col = forms.CharField(label="Coluna DNI", required=False, widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "dni"}))
+    dhi_col = forms.CharField(label="Coluna DHI", required=False, widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "dhi"}))
+    gti_col = forms.CharField(label="Coluna GTI/POA", required=False, widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "gti ou poa"}))
+    temp_air_col = forms.CharField(label="Coluna temperatura", required=False, widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "temp_air"}))
+    wind_speed_col = forms.CharField(label="Coluna vento", required=False, widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "wind_speed"}))
+    rh_col = forms.CharField(label="Coluna umidade", required=False, widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "rh"}))
+    pressure_col = forms.CharField(label="Coluna pressao", required=False, widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "pressure"}))
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs = PVPlant.objects.none()
+        if user is not None and user.is_authenticated:
+            qs = PVPlant.objects.all() if user.is_superuser else PVPlant.objects.filter(owner=user)
+        self.fields["plant"].queryset = qs.order_by("nome")
+
+    def clean_arquivo(self):
+        arquivo = self.cleaned_data["arquivo"]
+        name = getattr(arquivo, "name", "") or ""
+        if name and not name.lower().endswith(".csv"):
+            raise forms.ValidationError("Envie um arquivo .csv.")
+        return arquivo

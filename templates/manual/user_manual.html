@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Manual de Utilizacao - Braz Solar Scan{% endblock %}
+
+{% block extra_head %}
+<style>
+  .manual-page,.manual-page *{ box-sizing:border-box; min-width:0; }
+  .manual-grid{ display:grid; grid-template-columns:minmax(260px, 3fr) minmax(420px, 7fr); gap:1rem; align-items:start; }
+  .manual-toc{ position:sticky; top:1rem; display:grid; gap:.55rem; }
+  .manual-toc a{ display:flex; align-items:center; gap:.55rem; padding:.62rem .72rem; border-radius:12px; color:var(--ink); text-decoration:none; border:1px solid rgba(95,176,255,.13); background:rgba(10,35,65,.22); }
+  .manual-toc a:hover{ border-color:rgba(95,176,255,.42); background:rgba(95,176,255,.09); }
+  .manual-dot{ width:.62rem; height:.62rem; border-radius:50%; background:#ffd95e; box-shadow:0 0 10px rgba(255,217,94,.35); flex:0 0 auto; }
+  .manual-content{ display:grid; gap:1rem; }
+  .manual-section{ padding:1.1rem; border:1px solid rgba(95,176,255,.16); border-radius:16px; background:rgba(10,35,65,.24); }
+  .manual-section h2{ margin:0 0 .7rem; font-size:1.1rem; color:#d9f0ff; }
+  .manual-section p{ margin:.35rem 0; line-height:1.55; color:var(--ink-dim); }
+  .manual-flow{ display:grid; grid-template-columns:repeat(4, minmax(130px,1fr)); gap:.7rem; margin-top:.8rem; }
+  .manual-step{ border:1px solid rgba(255,255,255,.1); border-radius:14px; padding:.85rem; background:rgba(255,255,255,.035); }
+  .manual-step strong{ display:block; margin-bottom:.25rem; color:#fff; }
+  .manual-kpis{ display:grid; grid-template-columns:repeat(3, minmax(130px,1fr)); gap:.7rem; margin-top:.8rem; }
+  .manual-kpi{ padding:.85rem; border-radius:14px; border:1px solid rgba(95,176,255,.16); background:rgba(5,20,38,.32); }
+  .manual-kpi span{ display:block; font-size:.78rem; opacity:.72; }
+  .manual-kpi strong{ display:block; margin-top:.2rem; font-size:1rem; overflow-wrap:anywhere; }
+  .manual-list{ display:grid; gap:.58rem; margin:.8rem 0 0; padding:0; list-style:none; }
+  .manual-list li{ display:grid; grid-template-columns:1rem 1fr; gap:.55rem; align-items:start; padding:.65rem; border-radius:12px; background:rgba(255,255,255,.035); }
+  .manual-list li::before{ content:""; width:.55rem; height:.55rem; margin-top:.42rem; border-radius:50%; background:#25b7ff; box-shadow:0 0 8px rgba(37,183,255,.35); }
+  .manual-table-wrap{ overflow:auto; border:1px solid rgba(95,176,255,.15); border-radius:14px; margin-top:.8rem; }
+  .manual-table{ width:100%; min-width:760px; border-collapse:collapse; }
+  .manual-table th,.manual-table td{ padding:.7rem; text-align:left; border-bottom:1px solid rgba(255,255,255,.08); vertical-align:top; }
+  .manual-table th{ background:rgba(8,28,52,.94); color:#dff4ff; position:sticky; top:0; }
+  .manual-badge{ display:inline-flex; align-items:center; gap:.35rem; padding:.25rem .48rem; border-radius:999px; border:1px solid rgba(95,176,255,.22); background:rgba(95,176,255,.08); font-size:.78rem; color:#dff4ff; }
+  @media(max-width:1050px){ .manual-grid{ grid-template-columns:1fr; } .manual-toc{ position:static; grid-template-columns:repeat(2,minmax(0,1fr)); } .manual-flow{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media(max-width:680px){ .manual-toc,.manual-flow,.manual-kpis{ grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="manual-page">
+  <header class="page-head">
+    <h1 class="page-title">Manual de utilizacao</h1>
+    <p class="page-sub">Referencia operacional para configurar plantas, importar dados, casar series e interpretar os diagnosticos do Braz Solar Scan.</p>
+  </header>
+
+  <section class="manual-grid">
+    <aside class="card glass manual-toc" aria-label="Indice do manual">
+      <a href="#finalidade"><span class="manual-dot"></span><span>Finalidade</span></a>
+      <a href="#fluxo"><span class="manual-dot"></span><span>Fluxo de uso</span></a>
+      <a href="#configuracoes"><span class="manual-dot"></span><span>Parametros do usuario</span></a>
+      <a href="#funcoes"><span class="manual-dot"></span><span>Funcoes do sistema</span></a>
+      <a href="#qualidade"><span class="manual-dot"></span><span>Qualidade dos dados</span></a>
+      <a href="#rotina"><span class="manual-dot"></span><span>Rotina recomendada</span></a>
+    </aside>
+
+    <div class="manual-content">
+      <article id="finalidade" class="manual-section">
+        <h2>Finalidade do sistema</h2>
+        <p>O Braz Solar Scan centraliza cadastro tecnico, aquisicao de telemetria, dados meteorologicos, merge temporal e diagnosticos de desempenho de plantas fotovoltaicas.</p>
+        <div class="manual-kpis">
+          <div class="manual-kpi"><span>Entrada</span><strong>Planta, modulos, inversores e fontes de dados</strong></div>
+          <div class="manual-kpi"><span>Processamento</span><strong>Series alinhadas em 15 minutos</strong></div>
+          <div class="manual-kpi"><span>Saida</span><strong>Dashboards, FDD e auditoria</strong></div>
+        </div>
+      </article>
+
+      <article id="fluxo" class="manual-section">
+        <h2>Processo de utilizacao</h2>
+        <p>A ordem abaixo reduz erros de integracao e garante que os diagnosticos usem uma base coerente.</p>
+        <div class="manual-flow">
+          <div class="manual-step"><strong>1. Cadastre ativos</strong><span>Inclua modulos, inversores e a planta com coordenadas e fuso horario.</span></div>
+          <div class="manual-step"><strong>2. Configure a planta</strong><span>Defina detalhes eletricos, inclinacao, azimute, strings, MPPTs e credenciais.</span></div>
+          <div class="manual-step"><strong>3. Importe series</strong><span>Carregue dados operativos e meteorologicos para o mesmo periodo de analise.</span></div>
+          <div class="manual-step"><strong>4. Execute o merge</strong><span>Gere a base casada de 15 minutos e use-a nos dashboards e detectores.</span></div>
+        </div>
+      </article>
+
+      <article id="configuracoes" class="manual-section">
+        <h2>Variaveis e configuracoes definidas pelo usuario</h2>
+        <div class="manual-table-wrap">
+          <table class="manual-table">
+            <thead><tr><th>Area</th><th>O que configurar</th><th>Impacto pratico</th></tr></thead>
+            <tbody>
+              <tr><td><span class="manual-badge">Planta</span></td><td>Nome, latitude, longitude e fuso horario.</td><td>Define localizacao solar, conversao local/UTC e filtros temporais.</td></tr>
+              <tr><td><span class="manual-badge">Arranjo FV</span></td><td>Modulo, inversor, strings, modulos por string, MPPT, inclinacao, azimute, k_sys e TNOCT.</td><td>Base do modelo fisico e da expectativa de potencia.</td></tr>
+              <tr><td><span class="manual-badge">Credenciais</span></td><td>Provedor, usuario, senha e dispositivo monitorado.</td><td>Permite coletar ou revisar dados operativos do inversor.</td></tr>
+              <tr><td><span class="manual-badge">Meteorologia</span></td><td>Fonte, modelo, intervalo, periodo, GTI/POA e qualidade dos dados.</td><td>Afeta irradiancia, temperatura e confianca do diagnostico.</td></tr>
+              <tr><td><span class="manual-badge">Merge</span></td><td>Periodo, fonte operativa, fonte meteo e alinhamento temporal.</td><td>Cria a base consolidada consumida pelo dashboard e FDD.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article id="funcoes" class="manual-section">
+        <h2>Funcionalidades principais</h2>
+        <ul class="manual-list">
+          <li><span><strong>Modulos e inversores.</strong> Mantem o catalogo tecnico usado no dimensionamento e nos calculos fisicos.</span></li>
+          <li><span><strong>Plantas.</strong> Reune localizacao, configuracao eletrica, credenciais e cabeamento.</span></li>
+          <li><span><strong>Dados operativos.</strong> Consulta, importa e arquiva leituras brutas do sistema de monitoramento.</span></li>
+          <li><span><strong>Meteorologia.</strong> Busca dados de API e aceita dados externos quando o usuario tem uma fonte propria.</span></li>
+          <li><span><strong>Merge.</strong> Consolida inversor e meteorologia em buckets de 15 minutos, com opcao de persistencia.</span></li>
+          <li><span><strong>Dashboard e mapa de ocorrencias.</strong> Exibem energia, potencia, indicadores de confiabilidade e eventos detectados.</span></li>
+          <li><span><strong>FDD mismatch e MPPT-GNN.</strong> Avaliam divergencias entre comportamento esperado e medido, com trilhas de evidencia.</span></li>
+          <li><span><strong>Auditoria de registros.</strong> Permite revisar, editar, excluir, criar manualmente e exportar registros salvos.</span></li>
+        </ul>
+      </article>
+
+      <article id="qualidade" class="manual-section">
+        <h2>Leitura de qualidade dos dados</h2>
+        <p>Os campos de cobertura, lacunas e flags indicam quanto o dado pode ser usado com seguranca operacional. Baixa cobertura do inversor, meteorologia ausente, interpolacoes e outliers reduzem a confianca dos diagnosticos.</p>
+        <ul class="manual-list">
+          <li><span><strong>Use o mesmo periodo.</strong> Antes do merge, confirme que inversor e meteorologia cobrem a mesma janela.</span></li>
+          <li><span><strong>Prefira UTC para CSV tecnico.</strong> Se o arquivo vier em hora local, selecione o fuso da planta no upload.</span></li>
+          <li><span><strong>Revise lacunas.</strong> Buracos longos afetam energia estimada, alarmes e classificacao de eventos.</span></li>
+        </ul>
+      </article>
+
+      <article id="rotina" class="manual-section">
+        <h2>Rotina recomendada</h2>
+        <p>Em uso recorrente, atualize dados operativos e meteorologicos, execute o merge para o periodo novo, confira a auditoria de registros e revise os eventos no dashboard/FDD. Ao trocar uma fonte meteorologica, gere uma nova base casada para manter a rastreabilidade por fonte.</p>
+      </article>
+    </div>
+  </section>
+</div>
+{% endblock %}

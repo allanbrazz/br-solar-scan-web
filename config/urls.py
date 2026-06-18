@@ -6,6 +6,11 @@ from core.views.basicas import (
     signup,
 )
 from core.views.health import healthz
+from core.views.audit_records import (
+    audit_record_form_view,
+    audit_records_view,
+)
+from core.views.manual import user_manual_view
 from core.views.meteo import (
     open_meteo_view,
     open_meteo_view_api_json,
@@ -99,6 +104,10 @@ urlpatterns = [
 
     # Home
     path("", home, name="home"),
+    path("manual/", user_manual_view, name="user_manual"),
+    path("auditoria/", audit_records_view, name="audit_records"),
+    path("auditoria/<str:dataset>/novo/", audit_record_form_view, name="audit_record_create"),
+    path("auditoria/<str:dataset>/<int:pk>/editar/", audit_record_form_view, name="audit_record_edit"),
 
     # Auth
     path("accounts/", include("django.contrib.auth.urls")),

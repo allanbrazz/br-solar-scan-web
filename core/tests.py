@@ -1,8 +1,9 @@
-from datetime import date
+from datetime import date, datetime, timezone as dt_timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -20,6 +21,7 @@ from core.models import (
     MeteoSource,
     PlantMonitoringCredential,
     PlantDetectorConfiguration,
+    PVPlantMergedRecord15m,
     PVInverter,
     PVModule,
     PVPlant,
@@ -174,6 +176,210 @@ class AccessControlTests(TestCase):
         response = self.client.get(reverse("signup"))
 
         self.assertEqual(response.status_code, 404)
+
+
+class ManualAndAuditViewTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username="audit-owner", password="test-pass-123")
+        self.other_user = user_model.objects.create_user(username="audit-other", password="test-pass-123")
+        self.plant = PVPlant.objects.create(
+            owner=self.user,
+            nome="Planta auditada",
+            latitude=-30.0,
+            longitude=-51.0,
+            timezone="America/Sao_Paulo",
+        )
+        self.other_plant = PVPlant.objects.create(
+            owner=self.other_user,
+            nome="Planta invisivel",
+            latitude=-29.0,
+            longitude=-50.0,
+            timezone="America/Sao_Paulo",
+        )
+
+    def test_manual_page_requires_login_and_renders(self):
+        url = reverse("user_manual")
+        self.assertRedirects(self.client.get(url), f"{reverse('login')}?next={url}")
+
+        self.client.force_login(self.user)
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Manual de utilizacao")
+        self.assertContains(response, "Funcionalidades principais")
+
+    def test_audit_list_respects_plant_access_and_exports_csv(self):
+        self.client.force_login(self.user)
+        MeteoRecord.objects.create(
+            plant=self.plant,
+            source=MeteoSource.OPENMETEO,
+            dataset_model="best_match",
+            ts_utc=datetime(2025, 1, 1, 12, 0, tzinfo=dt_timezone.utc),
+            interval_min=15,
+            ghi=800,
+            gti=760,
+        )
+        MeteoRecord.objects.create(
+            plant=self.other_plant,
+            source=MeteoSource.OPENMETEO,
+            dataset_model="best_match",
+            ts_utc=datetime(2025, 1, 1, 12, 0, tzinfo=dt_timezone.utc),
+            interval_min=15,
+            ghi=900,
+        )
+
+        response = self.client.get(reverse("audit_records"), {"dataset": "meteo"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.plant.nome)
+        self.assertNotContains(response, self.other_plant.nome)
+
+        export = self.client.get(reverse("audit_records"), {"dataset": "meteo", "action": "export"})
+        self.assertEqual(export.status_code, 200)
+        self.assertIn("text/csv", export["Content-Type"])
+        content = export.content.decode("utf-8-sig")
+        self.assertIn("Planta auditada", content)
+        self.assertNotIn("Planta invisivel", content)
+
+    def test_audit_can_create_edit_and_delete_meteo_record(self):
+        self.client.force_login(self.user)
+        create_response = self.client.post(
+            reverse("audit_record_create", kwargs={"dataset": "meteo"}),
+            {
+                "plant": self.plant.pk,
+                "source": MeteoSource.OPENMETEO,
+                "source_endpoint": "",
+                "dataset_model": "manual_test",
+                "data_typology": "OTHER",
+                "ts_utc": "2025-01-01T12:15:00",
+                "interval_min": "15",
+                "ghi": "700",
+                "dni": "",
+                "dhi": "",
+                "gti": "680",
+                "temp_air": "25",
+                "wind_speed": "",
+                "rh": "",
+                "pressure": "",
+                "meteo_qc_score": "",
+            },
+        )
+        self.assertEqual(create_response.status_code, 302)
+        record = MeteoRecord.objects.get(plant=self.plant, dataset_model="manual_test")
+        self.assertEqual(record.ghi, 700)
+
+        edit_response = self.client.post(
+            reverse("audit_record_edit", kwargs={"dataset": "meteo", "pk": record.pk}),
+            {
+                "plant": self.plant.pk,
+                "source": MeteoSource.OPENMETEO,
+                "source_endpoint": "",
+                "dataset_model": "manual_test",
+                "data_typology": "OTHER",
+                "ts_utc": "2025-01-01T12:15:00",
+                "interval_min": "15",
+                "ghi": "725",
+                "dni": "",
+                "dhi": "",
+                "gti": "690",
+                "temp_air": "25",
+                "wind_speed": "",
+                "rh": "",
+                "pressure": "",
+                "meteo_qc_score": "",
+            },
+        )
+        self.assertEqual(edit_response.status_code, 302)
+        record.refresh_from_db()
+        self.assertEqual(record.ghi, 725)
+
+        delete_response = self.client.post(
+            f"{reverse('audit_records')}?dataset=meteo",
+            {"selected": [record.pk], "action": "delete_selected"},
+        )
+        self.assertEqual(delete_response.status_code, 302)
+        self.assertFalse(MeteoRecord.objects.filter(pk=record.pk).exists())
+
+    def test_audit_can_render_merged_records(self):
+        self.client.force_login(self.user)
+        PVPlantMergedRecord15m.objects.create(
+            plant=self.plant,
+            source_oper="SHINEMONITOR",
+            source_meteo="OPENMETEO",
+            ts_utc=datetime(2025, 1, 1, 12, 0, tzinfo=dt_timezone.utc),
+            interval_min=15,
+            p_ac_w=5000,
+            gti=780,
+        )
+
+        response = self.client.get(reverse("audit_records"), {"dataset": "merged"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "SHINEMONITOR")
+        self.assertContains(response, "OPENMETEO")
+
+    def test_meteo_csv_upload_imports_user_csv_records(self):
+        self.client.force_login(self.user)
+        csv_file = SimpleUploadedFile(
+            "meteo.csv",
+            (
+                b"ts_utc,ghi,poa,temp_air\n"
+                b"2025-01-01T12:00:00Z,800,760,25\n"
+                b"2025-01-01T12:05:00Z,810,770,25.4\n"
+            ),
+            content_type="text/csv",
+        )
+
+        response = self.client.post(
+            reverse("open_meteo_view"),
+            {
+                "action": "upload_csv",
+                "plant": self.plant.pk,
+                "arquivo": csv_file,
+                "interval_min": "5",
+                "delimiter": ",",
+                "decimal_separator": ".",
+                "timestamp_col": "ts_utc",
+                "timestamp_timezone": "UTC",
+                "dayfirst": "on",
+                "dataset_model": "Estacao local",
+                "data_typology": "MEASURED",
+                "update_existing": "on",
+                "ghi_col": "ghi",
+                "gti_col": "poa",
+                "temp_air_col": "temp_air",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        records = MeteoRecord.objects.filter(plant=self.plant, source=MeteoSource.USER_CSV).order_by("ts_utc")
+        self.assertEqual(records.count(), 2)
+        self.assertEqual(records.first().interval_min, 5)
+        self.assertEqual(records.first().gti, 760)
+
+    def test_merge_uses_selected_user_csv_meteo_source(self):
+        self.client.force_login(self.user)
+        with patch("core.views.juntar.build_plant_merged_dataset") as build_mock:
+            build_mock.return_value = SimpleNamespace(stats={}, df15=SimpleNamespace(empty=True), df_hour=SimpleNamespace(empty=True))
+            response = self.client.post(
+                reverse("merge_run_view"),
+                {
+                    "plant": self.plant.pk,
+                    "start_date": "2025-01-01",
+                    "end_date": "2025-01-01",
+                    "source_oper": "SHINEMONITOR",
+                    "source_meteo": MeteoSource.USER_CSV,
+                    "time_shift_mode": "none",
+                    "time_shift_target": "operational",
+                    "time_shift_manual_minutes": "0",
+                    "time_shift_max_abs_minutes": "120",
+                    "time_shift_step_minutes": "15",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(build_mock.called)
+        self.assertEqual(build_mock.call_args.kwargs["fetch_cfg"].meteo_source, MeteoSource.USER_CSV)
 
 
 @override_settings(
