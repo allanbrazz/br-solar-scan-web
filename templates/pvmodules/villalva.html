@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Calculo Villalva - Modulo FV{% endblock %}
+
+{% block extra_head %}
+<style>
+  .villalva-page,.villalva-page *{ box-sizing:border-box; min-width:0; }
+  .villalva-grid{ display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:1rem; align-items:start; }
+  .villalva-field-grid{ display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:.85rem; }
+  .villalva-field-grid.three{ grid-template-columns:repeat(3,minmax(150px,1fr)); }
+  .villalva-field label{ display:block; margin-bottom:.35rem; color:#e5f6ff; font-weight:700; font-size:.9rem; }
+  .villalva-field small{ display:block; margin-top:.25rem; color:var(--ink-dim); line-height:1.35; }
+  .villalva-actions{ display:flex; justify-content:flex-end; gap:.65rem; flex-wrap:wrap; }
+  .villalva-results{ display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:.75rem; }
+  .villalva-result{ border:1px solid rgba(95,176,255,.16); border-radius:14px; padding:.8rem; background:rgba(5,20,38,.32); }
+  .villalva-result span{ display:block; font-size:.78rem; color:var(--ink-dim); }
+  .villalva-result strong{ display:block; margin-top:.25rem; font-size:1.15rem; color:#fff; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  .villalva-table-wrap{ overflow:auto; border:1px solid rgba(95,176,255,.15); border-radius:14px; }
+  .villalva-table{ width:100%; min-width:760px; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  .villalva-table th,.villalva-table td{ padding:.65rem .75rem; border-bottom:1px solid rgba(255,255,255,.08); text-align:right; }
+  .villalva-table th:first-child,.villalva-table td:first-child{ text-align:left; }
+  .villalva-table th{ background:rgba(8,28,52,.94); color:#dff4ff; position:sticky; top:0; }
+  .villalva-status{ display:inline-flex; align-items:center; padding:.25rem .5rem; border-radius:999px; border:1px solid rgba(95,176,255,.22); background:rgba(95,176,255,.08); color:#e7f7ff; font-size:.8rem; }
+  .villalva-status.ok{ border-color:rgba(77,214,134,.36); background:rgba(77,214,134,.1); }
+  .villalva-status.warn{ border-color:rgba(255,217,94,.4); background:rgba(255,217,94,.1); }
+  .villalva-chart{ width:100%; height:300px; display:block; border:1px solid rgba(95,176,255,.15); border-radius:14px; background:rgba(5,20,38,.38); }
+  .villalva-note-list{ margin:.6rem 0 0; padding:0; list-style:none; display:grid; gap:.45rem; }
+  .villalva-note-list li{ padding:.58rem .7rem; border-radius:12px; background:rgba(255,217,94,.08); border:1px solid rgba(255,217,94,.18); color:#fff7d6; }
+  @media(max-width:1050px){ .villalva-field-grid,.villalva-field-grid.three,.villalva-results{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media(max-width:680px){ .villalva-field-grid,.villalva-field-grid.three,.villalva-results{ grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="villalva-page">
+  <header class="page-head">
+    <h1 class="page-title">Extracao Villalva</h1>
+    <p class="page-sub">Calcule Rs, Rp e fator de idealidade do diodo a partir dos pontos de datasheet STC e cadastre o modulo no catalogo.</p>
+  </header>
+
+  {% if form.errors or form.non_field_errors %}
+    <section class="dash" style="--cols:12;">
+      <article class="card glass accent-rose" style="grid-column:1 / -1;">
+        <h3 class="mb-2">Revise os dados informados</h3>
+        {% if form.non_field_errors %}<div class="alert alert-danger mb-2">{{ form.non_field_errors }}</div>{% endif %}
+        <ul class="mb-0">
+          {% for field in form %}
+            {% for e in field.errors %}
+              <li><strong>{{ field.label }}:</strong> {{ e }}</li>
+            {% endfor %}
+          {% endfor %}
+        </ul>
+      </article>
+    </section>
+  {% endif %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <section class="villalva-grid">
+      <article class="card glass accent-cyan" style="grid-column:1 / -1;">
+        <h3 class="mb-2">Identificacao e dados nominais</h3>
+        <div class="villalva-field-grid">
+          <div class="villalva-field"><label for="{{ form.nome.id_for_label }}">{{ form.nome.label }}</label>{{ form.nome }}</div>
+          <div class="villalva-field"><label for="{{ form.fabricante.id_for_label }}">{{ form.fabricante.label }}</label>{{ form.fabricante }}</div>
+          <div class="villalva-field"><label for="{{ form.pmp_w.id_for_label }}">{{ form.pmp_w.label }}</label>{{ form.pmp_w }}<small>Valor nominal do datasheet.</small></div>
+          <div class="villalva-field"><label for="{{ form.num_celulas.id_for_label }}">{{ form.num_celulas.label }}</label>{{ form.num_celulas }}<small>Use o numero de celulas em serie do modulo.</small></div>
+          <div class="villalva-field"><label for="{{ form.eficiencia_pct.id_for_label }}">{{ form.eficiencia_pct.label }}</label>{{ form.eficiencia_pct }}<small>Opcional para o metodo, usado no cadastro.</small></div>
+          <div class="villalva-field"><label for="{{ form.power_tolerance.id_for_label }}">{{ form.power_tolerance.label }}</label>{{ form.power_tolerance }}<small>Opcional.</small></div>
+        </div>
+      </article>
+
+      <article class="card glass accent-blue" style="grid-column:1 / -1;">
+        <h3 class="mb-2">Pontos eletricos STC</h3>
+        <div class="villalva-field-grid">
+          <div class="villalva-field"><label for="{{ form.vmp_v.id_for_label }}">{{ form.vmp_v.label }}</label>{{ form.vmp_v }}<small>Tensao no ponto de maxima potencia.</small></div>
+          <div class="villalva-field"><label for="{{ form.imp_a.id_for_label }}">{{ form.imp_a.label }}</label>{{ form.imp_a }}<small>Corrente no ponto de maxima potencia.</small></div>
+          <div class="villalva-field"><label for="{{ form.voc_v.id_for_label }}">{{ form.voc_v.label }}</label>{{ form.voc_v }}<small>Tensao de circuito aberto.</small></div>
+          <div class="villalva-field"><label for="{{ form.isc_a.id_for_label }}">{{ form.isc_a.label }}</label>{{ form.isc_a }}<small>Corrente de curto-circuito.</small></div>
+        </div>
+      </article>
+
+      <article class="card glass accent-amber" style="grid-column:1 / -1;">
+        <h3 class="mb-2">Coeficientes e iteracao</h3>
+        <div class="villalva-field-grid">
+          <div class="villalva-field"><label for="{{ form.temp_coeff_voc_pct_c.id_for_label }}">{{ form.temp_coeff_voc_pct_c.label }}</label>{{ form.temp_coeff_voc_pct_c }}<small>Geralmente negativo.</small></div>
+          <div class="villalva-field"><label for="{{ form.temp_coeff_isc_pct_c.id_for_label }}">{{ form.temp_coeff_isc_pct_c.label }}</label>{{ form.temp_coeff_isc_pct_c }}<small>Geralmente positivo.</small></div>
+          <div class="villalva-field"><label for="{{ form.alpha_min.id_for_label }}">{{ form.alpha_min.label }}</label>{{ form.alpha_min }}<small>Inicio da busca do fator a.</small></div>
+          <div class="villalva-field"><label for="{{ form.alpha_max.id_for_label }}">{{ form.alpha_max.label }}</label>{{ form.alpha_max }}<small>Fim da busca do fator a.</small></div>
+          <div class="villalva-field"><label for="{{ form.alpha_step.id_for_label }}">{{ form.alpha_step.label }}</label>{{ form.alpha_step }}</div>
+          <div class="villalva-field"><label for="{{ form.rs_step.id_for_label }}">{{ form.rs_step.label }}</label>{{ form.rs_step }}<small>Passos menores refinam a solucao e aumentam o tempo.</small></div>
+          <div class="villalva-field"><label for="{{ form.max_iterations.id_for_label }}">{{ form.max_iterations.label }}</label>{{ form.max_iterations }}</div>
+          <div class="villalva-field">
+            <label for="{{ form.atualizar_existente.id_for_label }}">{{ form.atualizar_existente.label }}</label>
+            <div>{{ form.atualizar_existente }}</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card glass" style="grid-column:1 / -1;">
+        <div class="villalva-actions">
+          <a href="{% url 'pvmodules:list' %}" class="btn">Voltar</a>
+          <button type="submit" name="action" value="calculate" class="btn btn-primary">Calcular parametros</button>
+          {% if result %}
+            <button type="submit" name="action" value="save" class="btn btn-primary">Cadastrar modulo</button>
+          {% endif %}
+        </div>
+      </article>
+    </section>
+  </form>
+
+  {% if result %}
+    <section class="villalva-grid" style="margin-top:1rem;">
+      <article class="card glass accent-green" style="grid-column:1 / -1;">
+        <h3 class="mb-2">Resultado selecionado</h3>
+        <div class="villalva-results">
+          <div class="villalva-result"><span>Rs</span><strong>{{ result.best.rs_ohm|floatformat:5 }} ohm</strong></div>
+          <div class="villalva-result"><span>Rp</span><strong>{{ result.best.rp_ohm|floatformat:3 }} ohm</strong></div>
+          <div class="villalva-result"><span>Fator a</span><strong>{{ result.best.diode_a|floatformat:3 }}</strong></div>
+          <div class="villalva-result"><span>Erro Pmp</span><strong>{{ result.best.error_pct|floatformat:4 }}%</strong></div>
+          <div class="villalva-result"><span>Iteracoes</span><strong>{{ result.best.iterations }}</strong></div>
+          <div class="villalva-result"><span>Pmp modelo</span><strong>{{ result.best.pmp_model_w|floatformat:3 }} W</strong></div>
+          <div class="villalva-result"><span>Vmp / Imp modelo</span><strong>{{ result.best.vmp_model_v|floatformat:3 }} V / {{ result.best.imp_model_a|floatformat:3 }} A</strong></div>
+          <div class="villalva-result"><span>Status</span><strong>{% if result.best.converged %}Convergente{% else %}Menor erro{% endif %}</strong></div>
+        </div>
+        {% if method_warnings %}
+          <ul class="villalva-note-list">
+            {% for warning in method_warnings %}
+              <li>{{ warning }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </article>
+
+      <article class="card glass accent-blue" style="grid-column:1 / -1;">
+        <h3 class="mb-2">Curva calculada</h3>
+        <canvas id="villalvaChart" class="villalva-chart" width="1100" height="300"></canvas>
+        {{ curve|json_script:"villalva-curve-data" }}
+      </article>
+
+      <article class="card glass accent-purple" style="grid-column:1 / -1;">
+        <h3 class="mb-2">Candidatos por fator a</h3>
+        <div class="villalva-table-wrap">
+          <table class="villalva-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>a</th>
+                <th>Rs (ohm)</th>
+                <th>Rp (ohm)</th>
+                <th>Pmp modelo (W)</th>
+                <th>Erro (%)</th>
+                <th>Iteracoes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for candidate in result.candidates %}
+                <tr>
+                  <td><span class="villalva-status {% if candidate.converged %}ok{% else %}warn{% endif %}">{% if candidate.converged %}convergente{% else %}menor erro{% endif %}</span></td>
+                  <td>{{ candidate.diode_a|floatformat:3 }}</td>
+                  <td>{{ candidate.rs_ohm|floatformat:5 }}</td>
+                  <td>{{ candidate.rp_ohm|floatformat:3 }}</td>
+                  <td>{{ candidate.pmp_model_w|floatformat:3 }}</td>
+                  <td>{{ candidate.error_pct|floatformat:4 }}</td>
+                  <td>{{ candidate.iterations }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  {% endif %}
+</div>
+
+{% if result %}
+<script>
+(() => {
+  const node = document.getElementById("villalva-curve-data");
+  const canvas = document.getElementById("villalvaChart");
+  if (!node || !canvas) return;
+  const data = JSON.parse(node.textContent || "[]");
+  const ctx = canvas.getContext("2d");
+  if (!ctx || !data.length) return;
+
+  const width = canvas.width;
+  const height = canvas.height;
+  const pad = {left: 52, right: 24, top: 22, bottom: 38};
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const maxV = Math.max(...data.map(d => d.v), 1);
+  const maxI = Math.max(...data.map(d => d.i), 1);
+  const maxP = Math.max(...data.map(d => d.p), 1);
+  const x = v => pad.left + (v / maxV) * plotW;
+  const yI = i => pad.top + plotH - (i / maxI) * plotH;
+  const yP = p => pad.top + plotH - (p / maxP) * plotH;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.strokeStyle = "rgba(255,255,255,.18)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.left, pad.top);
+  ctx.lineTo(pad.left, pad.top + plotH);
+  ctx.lineTo(pad.left + plotW, pad.top + plotH);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(230,246,255,.75)";
+  ctx.font = "14px sans-serif";
+  ctx.fillText("I-V", pad.left + 8, pad.top + 18);
+  ctx.fillText("P-V", pad.left + 58, pad.top + 18);
+  ctx.fillText("V", pad.left + plotW - 8, pad.top + plotH + 28);
+
+  function drawLine(accessor, color){
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    data.forEach((point, idx) => {
+      const px = x(point.v);
+      const py = accessor(point);
+      if (idx === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+  }
+
+  drawLine(point => yI(point.i), "#64d2ff");
+  drawLine(point => yP(point.p), "#ffd95e");
+})();
+</script>
+{% endif %}
+{% endblock %}

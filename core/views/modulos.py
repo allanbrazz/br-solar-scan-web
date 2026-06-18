@@ -4,7 +4,14 @@ from core.views._imports import *
 
 # Forms
 from core.forms import (
-    PVModuleForm, CSVUploadForm,
+    PVModuleForm, CSVUploadForm, VillalvaModuleForm,
+)
+
+from core.services.pvmodule.villalva import (
+    VillalvaError,
+    VillalvaInput,
+    extract_villalva_parameters,
+    result_iv_curve,
 )
 
 # Models
@@ -89,6 +96,143 @@ class ModuleUpdateView(LoginRequiredMixin, UpdateView):
     def get_success_url(self):
         messages.success(self.request, "Módulo atualizado com sucesso.")
         return reverse("pvmodules:detail", args=[self.object.pk])
+
+def _quantize_decimal(value: object, pattern: str) -> Decimal:
+    return Decimal(str(value)).quantize(Decimal(pattern))
+
+
+def _villalva_input_from_cleaned(cleaned: dict[str, Any]) -> VillalvaInput:
+    return VillalvaInput(
+        isc_a=float(cleaned["isc_a"]),
+        voc_v=float(cleaned["voc_v"]),
+        vmp_v=float(cleaned["vmp_v"]),
+        imp_a=float(cleaned["imp_a"]),
+        cells_in_series=int(cleaned["num_celulas"]),
+        temp_coeff_voc_pct_c=float(cleaned["temp_coeff_voc_pct_c"]),
+        temp_coeff_isc_pct_c=float(cleaned["temp_coeff_isc_pct_c"]),
+    )
+
+
+def _villalva_module_defaults(cleaned: dict[str, Any], result) -> dict[str, Any]:
+    best = result.best
+    eficiencia = cleaned.get("eficiencia_pct")
+    if eficiencia in (None, ""):
+        eficiencia = Decimal("0")
+    return {
+        "pmp_w": _quantize_decimal(cleaned["pmp_w"], "0.01"),
+        "vmp_v": _quantize_decimal(cleaned["vmp_v"], "0.001"),
+        "imp_a": _quantize_decimal(cleaned["imp_a"], "0.001"),
+        "voc_v": _quantize_decimal(cleaned["voc_v"], "0.001"),
+        "isc_a": _quantize_decimal(cleaned["isc_a"], "0.001"),
+        "eficiencia_pct": _quantize_decimal(eficiencia, "0.01"),
+        "power_tolerance": (cleaned.get("power_tolerance") or "").strip(),
+        "num_celulas": int(cleaned["num_celulas"]),
+        "temp_coeff_voc_pct_c": _quantize_decimal(cleaned["temp_coeff_voc_pct_c"], "0.001"),
+        "temp_coeff_isc_pct_c": _quantize_decimal(cleaned["temp_coeff_isc_pct_c"], "0.001"),
+        "rs_ohm": _quantize_decimal(best.rs_ohm, "0.0001"),
+        "rp_ohm": _quantize_decimal(best.rp_ohm, "0.001"),
+        "diode_a": _quantize_decimal(best.diode_a, "0.001"),
+    }
+
+
+class ModuleVillalvaEstimateView(LoginRequiredMixin, View):
+    template_name = "pvmodules/villalva.html"
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        return render(request, self.template_name, {"form": VillalvaModuleForm()})
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        form = VillalvaModuleForm(request.POST)
+        context: dict[str, Any] = {"form": form}
+        if not form.is_valid():
+            return render(request, self.template_name, context)
+
+        try:
+            result = self._calculate(form.cleaned_data)
+        except VillalvaError as exc:
+            form.add_error(None, str(exc))
+            return render(request, self.template_name, context)
+
+        data = _villalva_input_from_cleaned(form.cleaned_data)
+        context.update(
+            {
+                "result": result,
+                "curve": result_iv_curve(result.best, data, points=28),
+                "method_warnings": self._warnings(form.cleaned_data, result),
+            }
+        )
+
+        if request.POST.get("action") == "save":
+            saved = self._save_module(form, result)
+            if saved is not None:
+                obj, created = saved
+                action = "criado" if created else "atualizado"
+                messages.success(
+                    request,
+                    (
+                        f"Modulo {action} com parametros de Villalva: "
+                        f"Rs={obj.rs_ohm} ohm, Rp={obj.rp_ohm} ohm, a={obj.diode_a}."
+                    ),
+                )
+                return redirect("pvmodules:detail", pk=obj.pk)
+
+        return render(request, self.template_name, context)
+
+    def _calculate(self, cleaned: dict[str, Any]):
+        return extract_villalva_parameters(
+            _villalva_input_from_cleaned(cleaned),
+            alpha_min=float(cleaned["alpha_min"]),
+            alpha_max=float(cleaned["alpha_max"]),
+            alpha_step=float(cleaned["alpha_step"]),
+            rs_step=float(cleaned["rs_step"]),
+            max_iterations=int(cleaned["max_iterations"]),
+        )
+
+    def _save_module(self, form: VillalvaModuleForm, result):
+        cleaned = form.cleaned_data
+        nome = cleaned["nome"].strip()
+        fabricante = cleaned["fabricante"].strip()
+        defaults = _villalva_module_defaults(cleaned, result)
+        obj = PVModule.objects.filter(nome=nome, fabricante=fabricante).first()
+        created = obj is None
+
+        if obj is not None and not cleaned.get("atualizar_existente"):
+            form.add_error(
+                None,
+                "Ja existe um modulo com este nome e fabricante. Marque a opcao de atualizar para sobrescrever.",
+            )
+            return None
+
+        if obj is None:
+            obj = PVModule(nome=nome, fabricante=fabricante)
+        for field, value in defaults.items():
+            setattr(obj, field, value)
+
+        try:
+            obj.full_clean()
+            obj.save()
+        except ValidationError as exc:
+            form.add_error(None, exc)
+            return None
+        return obj, created
+
+    def _warnings(self, cleaned: dict[str, Any], result) -> list[str]:
+        warnings = list(result.warnings)
+        pmp_user = float(cleaned["pmp_w"])
+        pmp_mpp = result.pmp_datasheet_w
+        if pmp_user > 0:
+            mismatch_pct = abs(pmp_user - pmp_mpp) / pmp_user * 100.0
+            if mismatch_pct > 1.0:
+                warnings.append(
+                    (
+                        "Pmp nominal difere de Vmp x Imp em "
+                        f"{mismatch_pct:.2f}%. O metodo usa Vmp x Imp como ponto de maxima potencia."
+                    )
+                )
+        for candidate in result.candidates:
+            warnings.extend(candidate.warnings)
+        return list(dict.fromkeys(warnings))
+
 
 class CSVUploadView(LoginRequiredMixin, FormView):
     template_name = "pvmodules/upload.html"

@@ -25,7 +25,10 @@ try {
     $env:DJANGO_STATIC_ROOT = (Join-Path $Root "staticfiles")
 
     & $Python manage.py collectstatic --no-input
+    if ($LASTEXITCODE -ne 0) { throw "collectstatic failed with exit code $LASTEXITCODE" }
+
     & $Python -m PyInstaller --noconfirm --clean BrazSolarScan.spec
+    if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
 
     Copy-Item -LiteralPath (Join-Path $Root "desktop.env.example") -Destination (Join-Path $Root "dist\BrazSolarScan\desktop.env.example") -Force
 

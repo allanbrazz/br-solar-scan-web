@@ -13,6 +13,7 @@ from core.forms import MeteoRequestForm
 from core.services.fdd.dashboard_runtime import get_mismatch_backend_param_defaults
 from core.services.fdd.param_catalog import DEFAULT_CONFIG_NAME
 from core.services.fdd.report_pdf import build_mismatch_pdf_report
+from core.services.pvmodule.villalva import VillalvaInput, extract_villalva_parameters
 from core.views.dashboard import paired_model_metrics
 from core.models import (
     AccountNotification,
@@ -56,6 +57,88 @@ class DashboardMetricTests(TestCase):
         self.assertIsNone(empty["rmse"])
         self.assertIsNone(constant["pearson_r"])
         self.assertIsNone(constant["spearman_rho"])
+
+
+class VillalvaExtractionTests(TestCase):
+    def test_villalva_extraction_converges_for_kc200gt_reference(self):
+        data = VillalvaInput(
+            isc_a=8.21,
+            voc_v=32.9,
+            vmp_v=26.3,
+            imp_a=7.61,
+            cells_in_series=54,
+            temp_coeff_voc_pct_c=(-0.123 / 32.9 * 100.0),
+            temp_coeff_isc_pct_c=(0.0032 / 8.21 * 100.0),
+        )
+
+        result = extract_villalva_parameters(
+            data,
+            alpha_min=1.3,
+            alpha_max=1.3,
+            alpha_step=0.1,
+            rs_step=0.001,
+            max_iterations=800,
+        )
+
+        self.assertTrue(result.best.converged)
+        self.assertLess(result.best.error_pct, 0.01)
+        self.assertGreater(result.best.rs_ohm, 0)
+        self.assertGreater(result.best.rp_ohm, 100)
+        self.assertAlmostEqual(result.best.diode_a, 1.3, places=3)
+
+
+class ModuleVillalvaViewTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="villalva-owner",
+            password="Strong-test-pass-7291",
+        )
+        self.client.force_login(self.user)
+        self.payload = {
+            "nome": "KC200GT TEST",
+            "fabricante": "Kyocera",
+            "pmp_w": "200.143",
+            "vmp_v": "26.3",
+            "imp_a": "7.61",
+            "voc_v": "32.9",
+            "isc_a": "8.21",
+            "eficiencia_pct": "16.0",
+            "power_tolerance": "",
+            "num_celulas": "54",
+            "temp_coeff_voc_pct_c": "-0.3739",
+            "temp_coeff_isc_pct_c": "0.0390",
+            "alpha_min": "1.3",
+            "alpha_max": "1.3",
+            "alpha_step": "0.1",
+            "rs_step": "0.001",
+            "max_iterations": "800",
+            "atualizar_existente": "on",
+        }
+
+    def test_villalva_page_calculates_without_saving(self):
+        response = self.client.post(
+            reverse("pvmodules:villalva"),
+            {**self.payload, "action": "calculate"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Resultado selecionado")
+        self.assertContains(response, "Rs")
+        self.assertFalse(
+            PVModule.objects.filter(nome="KC200GT TEST", fabricante="Kyocera").exists()
+        )
+
+    def test_villalva_page_saves_module_with_extracted_parameters(self):
+        response = self.client.post(
+            reverse("pvmodules:villalva"),
+            {**self.payload, "action": "save"},
+        )
+
+        module = PVModule.objects.get(nome="KC200GT TEST", fabricante="Kyocera")
+        self.assertRedirects(response, reverse("pvmodules:detail", kwargs={"pk": module.pk}))
+        self.assertGreater(module.rs_ohm, 0)
+        self.assertGreater(module.rp_ohm, 0)
+        self.assertAlmostEqual(float(module.diode_a), 1.3, places=3)
 
 
 class AccessControlTests(TestCase):

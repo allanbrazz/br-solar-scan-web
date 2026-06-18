@@ -22,6 +22,7 @@ from core.views.modulos import (
     CSVUploadView,
     ModuleDetailView,
     ModuleUpdateView,
+    ModuleVillalvaEstimateView,
 )
 from core.views.plantas import (
     PlantListView, 
@@ -76,6 +77,7 @@ from core.views.mppt_gnn_fdd import (
 pvmodules_patterns = [
     path("modulos",            ModuleListView.as_view(),   name="list"),
     path("novo/",              ModuleCreateView.as_view(), name="create"),
+    path("villalva/",          ModuleVillalvaEstimateView.as_view(), name="villalva"),
     path("upload/",            CSVUploadView.as_view(),    name="upload"),
     path("<int:pk>/",          ModuleDetailView.as_view(), name="detail"),
     path("<int:pk>/editar/",   ModuleUpdateView.as_view(), name="edit"),

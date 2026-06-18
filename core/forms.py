@@ -1,6 +1,7 @@
 from __future__ import annotations
 from django import forms
 import datetime as date
+from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
@@ -146,6 +147,150 @@ class PVModuleForm(forms.ModelForm):
         if not (0 <= e <= 100):
             raise forms.ValidationError("Eficiência deve estar entre 0 e 100 (%).")
         return e
+
+class VillalvaModuleForm(forms.Form):
+    nome = forms.CharField(
+        label="Nome do modulo",
+        max_length=120,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex.: KC200GT"}),
+    )
+    fabricante = forms.CharField(
+        label="Fabricante",
+        max_length=120,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex.: Kyocera"}),
+    )
+    pmp_w = forms.DecimalField(
+        label="Pmp nominal (W)",
+        min_value=Decimal("0.01"),
+        decimal_places=3,
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.001"}),
+    )
+    vmp_v = forms.DecimalField(
+        label="Vmp (V)",
+        min_value=Decimal("0.001"),
+        decimal_places=4,
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.0001"}),
+    )
+    imp_a = forms.DecimalField(
+        label="Imp (A)",
+        min_value=Decimal("0.001"),
+        decimal_places=4,
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.0001"}),
+    )
+    voc_v = forms.DecimalField(
+        label="Voc (V)",
+        min_value=Decimal("0.001"),
+        decimal_places=4,
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.0001"}),
+    )
+    isc_a = forms.DecimalField(
+        label="Isc (A)",
+        min_value=Decimal("0.001"),
+        decimal_places=4,
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.0001"}),
+    )
+    eficiencia_pct = forms.DecimalField(
+        label="Eficiencia (%)",
+        required=False,
+        min_value=Decimal("0"),
+        max_value=Decimal("100"),
+        decimal_places=3,
+        initial=Decimal("0"),
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.001"}),
+    )
+    power_tolerance = forms.CharField(
+        label="Tolerancia de potencia",
+        required=False,
+        max_length=32,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex.: -0/+5 W"}),
+    )
+    num_celulas = forms.IntegerField(
+        label="Celulas em serie",
+        min_value=1,
+        widget=forms.NumberInput(attrs={"class": "form-control", "min": "1"}),
+    )
+    temp_coeff_voc_pct_c = forms.DecimalField(
+        label="Coef. temperatura Voc (%/C)",
+        decimal_places=4,
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.0001"}),
+    )
+    temp_coeff_isc_pct_c = forms.DecimalField(
+        label="Coef. temperatura Isc (%/C)",
+        decimal_places=4,
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.0001"}),
+    )
+    alpha_min = forms.DecimalField(
+        label="a minimo",
+        min_value=Decimal("0.5"),
+        max_value=Decimal("2.5"),
+        decimal_places=3,
+        initial=Decimal("1.0"),
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.001"}),
+    )
+    alpha_max = forms.DecimalField(
+        label="a maximo",
+        min_value=Decimal("0.5"),
+        max_value=Decimal("2.5"),
+        decimal_places=3,
+        initial=Decimal("1.5"),
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.001"}),
+    )
+    alpha_step = forms.DecimalField(
+        label="Passo de a",
+        min_value=Decimal("0.001"),
+        max_value=Decimal("0.5"),
+        decimal_places=4,
+        initial=Decimal("0.1"),
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.001"}),
+    )
+    rs_step = forms.DecimalField(
+        label="Passo de Rs (ohm)",
+        min_value=Decimal("0.0001"),
+        max_value=Decimal("0.05"),
+        decimal_places=5,
+        initial=Decimal("0.001"),
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.0001"}),
+    )
+    max_iterations = forms.IntegerField(
+        label="Limite de iteracoes",
+        min_value=50,
+        max_value=10000,
+        initial=2500,
+        widget=forms.NumberInput(attrs={"class": "form-control", "min": "50", "max": "10000"}),
+    )
+    atualizar_existente = forms.BooleanField(
+        label="Atualizar modulo com mesmo nome e fabricante",
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        vmp = cleaned.get("vmp_v")
+        voc = cleaned.get("voc_v")
+        imp = cleaned.get("imp_a")
+        isc = cleaned.get("isc_a")
+        pmp = cleaned.get("pmp_w")
+        alpha_min = cleaned.get("alpha_min")
+        alpha_max = cleaned.get("alpha_max")
+
+        if vmp is not None and voc is not None and voc <= vmp:
+            self.add_error("voc_v", "Voc deve ser maior que Vmp.")
+        if imp is not None and isc is not None and isc <= imp:
+            self.add_error("isc_a", "Isc deve ser maior que Imp.")
+        if alpha_min is not None and alpha_max is not None and alpha_max < alpha_min:
+            self.add_error("alpha_max", "O valor maximo de a deve ser maior ou igual ao minimo.")
+        if pmp is not None and vmp is not None and imp is not None and pmp > 0:
+            pmp_from_mpp = vmp * imp
+            mismatch_pct = abs(pmp - pmp_from_mpp) / pmp * Decimal("100")
+            if mismatch_pct > Decimal("8"):
+                self.add_error(
+                    "pmp_w",
+                    "Pmp difere mais de 8% de Vmp x Imp. Revise os dados do datasheet.",
+                )
+        return cleaned
+
 
 # ---------- PV Inverter ----------
 class PVInverterForm(forms.ModelForm):
