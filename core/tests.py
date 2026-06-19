@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone as dt_timezone
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -22,10 +22,12 @@ from core.models import (
     MeteoSource,
     PlantMonitoringCredential,
     PlantDetectorConfiguration,
+    PlantPerformanceRatio,
     PVPlantMergedRecord15m,
     PVInverter,
     PVModule,
     PVPlant,
+    PVPlantDetails,
 )
 
 
@@ -557,6 +559,50 @@ class RenovigiWorkflowTests(TestCase):
         )
         self.client.force_login(self.user)
 
+    def _seed_temperature_corrected_pr_fixture(self):
+        module = PVModule.objects.create(
+            nome="TEST-PR-TEMP",
+            fabricante="SolarScan Tests",
+            pmp_w="500.00",
+            vmp_v="41.000",
+            imp_a="12.200",
+            voc_v="49.000",
+            isc_a="13.000",
+            eficiencia_pct="21.00",
+            power_tolerance="",
+            num_celulas=144,
+            temp_coeff_voc_pct_c="-0.300",
+            temp_coeff_isc_pct_c="0.040",
+            rs_ohm="0.1000",
+            rp_ohm="500.000",
+            diode_a="1.300",
+        )
+        PVPlantDetails.objects.create(
+            plant=self.plant,
+            module=module,
+            strings_count=1,
+            modules_per_string=10,
+            modules_total=10,
+            k_sys="0.900",
+            noct_c="45.00",
+        )
+        base = datetime(2026, 6, 12, 12, 0, tzinfo=dt_timezone.utc)
+        for idx in range(8):
+            PVPlantMergedRecord15m.objects.create(
+                plant=self.plant,
+                source_oper="SHINEMONITOR",
+                source_meteo="OPENMETEO",
+                ts_utc=base + timedelta(minutes=15 * idx),
+                interval_min=15,
+                p_ac_w=3600.0,
+                e_ac_wh_15=900.0,
+                gti=800.0,
+                ghi=760.0,
+                temp_air=28.0,
+                flag_meteo_missing=False,
+                flag_inv_missing=False,
+            )
+
     def test_public_renovigi_catalog_is_seeded(self):
         self.assertTrue(
             PVModule.objects.filter(
@@ -713,11 +759,53 @@ class RenovigiWorkflowTests(TestCase):
         self.assertContains(response, "renderResidualCorrelationMatrix")
         self.assertContains(response, "renderFddSankey")
         self.assertContains(response, "vendor/chartjs/chart.umd.min.js")
+        self.assertContains(response, "prTempCard")
+        self.assertContains(response, "chartPrTemp")
+        self.assertContains(response, "data-pr-temp-api")
+        self.assertContains(response, "basicParamHelpData")
+        self.assertContains(response, "help-dot")
         self.assertContains(
             response,
             '<details class="card glass span-12 advanced-card" id="advancedParamsCard">',
         )
         self.assertNotContains(response, 'id="advancedParamsCard" open')
+
+    def test_mismatch_pr_temp_api_calculates_and_persists_monthly_ratio(self):
+        self._seed_temperature_corrected_pr_fixture()
+
+        response = self.client.get(
+            reverse("mismatch_fdd_pr_temp_api"),
+            {
+                "plant_id": self.plant.pk,
+                "start": "2026-06-12",
+                "end": "2026-06-12",
+                "source_oper": "ALL",
+                "source_meteo": "OPENMETEO",
+                "period": "monthly",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["period"], "monthly")
+        self.assertEqual(len(payload["series"]), 1)
+        self.assertGreater(payload["series"][0]["performance_ratio"], 0.0)
+        self.assertGreater(payload["series"][0]["raw_performance_ratio"], 0.0)
+
+        saved = PlantPerformanceRatio.objects.get(
+            plant=self.plant,
+            source_oper="ALL",
+            source_meteo="OPENMETEO",
+            period="monthly",
+        )
+        self.assertAlmostEqual(
+            saved.performance_ratio,
+            payload["series"][0]["performance_ratio"],
+            places=6,
+        )
+        self.assertEqual(saved.valid_samples_count, 8)
+        self.assertEqual(saved.meta["temperature_model"], "NOCT")
 
     def test_c18_detector_defaults_are_exposed_consistently(self):
         defaults = get_mismatch_backend_param_defaults()

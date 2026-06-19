@@ -17,6 +17,59 @@ BASIC_PARAM_DEFAULTS: Dict[str, float] = {
     "pmin_w": 300.0,
 }
 
+BASIC_PARAM_HELP: Dict[str, str] = {
+    "plant_id": "Planta cujos dados casados de inversor e meteorologia serao analisados.",
+    "start": "Primeiro dia local incluido na analise.",
+    "end": "Ultimo dia local incluido na analise.",
+    "dt_minutes": "Resolucao visual do heatmap; nao altera a base 15 min persistida.",
+    "warn_abs": "Desvio relativo absoluto a partir do qual o ponto entra em atencao.",
+    "display_mode": "Escolhe se as celulas priorizam o desvio numerico ou a tipologia diagnosticada.",
+    "fault_abs": "Desvio negativo relativo a partir do qual o ponto e tratado como falha severa.",
+    "gpoa_min": "Irradiancia minima no plano do modulo para considerar que ha sol suficiente.",
+    "pmin_w": "Potencia minima usada para filtrar pontos sem geracao util.",
+    "savedConfigurationSelect": "Conjunto de parametros salvo para reutilizar em execucoes futuras.",
+    "configurationName": "Nome que identifica a configuracao da planta.",
+    "rs_trials": "Quantidade de combinacoes testadas na busca aleatoria de parametros.",
+    "rs_seed": "Semente numerica que torna a busca aleatoria reprodutivel.",
+}
+
+ADVANCED_PARAM_HELP: Dict[str, str] = {
+    "meteo_pos_abs": "Tolerancia para desvio positivo associado a possivel erro meteorologico.",
+    "shading_std_abs": "Limite de variabilidade usado para diferenciar sombreamento de falha persistente.",
+    "shading_window_points": "Quantidade de pontos na janela movel usada para avaliar variacao de sombreamento.",
+    "max_gap_minutes": "Intervalo maximo para unir pontos proximos no mesmo evento.",
+    "gpoa_plot_min": "Irradiancia minima usada para destacar pontos nos graficos auxiliares.",
+    "pmodel_plot_min": "Potencia modelada minima para incluir pontos na leitura visual.",
+    "mismatch_clip_abs": "Limite aplicado ao desvio mostrado para evitar escala visual dominada por outliers.",
+    "sun_available_gpoa_wm2": "Irradiancia minima para classificar sol disponivel para geracao.",
+    "coarse_diag_gpoa_wm2": "Irradiancia minima para liberar diagnostico preliminar.",
+    "fine_diag_gpoa_wm2": "Irradiancia minima para liberar diagnostico mais rigoroso.",
+    "stable_cv_max": "Coeficiente de variacao maximo para considerar o ceu estavel.",
+    "stable_ramp_max_wm2": "Variacao maxima de irradiancia na janela para manter estabilidade.",
+    "stable_window_points": "Tamanho da janela de avaliacao de estabilidade.",
+    "min_baseline_points": "Numero minimo de amostras para formar referencia estatistica.",
+    "inv_cov_min": "Cobertura minima esperada das amostras do inversor no periodo.",
+    "ewma_lambda": "Peso da memoria curta no controle EWMA do residual.",
+    "ewma_L": "Multiplicador do limite de controle EWMA.",
+    "cusum_k": "Referencia de desvio minimo acumulado pelo CUSUM.",
+    "cusum_h": "Limite acumulado que dispara sinal estatistico no CUSUM.",
+    "zero_abs_w": "Potencia AC abaixo da qual a injecao e considerada praticamente nula.",
+    "zero_rel_model": "Fração do modelo abaixo da qual a injecao e tratada como nula.",
+    "degraded_rel": "Perda relativa usada para marcar geracao degradada.",
+    "severe_rel": "Perda relativa usada para marcar anomalia severa.",
+    "low_i_ratio_warn": "Razao de corrente DC que indica alerta de corrente baixa.",
+    "low_i_ratio_crit": "Razao de corrente DC que indica corrente criticamente baixa.",
+    "low_v_ratio_warn": "Razao de tensao DC que indica alerta de tensao baixa.",
+    "low_v_ratio_crit": "Razao de tensao DC que indica tensao criticamente baixa.",
+    "vac_low_ratio": "Limite relativo inferior de tensao CA comparado ao nominal.",
+    "vac_high_ratio": "Limite relativo superior de tensao CA comparado ao nominal.",
+    "vac_abs_margin_v": "Margem absoluta de tensao CA aceita antes de sinalizar rede.",
+    "freq_abs_tol_hz": "Desvio absoluto de frequencia CA tolerado.",
+    "clip_margin": "Margem medida para identificar limitacao ou clipping.",
+    "clip_model_margin": "Margem modelada usada para confirmar clipping esperado.",
+    "rca_min_baseline_points": "Numero minimo de pontos de referencia para diagnostico da causa.",
+}
+
 ADVANCED_PARAM_META: List[Dict[str, Any]] = [
     {"key": "meteo_pos_abs", "label": "Erro meteorológico positivo", "default": 0.25, "auto_text": "0.25", "step": "0.01", "min": "0", "group": "Modelo e desvio"},
     {"key": "shading_std_abs", "label": "Variabilidade de sombreamento", "default": 0.22, "auto_text": "0.22", "step": "0.01", "min": "0", "group": "Modelo e desvio"},
@@ -77,5 +130,7 @@ RANDOM_SEARCH_DEFAULT_SEED = 42
 def advanced_groups() -> List[Dict[str, Any]]:
     groups: "OrderedDict[str, List[Dict[str, Any]]]" = OrderedDict()
     for item in ADVANCED_PARAM_META:
-        groups.setdefault(str(item["group"]), []).append(item)
+        control = dict(item)
+        control["help"] = ADVANCED_PARAM_HELP.get(str(item["key"]), "Parametro avancado do detector FDD mismatch.")
+        groups.setdefault(str(item["group"]), []).append(control)
     return [{"title": title, "controls": controls} for title, controls in groups.items()]

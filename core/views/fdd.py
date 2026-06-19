@@ -23,6 +23,8 @@ from core.services.fdd.dashboard_common import MISMATCH_VERSION_SUMMARY, Dashboa
 from core.services.fdd.dashboard_runtime import build_mismatch_dashboard_payload, parse_dashboard_params
 from core.services.fdd.param_catalog import (
     ADVANCED_PARAM_KEYS,
+    ADVANCED_PARAM_HELP,
+    BASIC_PARAM_HELP,
     BASIC_PARAM_DEFAULTS,
     DEFAULT_CONFIG_NAME,
     DEFAULT_DETECTOR_VERSION,
@@ -34,6 +36,7 @@ from core.services.fdd.param_catalog import (
     RANDOM_SEARCH_DEFAULT_TRIALS,
     advanced_groups,
 )
+from core.services.fdd.performance_ratio import build_temperature_corrected_pr_payload
 from core.services.fdd.random_search import run_typology_random_search
 from core.services.fdd.validation import compute_validation_report_from_db, infer_truth_group
 
@@ -241,6 +244,7 @@ def mismatch_fdd_view(request: HttpRequest):
             "api_url": reverse("mismatch_fdd_api"),
             "export_pdf_url": reverse("mismatch_fdd_export_pdf"),
             "random_search_url": reverse("mismatch_fdd_random_search_api"),
+            "pr_temp_url": reverse("mismatch_fdd_pr_temp_api"),
             "display_mode": (request.GET.get("display_mode") or DEFAULT_DISPLAY_MODE),
             "config_name": request.GET.get("config_name") or DEFAULT_CONFIG_NAME,
             "detector_version": DEFAULT_DETECTOR_VERSION,
@@ -250,6 +254,8 @@ def mismatch_fdd_view(request: HttpRequest):
             "version_summary": MISMATCH_VERSION_SUMMARY,
             "advanced_param_groups": advanced_groups(),
             "advanced_param_keys": ADVANCED_PARAM_KEYS,
+            "advanced_param_help": ADVANCED_PARAM_HELP,
+            "basic_param_help": BASIC_PARAM_HELP,
             "configurations_url": reverse("mismatch_fdd_configurations_api"),
             "random_search_defaults": {"trials": RANDOM_SEARCH_DEFAULT_TRIALS, "seed": RANDOM_SEARCH_DEFAULT_SEED},
         },
@@ -376,6 +382,29 @@ def mismatch_fdd_api(request: HttpRequest) -> JsonResponse:
         return _json_response_strict({"ok": False, "error": exc.message}, status=exc.status_code)
     except Exception as exc:
         logger.exception("mismatch_fdd_api failed")
+        return _json_response_strict({"ok": False, "error": f"Erro interno: {type(exc).__name__}: {exc}"}, status=500)
+
+
+@require_http_methods(["GET", "POST"])
+@login_required
+def mismatch_fdd_pr_temp_api(request: HttpRequest) -> JsonResponse:
+    try:
+        data = request.POST if request.method == "POST" else request.GET
+        plant = _load_authorized_plant(request, _parse_plant_id(data))
+        tz_name = getattr(plant, "timezone", "UTC") or "UTC"
+        params = parse_dashboard_params(data, tz_name)
+        period = str(data.get("period") or data.get("pr_period") or "monthly").strip().lower()
+        payload = build_temperature_corrected_pr_payload(
+            plant,
+            params,
+            period=period,
+            persist=True,
+        )
+        return _json_response_strict(payload, status=200)
+    except DashboardServiceError as exc:
+        return _json_response_strict({"ok": False, "error": exc.message}, status=exc.status_code)
+    except Exception as exc:
+        logger.exception("mismatch_fdd_pr_temp_api failed")
         return _json_response_strict({"ok": False, "error": f"Erro interno: {type(exc).__name__}: {exc}"}, status=500)
 
 

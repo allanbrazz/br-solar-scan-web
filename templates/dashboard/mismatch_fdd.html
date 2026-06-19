@@ -39,6 +39,29 @@
     .ctl{ display:flex; flex-direction:column; gap:.35rem; min-width: 220px; }
     .ctl.sm{ min-width: 160px; }
     .ctl label{ font-size:.85rem; opacity:.85 }
+    .help-label{ display:inline-flex; align-items:center; gap:.35rem; min-width:0; }
+    .help-label span:first-child{ min-width:0; }
+    .help-dot{
+      width:18px;
+      height:18px;
+      border-radius:50%;
+      border:1px solid rgba(159,231,255,.62);
+      background: rgba(96,185,255,.12);
+      color:#dff7ff;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-size:.72rem;
+      font-weight:850;
+      line-height:1;
+      cursor:help;
+      flex:0 0 auto;
+    }
+    .help-dot:hover, .help-dot:focus{
+      border-color: rgba(159,231,255,.95);
+      background: rgba(96,185,255,.22);
+      outline:none;
+    }
     .ctl select, .ctl input[type="date"], .ctl input[type="number"]{
       padding:.55rem .7rem;
       border-radius:12px;
@@ -519,6 +542,48 @@
     .validation-matrix tr:last-child td{ border-bottom:0; }
     .validation-matrix th:last-child, .validation-matrix td:last-child{ border-right:0; }
     .validation-matrix th{ background: rgba(10,20,40,.25); opacity:.88; }
+    .pr-temp-card .page-head{ align-items:flex-start; }
+    .pr-temp-toolbar{ display:flex; gap:.65rem; flex-wrap:wrap; align-items:flex-end; justify-content:flex-end; }
+    .pr-temp-toolbar .ctl{ min-width:150px; }
+    .pr-temp-status{ margin-top:.65rem; min-height:1.2rem; opacity:.82; font-size:.88rem; }
+    .pr-temp-grid{
+      display:grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(280px, .8fr);
+      gap:1rem;
+      align-items:start;
+    }
+    .pr-temp-table-wrap{
+      overflow:auto;
+      max-height:360px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:14px;
+      background: rgba(10,20,40,.18);
+    }
+    .pr-temp-table{
+      width:100%;
+      min-width:620px;
+      border-collapse:collapse;
+      font-size:.85rem;
+    }
+    .pr-temp-table th, .pr-temp-table td{
+      padding:.52rem .62rem;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      text-align:left;
+      white-space:nowrap;
+    }
+    .pr-temp-table th{
+      position:sticky;
+      top:0;
+      z-index:1;
+      background: rgba(10,20,40,.92);
+      color:rgba(233,246,255,.94);
+    }
+    .pr-temp-table tr:last-child td{ border-bottom:0; }
+    .pr-temp-note{ opacity:.72; font-size:.83rem; line-height:1.35; margin-top:.6rem; }
+    @media (max-width: 1100px){
+      .pr-temp-grid{ grid-template-columns: 1fr; }
+      .pr-temp-toolbar{ justify-content:flex-start; }
+    }
     @media (max-width: 900px){
       .validation-grid, .form-grid{ grid-template-columns: 1fr; }
     }
@@ -527,7 +592,7 @@
 {% endblock %}
 
 {% block content %}
-<div id="fddPage" class="dash" data-api="{% url 'mismatch_fdd_api' %}" data-export="{{ export_pdf_url|default:'' }}" data-random-search="{{ random_search_url|default:'' }}" data-configurations="{{ configurations_url|default:'' }}" data-review-api="{% url 'mismatch_fdd_review_event_api' %}" data-truth-api="{% url 'mismatch_fdd_create_truth_event_api' %}" data-validation-api="{% url 'mismatch_fdd_validation_api' %}">
+<div id="fddPage" class="dash" data-api="{% url 'mismatch_fdd_api' %}" data-export="{{ export_pdf_url|default:'' }}" data-random-search="{{ random_search_url|default:'' }}" data-configurations="{{ configurations_url|default:'' }}" data-pr-temp-api="{{ pr_temp_url|default:'' }}" data-review-api="{% url 'mismatch_fdd_review_event_api' %}" data-truth-api="{% url 'mismatch_fdd_create_truth_event_api' %}" data-validation-api="{% url 'mismatch_fdd_validation_api' %}">
   <div class="card glass span-12">
     <div class="page-head">
       <div style="min-width:0;">
@@ -877,6 +942,69 @@
       <div class="tile"><p class="t">Síntese da implementação</p><p class="v mono">produto técnico</p><p class="s">A detecção usa a evidência combinada dos resíduos disponíveis de potência AC/DC, tensão DC e corrente DC, com ponderação por confiabilidade dos canais; o diagnóstico separa evidência observada de inferência causal e mantém rastreabilidade do evento no bin selecionado.</p></div>
     </div>
   </div>
+  <div class="card glass span-12 pr-temp-card" id="prTempCard">
+    <div class="page-head">
+      <div style="min-width:0;">
+        <h3 style="margin:0">Performance ratio corrigido por temperatura</h3>
+        <div class="sub">Curva calculada a partir da energia AC, irradiancia no plano e temperatura estimada por NOCT. Os resultados sao persistidos por periodo para auditoria posterior.</div>
+      </div>
+      <div class="pr-temp-toolbar">
+        <div class="ctl sm">
+          <label class="help-label" for="prTempPeriod"><span>Periodo</span><span class="help-dot" tabindex="0" title="Agrupamento aplicado aos dados disponiveis no intervalo selecionado.">?</span></label>
+          <select id="prTempPeriod">
+            <option value="daily">Diario</option>
+            <option value="monthly" selected>Mensal</option>
+            <option value="annual">Anual</option>
+          </select>
+        </div>
+        <button class="btn-glow secondary" id="btnPrTempRefresh" type="button" title="Atualizar PR corrigido por temperatura">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M21 4v6h-6" stroke="rgba(233,246,255,.92)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="label">Atualizar PR</span>
+        </button>
+      </div>
+    </div>
+
+    <div style="height:.8rem"></div>
+
+    <div class="kpi">
+      <div class="tile"><p class="t">PR corrigido</p><p class="v" id="prTempLatest">-</p><p class="s">ultimo periodo</p></div>
+      <div class="tile"><p class="t">PR medio</p><p class="v" id="prTempMean">-</p><p class="s">periodos validos</p></div>
+      <div class="tile"><p class="t">Energia AC</p><p class="v" id="prTempEnergy">-</p><p class="s">kWh no recorte</p></div>
+      <div class="tile"><p class="t">Irradiacao</p><p class="v" id="prTempIrr">-</p><p class="s">kWh/m2 no recorte</p></div>
+      <div class="tile"><p class="t">T ponderada</p><p class="v" id="prTempWeightedT">-</p><p class="s">Tcell ponderada por GPOA</p></div>
+      <div class="tile"><p class="t">Amostras validas</p><p class="v" id="prTempSamples">-</p><p class="s">bins 15 min</p></div>
+    </div>
+
+    <div class="pr-temp-status" id="prTempStatus">Atualize para calcular a curva com os filtros atuais.</div>
+    <div style="height:.8rem"></div>
+
+    <div class="pr-temp-grid">
+      <div>
+        <div class="chart-wrap sm"><canvas id="chartPrTemp"></canvas></div>
+        <div class="pr-temp-note">Referencia PVsyst: PR = energia produzida dividida por irradiancia incidente vezes potencia nominal; a versao corrigida por temperatura substitui a irradiancia por um termo ponderado por temperatura de celula.</div>
+      </div>
+      <div class="pr-temp-table-wrap">
+        <table class="pr-temp-table">
+          <thead>
+            <tr>
+              <th>Periodo</th>
+              <th>PR corr.</th>
+              <th>PR bruto</th>
+              <th>Energia</th>
+              <th>Irrad.</th>
+              <th>Amostras</th>
+            </tr>
+          </thead>
+          <tbody id="prTempTableBody">
+            <tr><td colspan="6">Sem dados calculados.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <aside id="detailDrawer" class="detail-drawer" aria-hidden="true">
@@ -978,10 +1106,14 @@
 </aside>
 
 {{ advanced_param_keys|json_script:"advancedParamKeysData" }}
+{{ basic_param_help|json_script:"basicParamHelpData" }}
+{{ advanced_param_help|json_script:"advancedParamHelpData" }}
 
 <script>
   const $ = (id) => document.getElementById(id);
   const ADVANCED_PARAM_KEYS = JSON.parse(document.getElementById("advancedParamKeysData")?.textContent || "[]");
+  const BASIC_PARAM_HELP = JSON.parse(document.getElementById("basicParamHelpData")?.textContent || "{}");
+  const ADVANCED_PARAM_HELP = JSON.parse(document.getElementById("advancedParamHelpData")?.textContent || "{}");
   let detectorMetadata = {
     config_name: "{{ config_name|default:'C18_estabilidade_restritiva'|escapejs }}",
     detector_version: "{{ detector_version|default:'mismatch_runtime_v1'|escapejs }}",
@@ -1461,6 +1593,28 @@
     return escHtml(value).replace(/`/g, "&#96;");
   }
 
+  function attachHelpDots(){
+    const helpById = { ...BASIC_PARAM_HELP, ...ADVANCED_PARAM_HELP };
+    for (const [id, text] of Object.entries(helpById)){
+      const field = $(id);
+      if (!field || !text) continue;
+      const ctl = field.closest(".ctl");
+      const safeId = (window.CSS && typeof CSS.escape === "function") ? CSS.escape(id) : String(id).replace(/"/g, '\\"');
+      const label = document.querySelector(`label[for="${safeId}"]`) || ctl?.querySelector("label");
+      if (!label || label.dataset.helpAttached === "1") continue;
+      if (!label.getAttribute("for")) label.setAttribute("for", id);
+      label.classList.add("help-label");
+      const dot = document.createElement("span");
+      dot.className = "help-dot";
+      dot.tabIndex = 0;
+      dot.textContent = "?";
+      dot.title = String(text);
+      dot.setAttribute("aria-label", String(text));
+      label.appendChild(dot);
+      label.dataset.helpAttached = "1";
+    }
+  }
+
   function getCookie(name){
     const cookies = String(document.cookie || "").split(";");
     for (const part of cookies){
@@ -1657,6 +1811,7 @@
   let chartResidualProfile = null;
   let chartDetailDay = null;
   let chartDetailIrrDay = null;
+  let chartPrTemp = null;
 
   function chartCommonOptions(){
     return {
@@ -1688,6 +1843,7 @@
     if(chartResidualProfile){ chartResidualProfile.destroy(); chartResidualProfile = null; }
     if(chartDetailDay){ chartDetailDay.destroy(); chartDetailDay = null; }
     if(chartDetailIrrDay){ chartDetailIrrDay.destroy(); chartDetailIrrDay = null; }
+    if(chartPrTemp){ chartPrTemp.destroy(); chartPrTemp = null; }
   }
 
   function buildCharts(payload){
@@ -3859,6 +4015,123 @@
     }
   }
 
+  function resetPrTempCard(message="Atualize para calcular a curva com os filtros atuais."){
+    ["prTempLatest","prTempMean","prTempEnergy","prTempIrr","prTempWeightedT","prTempSamples"].forEach((id)=>{
+      const el = $(id);
+      if (el) el.textContent = "-";
+    });
+    const body = $("prTempTableBody");
+    if (body) body.innerHTML = `<tr><td colspan="6">Sem dados calculados.</td></tr>`;
+    const status = $("prTempStatus");
+    if (status) status.textContent = message;
+    if (chartPrTemp){ chartPrTemp.destroy(); chartPrTemp = null; }
+  }
+
+  function renderPrTempCard(data){
+    const rows = Array.isArray(data?.series) ? data.series : [];
+    if (!rows.length){
+      resetPrTempCard("Sem dados validos para calcular PR corrigido por temperatura no recorte atual.");
+      return;
+    }
+
+    const finitePr = rows.map((r)=>numOrNull(r.performance_ratio)).filter((v)=>v !== null);
+    const latest = [...rows].reverse().find((r)=>numOrNull(r.performance_ratio) !== null) || rows[rows.length - 1];
+    const meanPr = finitePr.length ? finitePr.reduce((acc, v)=>acc + v, 0) / finitePr.length : null;
+    const totalEnergy = rows.reduce((acc, r)=>acc + (numOrNull(r.energy_kwh) || 0), 0);
+    const totalIrr = rows.reduce((acc, r)=>acc + (numOrNull(r.irradiation_kwh_m2) || 0), 0);
+    const validSamples = rows.reduce((acc, r)=>acc + (Number(r.valid_samples_count || 0) || 0), 0);
+
+    $("prTempLatest").textContent = fmtPct(latest?.performance_ratio ?? null, 1);
+    $("prTempMean").textContent = fmtPct(meanPr, 1);
+    $("prTempEnergy").textContent = fmtN(totalEnergy, 1);
+    $("prTempIrr").textContent = fmtN(totalIrr, 2);
+    $("prTempWeightedT").textContent = `${fmtN(data?.summary?.t_array_weighted_c ?? null, 1)} C`;
+    $("prTempSamples").textContent = String(validSamples || data?.summary?.valid_samples_count || "-");
+
+    const status = $("prTempStatus");
+    if (status){
+      const pnom = fmtN(data?.summary?.pnom_kwp ?? null, 2);
+      const mu = fmtN(data?.summary?.mu_pmpp_per_c ?? null, 5);
+      status.textContent = `Calculado e persistido para ${rows.length} periodo(s). Pnom=${pnom} kWp; mu=${mu} 1/C; fonte meteo=${data?.sources?.source_meteo || "-"}.`;
+    }
+
+    const body = $("prTempTableBody");
+    if (body){
+      body.innerHTML = rows.map((r)=>`
+        <tr>
+          <td class="mono">${escHtml(r.label || r.period_start || "-")}</td>
+          <td class="mono">${fmtPct(r.performance_ratio ?? null, 1)}</td>
+          <td class="mono">${fmtPct(r.raw_performance_ratio ?? null, 1)}</td>
+          <td class="mono">${fmtN(r.energy_kwh ?? null, 1)} kWh</td>
+          <td class="mono">${fmtN(r.irradiation_kwh_m2 ?? null, 2)} kWh/m2</td>
+          <td class="mono">${fmtAny(r.valid_samples_count)}</td>
+        </tr>
+      `).join("");
+    }
+
+    if (!window.Chart || !$("chartPrTemp")) return;
+    if (chartPrTemp){ chartPrTemp.destroy(); chartPrTemp = null; }
+    const options = chartCommonOptions();
+    options.scales.y.ticks.callback = (value) => `${value}%`;
+    options.plugins.tooltip.callbacks = {
+      label: (ctx) => `${ctx.dataset.label}: ${fmtN(ctx.parsed.y, 1)}%`,
+    };
+    chartPrTemp = new Chart($("chartPrTemp"), {
+      type: "line",
+      data: {
+        labels: rows.map((r)=>r.label || r.period_start),
+        datasets: [
+          {
+            label: "PR corrigido por temperatura",
+            data: rows.map((r)=>{
+              const v = numOrNull(r.performance_ratio);
+              return v === null ? null : v * 100;
+            }),
+            borderWidth: 2,
+            pointRadius: 3,
+            tension: 0.18,
+          },
+          {
+            label: "PR bruto",
+            data: rows.map((r)=>{
+              const v = numOrNull(r.raw_performance_ratio);
+              return v === null ? null : v * 100;
+            }),
+            borderWidth: 2,
+            borderDash: [6, 5],
+            pointRadius: 2,
+            tension: 0.18,
+          },
+        ],
+      },
+      options,
+    });
+  }
+
+  async function refreshPrTemp({ silent=false } = {}){
+    const page = $("fddPage");
+    const apiUrl = page ? page.dataset.prTempApi : null;
+    const btn = $("btnPrTempRefresh");
+    if (!apiUrl) return;
+    try{
+      const payload = currentPayloadBase();
+      payload.period = String($("prTempPeriod")?.value || "monthly");
+      setBtnLoading(btn, true, "Atualizar PR", "Calculando...");
+      if (!silent){
+        const status = $("prTempStatus");
+        if (status) status.textContent = "Calculando PR corrigido por temperatura...";
+      }
+      const data = await fetchFddData(apiUrl, payload);
+      if (!data || data.ok === false) throw new Error(data?.error || "Falha no calculo do PR.");
+      renderPrTempCard(data);
+    }catch(err){
+      console.error(err);
+      resetPrTempCard(`PR indisponivel: ${String(err.message || err)}`);
+    }finally{
+      setBtnLoading(btn, false, "Atualizar PR", "Calculando...");
+    }
+  }
+
   async function runFdd(opts = { save:false, preserveSelection:false }){
     const page = $("fddPage");
     const apiUrl = page ? page.dataset.api : null;
@@ -3890,6 +4163,7 @@
       }
 
       setStatus(false);
+      refreshPrTemp({ silent:true });
     }catch(err){
       console.error(err);
       setStatus(true, `Erro: ${String(err.message || err)}`);
@@ -3951,6 +4225,7 @@
     setStatus(false);
     renderRandomSearchResult(null);
     renderValidationDashboard({ summary: { validation: {}, events: [] } });
+    resetPrTempCard();
     closeDetailDrawer();
   }
 
@@ -3983,12 +4258,15 @@
   document.addEventListener("DOMContentLoaded", () => {
     reorderPostHeatmapSections();
     prefillDefaultsIfEmpty();
+    attachHelpDots();
 
     $("btnRun")?.addEventListener("click", () => runFdd({ save:false }));
     $("btnRunSave")?.addEventListener("click", () => runFdd({ save:true }));
     $("btnExportPdf")?.addEventListener("click", exportPdf);
     $("btnReset")?.addEventListener("click", resetUi);
     $("btnRandomSearch")?.addEventListener("click", runRandomSearch);
+    $("btnPrTempRefresh")?.addEventListener("click", () => refreshPrTemp({ silent:false }));
+    $("prTempPeriod")?.addEventListener("change", () => refreshPrTemp({ silent:false }));
     $("btnLoadConfiguration")?.addEventListener("click", () => {
       const selected = selectedSavedConfiguration();
       if (!selected){ setConfigurationStatus("Selecione uma configuração salva.", true); return; }
@@ -4003,7 +4281,10 @@
       const selected = selectedSavedConfiguration();
       if (selected && $("configurationName")) $("configurationName").value = selected.name;
     });
-    $("plant_id")?.addEventListener("change", () => loadSavedConfigurations({applyDefault:true}));
+    $("plant_id")?.addEventListener("change", () => {
+      loadSavedConfigurations({applyDefault:true});
+      refreshPrTemp({ silent:true });
+    });
 
     $("dt_minutes")?.addEventListener("change", () => {
       if (hmState.payload) renderHeatmapCanvas(hmState.payload);
@@ -4020,6 +4301,7 @@
     bindHeatmapFit();
     renderValidationDashboard({ summary: { validation: {}, events: [] } });
     loadSavedConfigurations({applyDefault:true});
+    refreshPrTemp({ silent:true });
 
     document.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape") closeDetailDrawer();

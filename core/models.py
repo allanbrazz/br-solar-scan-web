@@ -964,6 +964,72 @@ class PVPlantMergedRecord15m(models.Model):
         plant_label = getattr(self.plant, "nome", None) or getattr(self.plant, "name", None) or str(self.plant_id)
         return f"{plant_label} merged15m {self.ts_utc.isoformat()}"
 
+
+class PlantPerformanceRatio(models.Model):
+    class Period(models.TextChoices):
+        DAILY = "daily", "Diario"
+        MONTHLY = "monthly", "Mensal"
+        ANNUAL = "annual", "Anual"
+
+    plant = models.ForeignKey(
+        "core.PVPlant",
+        on_delete=models.CASCADE,
+        related_name="performance_ratios",
+        db_index=True,
+    )
+    source_oper = models.CharField(max_length=30, blank=True, default="ALL", db_index=True)
+    source_meteo = models.CharField(max_length=20, blank=True, default="", db_index=True)
+    period = models.CharField(max_length=12, choices=Period.choices, default=Period.MONTHLY, db_index=True)
+    period_start = models.DateField(db_index=True)
+    period_end = models.DateField()
+    ts_start_utc = models.DateTimeField(db_index=True)
+    ts_end_utc = models.DateTimeField(db_index=True)
+
+    performance_ratio = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0.0), MaxValueValidator(5.0)],
+        help_text="Performance ratio corrigido por temperatura.",
+    )
+    raw_performance_ratio = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0.0), MaxValueValidator(5.0)],
+        help_text="Performance ratio sem correcao termica.",
+    )
+    energy_kwh = models.FloatField(default=0.0, validators=[MinValueValidator(0.0)])
+    irradiation_kwh_m2 = models.FloatField(default=0.0, validators=[MinValueValidator(0.0)])
+    denominator_kwh = models.FloatField(default=0.0, validators=[MinValueValidator(0.0)])
+    pnom_kwp = models.FloatField(default=0.0, validators=[MinValueValidator(0.0)])
+    t_array_weighted_c = models.FloatField(null=True, blank=True)
+    mu_pmpp_per_c = models.FloatField(null=True, blank=True)
+    samples_count = models.PositiveIntegerField(default=0)
+    valid_samples_count = models.PositiveIntegerField(default=0)
+    meta = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Performance ratio corrigido por temperatura"
+        verbose_name_plural = "Performance ratios corrigidos por temperatura"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["plant", "source_oper", "source_meteo", "period", "period_start"],
+                name="uniq_prtemp_plant_sources_period",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["plant", "period", "period_start"], name="idx_prtemp_plant_period"),
+            models.Index(fields=["plant", "source_meteo", "period_start"], name="idx_prtemp_plant_meteo"),
+        ]
+        ordering = ["plant_id", "period", "period_start"]
+
+    def __str__(self) -> str:
+        label = getattr(self.plant, "nome", None) or str(self.plant_id)
+        pr = "n/a" if self.performance_ratio is None else f"{self.performance_ratio:.3f}"
+        return f"{label} {self.period} {self.period_start}: PR_T={pr}"
+
 # ---------------------------
 # F A L H A S
 # ---------------------------
