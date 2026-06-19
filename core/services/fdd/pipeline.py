@@ -142,6 +142,21 @@ def _first_finite(values: list[Any]) -> Optional[float]:
 
 
 
+def _max_int(values: list[Any]) -> Optional[int]:
+    ints: list[int] = []
+    for v in values:
+        if v is None:
+            continue
+        try:
+            f = float(v)
+        except Exception:
+            continue
+        if np.isfinite(f):
+            ints.append(int(round(f)))
+    return max(ints) if ints else None
+
+
+
 def _bool_any(values: list[Any]) -> bool:
     return any(bool(v) for v in values)
 
@@ -213,8 +228,8 @@ def _synthesize_agg_rows_from_mppt(
                 "flag_meteo_interpolated": _bool_any([r.get("flag_meteo_interpolated") for r in grp]),
                 "flag_meteo_outlier": _bool_any([r.get("flag_meteo_outlier") for r in grp]),
                 "flag_meteo_artifact": _bool_any([r.get("flag_meteo_artifact") for r in grp]),
-                "alarm_code": None,
-                "alarm_sev": None,
+                "alarm_code": _max_int([r.get("alarm_code") for r in grp]),
+                "alarm_sev": _max_int([r.get("alarm_sev") for r in grp]),
                 "inv_coverage": _first_finite([r.get("inv_coverage") for r in grp]),
                 "flag_low_coverage": _bool_any([r.get("flag_low_coverage") for r in grp]),
                 "flag_meteo_missing": _bool_all([r.get("flag_meteo_missing") for r in grp], default=False),

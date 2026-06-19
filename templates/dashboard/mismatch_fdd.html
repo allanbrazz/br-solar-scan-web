@@ -1075,6 +1075,9 @@
     <div class="drawer-tab-panel" data-panel="ac">
       <h4 style="margin:.2rem 0 .6rem;">Saída do inversor (AC)</h4>
       <table class="kv" id="detailAC"></table>
+      <div style="height:.9rem"></div>
+      <h4 style="margin:.2rem 0 .6rem;">Tensão CA do dia</h4>
+      <div class="chart-wrap sm"><canvas id="chartDetailAcVoltageDay"></canvas></div>
     </div>
 
     <div class="drawer-tab-panel" data-panel="compare">
@@ -1321,7 +1324,7 @@
       if (!Number.isFinite(v)) return "—";
       return Number.isInteger(v) ? String(v) : fmtN(v, 6);
     }
-    if (typeof v === "boolean") return v ? "true" : "false";
+    if (typeof v === "boolean") return v ? "Sim" : "Não";
     if (typeof v === "string") return v === "" ? "—" : v;
     try{ return JSON.stringify(v); }catch(_e){ return String(v); }
   }
@@ -1396,8 +1399,12 @@
     diagnosis_confidence_level: "Nível de confiança do diagnóstico",
     ewma_z: "EWMA z",
     cusum_score: "CUSUM score",
-    residual_event_score: "Residual event score",
-    combined_event_score: "Combined event score",
+    residual_event_score: "Score do evento residual",
+    combined_event_score: "Score combinado do evento",
+    valid_period: "Período válido",
+    stable_sky: "Céu estável",
+    anomaly_power: "Anomalia de potência",
+    residual_trigger: "Gatilho por resíduo",
     state_label: "Estado operativo",
     domain_label: "Domínio provável",
     diagnosis_label: "Diagnóstico final",
@@ -1410,6 +1417,16 @@
     flag_meteo_artifact: "Artefato meteo",
     flag_meteo_missing: "Flag meteo missing",
     flag_inv_missing:   "Flag inversor missing",
+    flag_inv_missing_all: "Inversor ausente no bin",
+    flag_inv_missing_partial: "Inversor parcialmente ausente",
+    freq_hz: "Frequência da rede [Hz]",
+    alarm_code: "Código do alarme",
+    alarm_sev: "Severidade do alarme",
+    reason: "Razão",
+    gate_reason: "Razão do filtro",
+    base_gate: "Filtro-base",
+    coarse_gate: "Filtro amplo",
+    fine_gate: "Filtro fino",
 
     // Mantém se existir no teu backend
     mppt1_vdc_v: "MPPT1 Vdc [V]",
@@ -1437,6 +1454,12 @@
     unknown_shutdown_with_sun: "Desligamento sem causa definida com sol",
     dc_side_partial_loss_probable: "Perda parcial provável no lado CC",
     dc_side_voltage_anomaly_probable: "Anomalia provável de tensão CC",
+    dc_open_circuit_probable: "Circuito aberto provável no lado CC",
+    dc_short_circuit_probable: "Curto-circuito provável no lado CC",
+    dc_shading_soiling_probable: "Sombreamento ou sujeira provável",
+    dc_degradation_probable: "Degradação provável no lado CC",
+    dc_mppt_tracking_anomaly_probable: "Anomalia provável de rastreamento MPPT",
+    dc_partial_open_circuit_probable: "Abertura parcial provável no lado CC",
     partial_generation_loss_probable: "Perda parcial provável de geração",
     persistent_underperformance: "Desempenho persistentemente abaixo do esperado",
     curtailment_clipping: "Limitação de potência ou clipping",
@@ -1444,6 +1467,73 @@
     power_mismatch_warning: "Desvio de potência em atenção",
     critical_operational_anomaly: "Anomalia operacional crítica",
     operational_anomaly_warning: "Anomalia operacional em atenção",
+  };
+
+  const STATE_LABELS_PT = {
+    injecting_normal: "Injetando normalmente",
+    injecting_degraded: "Injetando com degradação",
+    sun_available_not_injecting: "Sol disponível sem injeção",
+    telemetry_invalid: "Telemetria inválida",
+    low_irradiance: "Baixa irradiância",
+    unknown: "Estado não determinado",
+  };
+
+  const DOMAIN_LABELS_PT = {
+    operational: "Operacional",
+    grid: "Rede CA",
+    dc_side: "Lado CC",
+    inverter: "Inversor",
+    meteo: "Meteorologia",
+    unknown: "Domínio não determinado",
+  };
+
+  const REASON_LABELS_PT = {
+    missing_or_low_coverage: "Dados ausentes ou baixa cobertura",
+    outside_operational_gate: "Fora do filtro operacional",
+    direct_grid_evidence: "Evidência direta de rede",
+    zero_injection_with_alarm: "Sem injeção com alarme",
+    zero_injection_no_direct_cause: "Sem injeção sem causa direta",
+    zero_injection_with_open_signature: "Sem injeção com assinatura de circuito aberto",
+    zero_injection_with_short_signature: "Sem injeção com assinatura de curto-circuito",
+    pac_near_cap: "Potência CA próxima ao limite nominal",
+    low_idc_vs_baseline: "Corrente CC abaixo da linha de base",
+    low_vdc_vs_baseline: "Tensão CC abaixo da linha de base",
+    pac_below_expected: "Potência CA abaixo do esperado",
+    underperformance_low_irradiance_confidence: "Subdesempenho com baixa confiança de irradiância",
+    residual_anomaly_only: "Anomalia indicada apenas pelos resíduos",
+    no_strong_fault_evidence: "Sem evidência forte de falha",
+    vdc_residual_strong_negative: "Resíduo de tensão CC fortemente negativo",
+    idc_residual_extremely_negative: "Resíduo de corrente CC extremamente negativo",
+    idc_drop_with_vdc_preserved: "Queda de corrente CC com tensão preservada",
+    moderate_persistent_current_loss: "Perda moderada e persistente de corrente",
+    vdc_drop_without_matching_idc_drop: "Queda de tensão CC sem queda equivalente de corrente",
+    "mismatch<=-fault_abs": "Mismatch abaixo do limite crítico",
+    "|mismatch|>=warn_abs": "Mismatch acima do limite de atenção",
+    no_generation_under_sun: "Sem geração com irradiância disponível",
+    "anomaly=true": "Anomalia marcada pelo detector",
+    backend_class: "Classificação do backend",
+    rca_code: "Código RCA",
+    default_ok: "Sem indício relevante",
+    no_point_in_bin: "Sem ponto no bin",
+    no_operatives: "Sem dados operacionais",
+    classified: "Classificado",
+    warn: "Atenção",
+    crit: "Crítico",
+    none: "Sem classe",
+  };
+
+  const IRRADIANCE_TIER_PT = {
+    A: "Alta",
+    B: "Média",
+    C: "Baixa",
+    N: "Não aplicável",
+  };
+
+  const ALARM_SEV_PT = {
+    0: "Sem alarme",
+    1: "Atenção",
+    2: "Falha/alarme",
+    3: "Falha crítica",
   };
 
   function humanizeKey(s){
@@ -1735,7 +1825,7 @@
     VALIDATION_LABEL_OPTIONS.forEach(pushValue);
     pushValue(selectedValue);
     let html = allowBlank ? `<option value="">— selecionar —</option>` : "";
-    html += values.map((v)=>`<option value="${escAttr(v)}" ${String(selectedValue || "") === v ? "selected" : ""}>${escHtml(v)}</option>`).join("");
+    html += values.map((v)=>`<option value="${escAttr(v)}" ${String(selectedValue || "") === v ? "selected" : ""}>${escHtml(translatedToken(v))}</option>`).join("");
     return html;
   }
 
@@ -1811,6 +1901,7 @@
   let chartResidualProfile = null;
   let chartDetailDay = null;
   let chartDetailIrrDay = null;
+  let chartDetailAcVoltageDay = null;
   let chartPrTemp = null;
 
   function chartCommonOptions(){
@@ -1843,6 +1934,7 @@
     if(chartResidualProfile){ chartResidualProfile.destroy(); chartResidualProfile = null; }
     if(chartDetailDay){ chartDetailDay.destroy(); chartDetailDay = null; }
     if(chartDetailIrrDay){ chartDetailIrrDay.destroy(); chartDetailIrrDay = null; }
+    if(chartDetailAcVoltageDay){ chartDetailAcVoltageDay.destroy(); chartDetailAcVoltageDay = null; }
     if(chartPrTemp){ chartPrTemp.destroy(); chartPrTemp = null; }
   }
 
@@ -2367,7 +2459,7 @@
       ctx.fillStyle = "rgba(233,246,255,.88)";
       ctx.textAlign = "right";
       ctx.font = "12px sans-serif";
-      ctx.fillText(humanizeKey(label).slice(0, 29), margin.left - 10, margin.top + (row+.5)*cellHeight);
+      ctx.fillText(translatedToken(label).slice(0, 29), margin.left - 10, margin.top + (row+.5)*cellHeight);
       columns.forEach((column, col) => {
         const value = percentages[row][col];
         const x = margin.left + col*cellWidth;
@@ -2510,8 +2602,8 @@
     rowLabels.forEach((label, row) => {
       const rowHead = document.createElement("div");
       rowHead.className = "diagnostic-row-head";
-      rowHead.textContent = humanizeKey(label);
-      rowHead.title = humanizeKey(label);
+      rowHead.textContent = translatedToken(label);
+      rowHead.title = translatedToken(label);
       grid.appendChild(rowHead);
       columns.forEach((column, col) => {
         const value = percentages[row][col];
@@ -2523,7 +2615,7 @@
         cell.style.color = Number.isFinite(value) && value/maxValue > .58 ? "#071321" : "#fff";
         cell.textContent = Number.isFinite(value) && value > 0 ? `${value.toFixed(1)}%` : "";
         const period = dimension === "hour" ? `${String(column).padStart(2, "0")}:00` : `mês ${column}`;
-        cell.title = `${humanizeKey(label)} em ${period}: ${count} amostras (${Number.isFinite(value) ? value.toFixed(2) : "0.00"}%).`;
+        cell.title = `${translatedToken(label)} em ${period}: ${count} amostras (${Number.isFinite(value) ? value.toFixed(2) : "0.00"}%).`;
         cell.setAttribute("aria-label", cell.title);
         grid.appendChild(cell);
       });
@@ -2572,6 +2664,9 @@
 
       i_ac_a:       ["i_ac_a","iac_a","i_ac_l1","i_ac","iac"],
       v_ac_v:       ["v_ac","vac","v_ac_v","v_ac_l1","vac_l1","v_ll","v_ln"],
+      freq_hz:      ["freq","frequency","fac_hz","grid_frequency_hz"],
+      alarm_code:   ["alarm","alarm_code","fault_code","codigo_alarme","codigo_falha"],
+      alarm_sev:    ["alarm_severity","alarm_sev","severity","nivel_alarme","severidade_alarme"],
       p_dc_w:       ["p_dc_w","pdc_w","p_dc","pdc"],
       v_dc_v:       ["v_dc_v","vdc_v","vdc","v_string_v"],
       i_dc_a:       ["i_dc_a","idc_a","idc","i_string_a"],
@@ -3212,9 +3307,75 @@
     return m[String(level || "")] || (level || "—");
   }
 
+  function translatedToken(value){
+    const raw = String(value ?? "").trim();
+    if (!raw) return "—";
+    const lower = raw.toLowerCase();
+    return DIAGNOSIS_LABELS_PT[lower]
+      || STATE_LABELS_PT[lower]
+      || DOMAIN_LABELS_PT[lower]
+      || REASON_LABELS_PT[raw]
+      || REASON_LABELS_PT[lower]
+      || IRRADIANCE_TIER_PT[raw]
+      || IRRADIANCE_TIER_PT[raw.toUpperCase()]
+      || humanizeKey(raw);
+  }
+
+  function translatedReasonText(value){
+    if (Array.isArray(value)) return value.map(translatedToken).filter((v) => v && v !== "—").join("; ") || "—";
+    const raw = String(value ?? "").trim();
+    if (!raw) return "—";
+    return raw.split(/;|,/).map((part) => translatedToken(part)).filter(Boolean).join("; ") || translatedToken(raw);
+  }
+
   function confidenceReasonText(block){
     const reasons = Array.isArray(block?.reasons) ? block.reasons.filter(Boolean) : [];
-    return reasons.length ? reasons.join("; ") : "—";
+    return reasons.length ? translatedReasonText(reasons) : "—";
+  }
+
+  function boolValuePt(value){
+    if (typeof value === "boolean") return value ? "Sim" : "Não";
+    if (typeof value === "number" && Number.isFinite(value)) return value !== 0 ? "Sim" : "Não";
+    const s = String(value ?? "").trim().toLowerCase();
+    if (["1","true","yes","sim","on"].includes(s)) return "Sim";
+    if (["0","false","no","não","nao","off"].includes(s)) return "Não";
+    return fmtAny(value);
+  }
+
+  function formatValueForKey(key, value){
+    if (isNullishValue(value)) return "—";
+    const k = String(key || "").toLowerCase();
+    if (typeof value === "boolean") return value ? "Sim" : "Não";
+    if (["data_reliability_level","detection_confidence_level","diagnosis_confidence_level"].includes(k)){
+      return confidenceLevelPt(value);
+    }
+    if (k === "state_label") return STATE_LABELS_PT[String(value).toLowerCase()] || translatedToken(value);
+    if (k === "domain_label") return DOMAIN_LABELS_PT[String(value).toLowerCase()] || translatedToken(value);
+    if (["diagnosis_label","rca_label","label","final_label","event_label_prelim"].includes(k)){
+      return translatedToken(value);
+    }
+    if (k === "irradiance_tier") return IRRADIANCE_TIER_PT[String(value).toUpperCase()] || translatedToken(value);
+    if (k === "alarm_sev"){
+      const n = Number(value);
+      if (Number.isFinite(n) && ALARM_SEV_PT[Math.round(n)]) return ALARM_SEV_PT[Math.round(n)];
+      return translatedToken(value);
+    }
+    if (k === "alarm_code"){
+      const n = Number(value);
+      if (Number.isFinite(n) && Math.round(n) === 0) return "Sem alarme (0)";
+      if (Number.isFinite(n)) return `Alarme ${Math.round(n)}`;
+      return translatedToken(value);
+    }
+    if (k.includes("reason") || k.endsWith("_gate")){
+      return translatedReasonText(value);
+    }
+    if (
+      k.startsWith("flag_")
+      || ["valid_period","stable_sky","anomaly","anomaly_power","residual_trigger","direct_grid_evidence","zero_injection_flag"].includes(k)
+    ){
+      return boolValuePt(value);
+    }
+    return fmtAny(value);
   }
 
   function buildConfidenceRows(raw, dumpPoint){
@@ -3230,17 +3391,17 @@
       { label: "Confiança do diagnóstico", value: fmtPct(raw.diagnosis_confidence_score), key: "diagnosis_confidence_score" },
       { label: "Nível do diagnóstico", value: confidenceLevelPt(raw.diagnosis_confidence_level), key: "diagnosis_confidence_level" },
       { label: "Razões (diagnóstico)", value: confidenceReasonText(notes.diagnosis_confidence), key: "diagnosis_confidence_reasons" },
-      { label: "Estado operativo", value: fmtAny(raw.state_label), key: "state_label" },
-      { label: "Domínio provável", value: fmtAny(raw.domain_label), key: "domain_label" },
-      { label: "Diagnóstico final", value: fmtAny(raw.diagnosis_label), key: "diagnosis_label" },
-      { label: "Evidência direta de rede", value: fmtAny(raw.direct_grid_evidence), key: "direct_grid_evidence" },
-      { label: "Sem injeção sob sol", value: fmtAny(raw.zero_injection_flag), key: "zero_injection_flag" },
-      { label: "Tier de irradiância", value: fmtAny(raw.irradiance_tier), key: "irradiance_tier" },
+      { label: "Estado operativo", value: formatValueForKey("state_label", raw.state_label), key: "state_label" },
+      { label: "Domínio provável", value: formatValueForKey("domain_label", raw.domain_label), key: "domain_label" },
+      { label: "Diagnóstico final", value: formatValueForKey("diagnosis_label", raw.diagnosis_label), key: "diagnosis_label" },
+      { label: "Evidência direta de rede", value: formatValueForKey("direct_grid_evidence", raw.direct_grid_evidence), key: "direct_grid_evidence" },
+      { label: "Sem injeção sob sol", value: formatValueForKey("zero_injection_flag", raw.zero_injection_flag), key: "zero_injection_flag" },
+      { label: "Tier de irradiância", value: formatValueForKey("irradiance_tier", raw.irradiance_tier), key: "irradiance_tier" },
     ];
   }
 
   function renderKvRows(obj, keys){
-    return keys.map((k) => `<tr><td class="k mono">${prettyKeyCompact(k)}</td><td class="v mono">${fmtAny(obj?.[k])}</td></tr>`).join("");
+    return keys.map((k) => `<tr><td class="k mono">${escHtml(prettyKeyCompact(k))}</td><td class="v mono">${escHtml(formatValueForKey(k, obj?.[k]))}</td></tr>`).join("");
   }
 
   function mergeDefined(baseObj, overrideObj){
@@ -3396,6 +3557,75 @@
     }
   }
 
+  function renderSelectedDayAcVoltageCurve(payload, cellObj){
+    const canvas = $("chartDetailAcVoltageDay");
+    if (!canvas || !window.Chart) return;
+    if (chartDetailAcVoltageDay){ chartDetailAcVoltageDay.destroy(); chartDetailAcVoltageDay = null; }
+
+    const dayKey = cellObj?.day || cellObj?.ds || null;
+    if (!payload || !cellObj || !dayKey) return;
+
+    const s = payload.series || {};
+    const labels = s.t_local || [];
+    const days = s.hm_day_local || [];
+    const vacAll = s.v_ac_v || s.vac_v || [];
+
+    const idxs = [];
+    for (let i=0; i<days.length; i++) if (days[i] === dayKey) idxs.push(i);
+    if (!idxs.length) return;
+
+    const localLabels = idxs.map(i => {
+      const iso = String(labels[i] || "");
+      return iso.length >= 16 ? iso.slice(11,16) : iso;
+    });
+    const vac = idxs.map(i => vacAll[i]);
+    if (!vac.some((v) => Number.isFinite(Number(v)))) return;
+
+    const selectedIndex = idxs.indexOf(cellObj.idx);
+    const pointR = localLabels.map((_,k)=>k===selectedIndex?5:0);
+    const pointHoverR = localLabels.map((_,k)=>k===selectedIndex?7:3);
+    const pointBg = localLabels.map((_,k)=>k===selectedIndex?"#ffffff":"rgba(125, 211, 252, 0.25)");
+    const pointBorder = localLabels.map((_,k)=>k===selectedIndex?"#7dd3fc":"rgba(125, 211, 252, 0.85)");
+
+    const opts = chartCommonOptions();
+    opts.scales = {
+      x: opts.scales?.x || {},
+      y: {
+        ...(opts.scales?.y || {}),
+        title: {
+          display: true,
+          text: "Tensão CA [V]",
+          color: "rgba(233,246,255,.88)",
+          font: { size: 12, weight: "700" }
+        }
+      }
+    };
+
+    chartDetailAcVoltageDay = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: localLabels,
+        datasets: [
+          {
+            label: "Tensão CA [V]",
+            data: vac,
+            borderWidth: 2,
+            tension: 0.15,
+            spanGaps: true,
+            borderColor: "#7dd3fc",
+            backgroundColor: "rgba(125, 211, 252, 0.20)",
+            pointRadius: pointR,
+            pointHoverRadius: pointHoverR,
+            pointBackgroundColor: pointBg,
+            pointBorderColor: pointBorder,
+            pointBorderWidth: localLabels.map((_,k)=>k===selectedIndex?2:1),
+          },
+        ]
+      },
+      options: opts,
+    });
+  }
+
   function buildSeriesDumpFallback(payload, idx){
     if (!payload || !Number.isInteger(idx) || idx < 0) return {};
     return {
@@ -3431,6 +3661,8 @@
         v_ac_v: seriesAt(payload, "v_ac_v", idx),
         i_ac_a: seriesAt(payload, "i_ac_a", idx),
         freq_hz: seriesAt(payload, "freq_hz", idx),
+        alarm_code: seriesAt(payload, "alarm_code", idx),
+        alarm_sev: seriesAt(payload, "alarm_sev", idx),
         inv_coverage: seriesAt(payload, "inv_coverage", idx),
         flag_inv_missing_all: seriesAt(payload, "flag_inv_missing_all", idx),
         flag_inv_missing_partial: seriesAt(payload, "flag_inv_missing_partial", idx),
@@ -3533,9 +3765,9 @@
                 <span class="pill neutral mono">id=${fmtAny(ev?.id)}</span>
                 <span class="pill info">${escHtml(ev?.match_type || "—")}</span>
               </div>
-              <div><b>Previsto:</b> <span class="mono">${escHtml(ev?.pred_label || ev?.event_label_prelim || "—")}</span></div>
-              <div><b>Final:</b> <span class="mono">${escHtml(ev?.final_label || "—")}</span></div>
-              <div><b>Verdade associada:</b> <span class="mono">${escHtml(ev?.matched_truth_label || "—")}</span></div>
+              <div><b>Previsto:</b> <span class="mono">${escHtml(translatedToken(ev?.pred_label || ev?.event_label_prelim || "—"))}</span></div>
+              <div><b>Final:</b> <span class="mono">${escHtml(translatedToken(ev?.final_label || "—"))}</span></div>
+              <div><b>Verdade associada:</b> <span class="mono">${escHtml(translatedToken(ev?.matched_truth_label || "—"))}</span></div>
               <div class="mono">${escHtml(ev?.ts_start_utc || "—")} → ${escHtml(ev?.ts_end_utc || "—")}</div>
             </div>`;
         }).join("");
@@ -3563,8 +3795,8 @@
       </div>
       <div class="validation-help mono">${escHtml(predEvent?.ts_start_utc || "—")} → ${escHtml(predEvent?.ts_end_utc || "—")}</div>
       <table class="kv">
-        <tr><td class="k">Rótulo preliminar</td><td class="v mono">${escHtml(validationBlock?.pred_event_label_prelim || predEvent?.event_label_prelim || "—")}</td></tr>
-        <tr><td class="k">Rótulo final salvo</td><td class="v mono">${escHtml(validationBlock?.pred_event_final_label || predEvent?.final_label || "—")}</td></tr>
+        <tr><td class="k">Rótulo preliminar</td><td class="v mono">${escHtml(translatedToken(validationBlock?.pred_event_label_prelim || predEvent?.event_label_prelim || "—"))}</td></tr>
+        <tr><td class="k">Rótulo final salvo</td><td class="v mono">${escHtml(translatedToken(validationBlock?.pred_event_final_label || predEvent?.final_label || "—"))}</td></tr>
         <tr><td class="k">Match atual</td><td class="v mono">${escHtml(predEvent?.match_type || "—")}</td></tr>
       </table>` : `
       <div class="validation-banner warn">Este bin não veio associado a um <b>FaultEvent</b> previsto no overlay do backend. Se houver um evento compatível em <code>summary.events</code>, a interface tentará vinculá-lo automaticamente; caso contrário, você ainda pode registrar um evento real manualmente logo abaixo.</div>`;
@@ -3574,7 +3806,7 @@
         <span class="pill ${pillClassForState(validationBlock?.bin_truth_state)}">bin truth=${escHtml(validationBlock?.bin_truth_state || "unlabeled")}</span>
         <span class="pill neutral mono">truth_event_id=${fmtAny(validationBlock?.truth_event_id)}</span>
       </div>
-      <div class="validation-help">Rótulo de verdade atual para o bin selecionado: <span class="mono">${escHtml(validationBlock?.bin_truth_label || "—")}</span></div>`;
+      <div class="validation-help">Rótulo de verdade atual para o bin selecionado: <span class="mono">${escHtml(translatedToken(validationBlock?.bin_truth_label || "—"))}</span></div>`;
 
     return `
       <div class="validation-block">
@@ -3779,6 +4011,7 @@
       if (detailValidation) detailValidation.innerHTML = '';
       if (chartDetailDay){ chartDetailDay.destroy(); chartDetailDay = null; }
       if (chartDetailIrrDay){ chartDetailIrrDay.destroy(); chartDetailIrrDay = null; }
+      if (chartDetailAcVoltageDay){ chartDetailAcVoltageDay.destroy(); chartDetailAcVoltageDay = null; }
       closeDetailDrawer();
       return;
     }
@@ -3791,7 +4024,7 @@
     const clsTxt = cellObj?.cls || 'none';
     const tsLocal = dumpPoint?.ts_local || cellObj?.exact_ts_local || '—';
     const tsUtc = dumpPoint?.ts_utc || '—';
-    if (meta) meta.textContent = `Data/hora local: ${fmtAny(tsLocal)} • UTC: ${fmtAny(tsUtc)} • classe=${clsTxt} • razão=${cellObj?.reason || '—'} • idx=${idx >= 0 ? idx : '—'}`;
+    if (meta) meta.textContent = `Data/hora local: ${fmtAny(tsLocal)} • UTC: ${fmtAny(tsUtc)} • classe=${translatedToken(clsTxt)} • razão=${translatedReasonText(cellObj?.reason || '—')} • idx=${idx >= 0 ? idx : '—'}`;
 
     const confBlock = mergeDefined(fallbackPoint?.confidence || {}, dumpPoint?.confidence || {});
     const detBlock = mergeDefined(fallbackPoint?.detection || {}, dumpPoint?.detection || {});
@@ -3812,6 +4045,8 @@
     acBlock.v_ac_v = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.v_ac_v","v_ac_v"]);
     acBlock.i_ac_a = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.i_ac_a","i_ac_a"]);
     acBlock.freq_hz = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.freq_hz","freq_hz"]);
+    acBlock.alarm_code = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.alarm_code","alarm_code"]);
+    acBlock.alarm_sev = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.alarm_sev","alarm_sev"]);
     modelBlock.v_dc_model_v = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.v_dc_model_v","v_dc_model_v","residuals.v_dc.expected","v_dc_model_v"]);
     modelBlock.i_dc_model_a = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.i_dc_model_a","i_dc_model_a","residuals.i_dc.expected","i_dc_model_a"]);
     modelBlock.p_ac_model_w = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["model.p_ac_model_w","p_ac_model_w","residuals.p_ac.expected","p_ac_model_w"]);
@@ -3835,7 +4070,7 @@
     if (tblMeteo) tblMeteo.innerHTML = renderKvRows(meteoBlock, ['g_poa_used','ghi','dni','dhi','temp_air','wind_speed','rh','meteo_qc_score','flag_meteo_missing','flag_meteo_low_confidence','flag_meteo_interpolated','flag_meteo_outlier','flag_meteo_artifact']);
     if (tblConf) tblConf.innerHTML = renderKvRows(confBlock, ['data_reliability_score','data_reliability_level','detection_confidence_score','detection_confidence_level','diagnosis_confidence_score','diagnosis_confidence_level']);
     if (tblDet) tblDet.innerHTML = renderKvRows(detBlock, ['valid_period','stable_sky','anomaly','anomaly_power','residual_trigger','residual_event_score','combined_event_score','ewma_z','cusum_score','irradiance_tier','rca_code','rca_label']);
-    if (tblAC) tblAC.innerHTML = renderKvRows(acBlock, ['p_ac_w','p_ac_mppt_sum_w','p_ac_agg_w','v_ac_v','i_ac_a','freq_hz','inv_coverage','flag_inv_missing_all','flag_inv_missing_partial']);
+    if (tblAC) tblAC.innerHTML = renderKvRows(acBlock, ['p_ac_w','p_ac_mppt_sum_w','p_ac_agg_w','v_ac_v','i_ac_a','freq_hz','alarm_code','alarm_sev','inv_coverage','flag_inv_missing_all','flag_inv_missing_partial']);
     renderCompareTable(tblCompare, { ...dumpPoint, chosen_total: acBlock, meteo: meteoBlock, model: modelBlock, residuals: residualBlock }, fallbackPoint, payload, idx);
 
     if (tblAll){
@@ -3858,6 +4093,7 @@
       bindValidationActions(payload, { ...cellObj, dumpPoint }, validationBlock);
     }
     renderSelectedDayCurve(payload, cellObj);
+    renderSelectedDayAcVoltageCurve(payload, cellObj);
     setDrawerTab(document.querySelector('.drawer-tab-btn.active')?.dataset.tab || 'mppt');
     openDetailDrawer();
   }
@@ -3867,6 +4103,7 @@
     hmState.selectedSnapshot = null;
     if (chartDetailDay){ chartDetailDay.destroy(); chartDetailDay = null; }
     if (chartDetailIrrDay){ chartDetailIrrDay.destroy(); chartDetailIrrDay = null; }
+    if (chartDetailAcVoltageDay){ chartDetailAcVoltageDay.destroy(); chartDetailAcVoltageDay = null; }
     renderDetail(null, null);
     drawHeatmapCanvas();
   }
@@ -3918,7 +4155,7 @@
 
       const mmTxt = (obj.mm == null) ? "—" : `${fmtN(obj.mm,3)} (${fmtPct(obj.mm,1)})`;
       if (tip) tip.textContent =
-        `${h.ds} ${h.ts} • class=${obj.cls} • operativos=${obj.has_oper ? "sim" : "não"} • reason=${obj.reason ?? "—"} • RCA=${obj.code ?? "—"} • rótulo=${obj.lbl ?? "—"} • mismatch=${mmTxt}`;
+        `${h.ds} ${h.ts} • classe=${translatedToken(obj.cls)} • operativos=${obj.has_oper ? "sim" : "não"} • razão=${translatedReasonText(obj.reason ?? "—")} • RCA=${obj.code ?? "—"} • rótulo=${translatedToken(obj.lbl ?? "—")} • mismatch=${mmTxt}`;
     });
 
     canvas.addEventListener("mouseleave", () => { if (tip) tip.textContent = ""; });

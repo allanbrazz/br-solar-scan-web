@@ -12,6 +12,7 @@ DEFAULT_TZ = "UTC"
 # =========================
 DEFAULT_INV_MEAN_COLS = (
     "p_dc_w", "p_ac_w", "v_dc_v", "i_dc_a", "v_ac_v", "i_ac_a", "freq_hz", "pf", "qac_var",
+    "alarm_code", "alarm_sev",
     "mppt1_v_dc_v","mppt2_v_dc_v","mppt3_v_dc_v","mppt4_v_dc_v",
     "mppt1_i_dc_a","mppt2_i_dc_a","mppt3_i_dc_a","mppt4_i_dc_a",
     "mppt1_p_dc_w","mppt2_p_dc_w","mppt3_p_dc_w","mppt4_p_dc_w",
@@ -190,7 +191,11 @@ def aggregate_inverter_to_15min(
         df["_e_ac_wh_sample"] = pd.NA
 
     grouped = df.groupby("ts_15", observed=True)
-    out = grouped.agg({c: "mean" for c in mean_cols})
+    alarm_cols = [c for c in ("alarm_code", "alarm_sev") if c in mean_cols]
+    mean_agg_cols = [c for c in mean_cols if c not in alarm_cols]
+    out = grouped.agg({c: "mean" for c in mean_agg_cols}) if mean_agg_cols else pd.DataFrame(index=grouped.size().index)
+    for c in alarm_cols:
+        out[c] = grouped[c].max()
 
     # Energia total do bucket (Wh)
     out["e_ac_wh_15"] = grouped["_e_ac_wh_sample"].sum(min_count=1)

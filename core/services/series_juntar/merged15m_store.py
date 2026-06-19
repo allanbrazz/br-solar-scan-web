@@ -12,6 +12,7 @@ MERGED_COLS = (
     "p_dc_w", "p_ac_w", "v_dc_v", "i_dc_a", "v_ac_v", "i_ac_a", "freq_hz",
     "mppt1_vdc_v", "mppt2_vdc_v", "mppt3_vdc_v", "mppt4_vdc_v",
     "mppt1_idc_a", "mppt2_idc_a", "mppt3_idc_a", "mppt4_idc_a",
+    "alarm_code", "alarm_sev",
     "e_ac_wh_15",
     "inv_n", "inv_coverage", "flag_low_coverage",
     "ghi", "dni", "dhi", "gti",
@@ -170,6 +171,8 @@ def upsert_merged_15m_df(
         vac = _to_float(row.get("v_ac_v"))
         iac = _to_float(row.get("i_ac_a"))
         freq = _to_float(row.get("freq_hz"))
+        alarm_code = _to_int(row.get("alarm_code"))
+        alarm_sev = _to_int(row.get("alarm_sev"))
 
         if has_mppt:
             pdc_k = []
@@ -216,6 +219,8 @@ def upsert_merged_15m_df(
                             v_ac_v=vac,
                             i_ac_a=iac,
                             freq_hz=freq,
+                            alarm_code=alarm_code,
+                            alarm_sev=alarm_sev,
 
                             e_ac_wh_15=e15,
 
@@ -241,6 +246,8 @@ def upsert_merged_15m_df(
                 v_ac_v=vac,
                 i_ac_a=iac,
                 freq_hz=freq,
+                alarm_code=alarm_code,
+                alarm_sev=alarm_sev,
 
                 e_ac_wh_15=e_total,
 

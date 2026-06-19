@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Sequence, Dict, Any, Literal, Tuple, List
+from typing import Optional, Sequence, Dict, Any, Literal, Tuple, List
 
 import math
 import pandas as pd
@@ -120,6 +120,35 @@ def _parse_float(v: Any) -> float:
     return float("nan")
 
 
+def _normalize_payload_key(value: Any) -> str:
+    import unicodedata
+
+    text = str(value or "").strip().lower()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return "".join(ch for ch in text if ch.isalnum())
+
+
+def _payload_value(payload: Dict[str, Any], aliases: Sequence[str]) -> Any:
+    for alias in aliases:
+        if alias in payload:
+            return payload.get(alias)
+
+    normalized = {_normalize_payload_key(k): v for k, v in (payload or {}).items()}
+    for alias in aliases:
+        key = _normalize_payload_key(alias)
+        if key in normalized:
+            return normalized.get(key)
+    return None
+
+
+def _parse_int_or_none(v: Any) -> Optional[int]:
+    x = _parse_float(v)
+    if isinstance(x, (int, float)) and math.isfinite(x):
+        return int(round(float(x)))
+    return None
+
+
 def _mean_nonzero(vals: List[float], min_abs: float = 1e-6) -> float:
     xs = [x for x in vals if x is not None and isinstance(x, (int, float)) and math.isfinite(x) and abs(x) > min_abs]
     return float(sum(xs) / len(xs)) if xs else float("nan")
@@ -201,6 +230,20 @@ def _extract_renovigi(payload: Dict[str, Any]) -> Dict[str, float]:
     ]
     vac = _mean_nonzero(v_ph, min_abs=5.0)
     iac = _mean_nonzero(i_ph, min_abs=0.05)
+    freq_hz = _parse_float(_payload_value(payload, (
+        "Frequência da rede", "Frequencia da rede", "Frequência rede", "Frequencia rede",
+        "Frequência CA", "Frequencia CA", "Freq. da rede", "Freq rede", "fac_hz", "freq_hz", "frequency",
+    )))
+    alarm_code = _parse_int_or_none(_payload_value(payload, (
+        "Código do alarme", "Codigo do alarme", "Código de alarme", "Codigo de alarme",
+        "Código de falha", "Codigo de falha", "Alarme", "Alarm", "Alarm code", "Fault code",
+    )))
+    alarm_sev = _parse_int_or_none(_payload_value(payload, (
+        "Severidade do alarme", "Severidade alarme", "Nível do alarme", "Nivel do alarme",
+        "Alarm severity", "alarm_sev",
+    )))
+    if alarm_sev is None and alarm_code is not None:
+        alarm_sev = 0 if int(alarm_code) == 0 else 2
 
     return {
         "p_ac_w": pac,
@@ -210,6 +253,9 @@ def _extract_renovigi(payload: Dict[str, Any]) -> Dict[str, float]:
         "i_dc_a": idc,
         "v_ac_v": vac,
         "i_ac_a": iac,
+        "freq_hz": freq_hz,
+        "alarm_code": float("nan") if alarm_code is None else float(alarm_code),
+        "alarm_sev": float("nan") if alarm_sev is None else float(alarm_sev),
 
         # MPPTs (V/I) + Pdc estimado
         "mppt1_v_dc_v": mppt_v[0],
@@ -238,6 +284,9 @@ def _extract_generic(payload: Dict[str, Any]) -> Dict[str, float]:
         "i_dc_a": nan,
         "v_ac_v": nan,
         "i_ac_a": nan,
+        "freq_hz": nan,
+        "alarm_code": nan,
+        "alarm_sev": nan,
         "mppt1_v_dc_v": nan, "mppt2_v_dc_v": nan, "mppt3_v_dc_v": nan, "mppt4_v_dc_v": nan,
         "mppt1_i_dc_a": nan, "mppt2_i_dc_a": nan, "mppt3_i_dc_a": nan, "mppt4_i_dc_a": nan,
         "mppt1_p_dc_w": nan, "mppt2_p_dc_w": nan, "mppt3_p_dc_w": nan, "mppt4_p_dc_w": nan,
@@ -368,7 +417,7 @@ def fetch_inverter_df(
 
     base_cols = [
         "ts_utc",
-        "p_dc_w", "p_ac_w", "v_dc_v", "i_dc_a", "v_ac_v", "i_ac_a",
+        "p_dc_w", "p_ac_w", "v_dc_v", "i_dc_a", "v_ac_v", "i_ac_a", "freq_hz", "alarm_code", "alarm_sev",
         "mppt1_v_dc_v","mppt2_v_dc_v","mppt3_v_dc_v","mppt4_v_dc_v",
         "mppt1_i_dc_a","mppt2_i_dc_a","mppt3_i_dc_a","mppt4_i_dc_a",
         "mppt1_p_dc_w","mppt2_p_dc_w","mppt3_p_dc_w","mppt4_p_dc_w",

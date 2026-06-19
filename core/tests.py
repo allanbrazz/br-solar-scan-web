@@ -595,6 +595,14 @@ class RenovigiWorkflowTests(TestCase):
                 ts_utc=base + timedelta(minutes=15 * idx),
                 interval_min=15,
                 p_ac_w=3600.0,
+                p_dc_w=4200.0,
+                v_dc_v=410.0,
+                i_dc_a=10.2,
+                v_ac_v=228.0 + idx,
+                i_ac_a=15.6,
+                freq_hz=60.03,
+                alarm_code=7,
+                alarm_sev=2,
                 e_ac_wh_15=900.0,
                 gti=800.0,
                 ghi=760.0,
@@ -602,6 +610,24 @@ class RenovigiWorkflowTests(TestCase):
                 flag_meteo_missing=False,
                 flag_inv_missing=False,
             )
+
+    def test_renovigi_payload_extractor_reads_grid_frequency_and_alarm(self):
+        from core.services.series_juntar.timeseries_io import _extract_payload
+
+        metrics = _extract_payload(
+            "RENOVIGI",
+            {
+                "Potência ativa total": "3.600",
+                "Tensão Fase A": "228,5",
+                "Corrente Fase A": "15,6",
+                "Frequência da rede": "60,03",
+                "Código do alarme": "7",
+            },
+        )
+
+        self.assertAlmostEqual(metrics["freq_hz"], 60.03)
+        self.assertEqual(metrics["alarm_code"], 7.0)
+        self.assertEqual(metrics["alarm_sev"], 2.0)
 
     def test_public_renovigi_catalog_is_seeded(self):
         self.assertTrue(
@@ -764,11 +790,46 @@ class RenovigiWorkflowTests(TestCase):
         self.assertContains(response, "data-pr-temp-api")
         self.assertContains(response, "basicParamHelpData")
         self.assertContains(response, "help-dot")
+        self.assertContains(response, "chartDetailAcVoltageDay")
+        self.assertContains(response, "Frequência da rede [Hz]")
+        self.assertContains(response, "Código do alarme")
+        self.assertContains(response, "Score do evento residual")
+        self.assertContains(response, "translatedToken")
         self.assertContains(
             response,
             '<details class="card glass span-12 advanced-card" id="advancedParamsCard">',
         )
         self.assertNotContains(response, 'id="advancedParamsCard" open')
+
+    def test_mismatch_fdd_api_exposes_ac_frequency_and_alarm_fields(self):
+        self._seed_temperature_corrected_pr_fixture()
+
+        response = self.client.get(
+            reverse("mismatch_fdd_api"),
+            {
+                "plant_id": self.plant.pk,
+                "start": "2026-06-12",
+                "end": "2026-06-12",
+                "source_oper": "ALL",
+                "source_meteo": "OPENMETEO",
+                "min_baseline_points": "4",
+                "rca_min_baseline_points": "4",
+                "stable_window_points": "2",
+                "shading_window_points": "2",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertIn(60.03, payload["series"]["freq_hz"])
+        self.assertIn(7, payload["series"]["alarm_code"])
+        self.assertIn(2, payload["series"]["alarm_sev"])
+
+        first_dump = next(iter(payload["dump_by_tkey"].values()))
+        self.assertEqual(first_dump["chosen_total"]["alarm_code"], 7)
+        self.assertEqual(first_dump["chosen_total"]["alarm_sev"], 2)
+        self.assertAlmostEqual(first_dump["chosen_total"]["freq_hz"], 60.03)
 
     def test_mismatch_pr_temp_api_calculates_and_persists_monthly_ratio(self):
         self._seed_temperature_corrected_pr_fixture()
