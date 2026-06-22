@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{{ plant.nome }} - Growatt / ShinePhone{% endblock %}
+{% block extra_head %}
+<style>
+  .gw-page,.gw-page *{box-sizing:border-box;min-width:0}
+  .gw-head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}
+  .gw-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:1rem}
+  .gw-section{grid-column:1/-1}
+  .gw-fields{display:grid;grid-template-columns:repeat(4,minmax(170px,1fr));gap:.8rem;align-items:end}
+  .gw-field{display:grid;gap:.35rem}
+  .gw-field label{font-size:.8rem;font-weight:800;opacity:.82}
+  .gw-field input,.gw-field select{width:100%}
+  .gw-actions{display:flex;justify-content:flex-end;gap:.55rem;flex-wrap:wrap;margin-top:.9rem}
+  .gw-path{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap;margin:.1rem 0 1rem}
+  .gw-step{padding:.34rem .55rem;border:1px solid rgba(95,176,255,.2);border-radius:6px;background:rgba(10,35,65,.22);font-size:.75rem;font-weight:800}
+  .gw-step.done{border-color:rgba(63,205,145,.38);color:#9cf0c5}
+  .gw-meta{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:.65rem;margin-top:.8rem}
+  .gw-kpi{padding:.7rem;border-left:3px solid rgba(79,205,255,.65);background:rgba(8,31,57,.28)}
+  .gw-kpi span{display:block;font-size:.72rem;opacity:.7}.gw-kpi strong{display:block;margin-top:.2rem}
+  .gw-table-wrap{overflow:auto;border:1px solid rgba(95,176,255,.16);border-radius:6px;margin-top:1rem}
+  .gw-table{width:100%;min-width:1050px;border-collapse:collapse}
+  .gw-table th,.gw-table td{padding:.62rem;border-bottom:1px solid rgba(255,255,255,.08);text-align:right;white-space:nowrap}
+  .gw-table th{position:sticky;top:0;background:rgba(8,28,52,.97)}
+  .gw-table th:first-child,.gw-table td:first-child{text-align:left}
+  .gw-note{font-size:.78rem;opacity:.72;margin:.65rem 0 0}
+  @media(max-width:980px){.gw-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.gw-meta{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:620px){.gw-fields,.gw-meta{grid-template-columns:1fr}.gw-actions .btn{width:100%}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="gw-page">
+  <header class="page-head gw-head">
+    <div>
+      <h1 class="page-title">{{ plant.nome }} - Growatt / ShinePhone</h1>
+      <p class="page-sub">Descubra a conta, vincule o inversor e sincronize a telemetria de cinco minutos.</p>
+    </div>
+    <div class="action-group">
+      <a class="btn btn-secondary" href="{% url 'opdata_list' plant.pk %}">Dados salvos</a>
+      <a class="btn btn-secondary" href="{% url 'plants:detail' plant.pk %}">Detalhes da planta</a>
+    </div>
+  </header>
+
+  <div class="gw-path" aria-label="Etapas da aquisição Growatt">
+    <span class="gw-step done">1. Credenciais</span>
+    <span class="gw-step{% if plants %} done{% endif %}">2. Descoberta</span>
+    <span class="gw-step{% if cred.growatt_device_sn %} done{% endif %}">3. Vínculo</span>
+    <span class="gw-step{% if result %} done{% endif %}">4. Aquisição</span>
+  </div>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <section class="gw-grid">
+      <article class="card glass gw-section accent-cyan">
+        <h3>Conta ShinePhone</h3>
+        <div class="gw-fields">
+          <div class="gw-field"><label for="gwUser">Usuário</label><input id="gwUser" class="form-control" name="username" value="{{ cred.username }}" autocomplete="username"></div>
+          <div class="gw-field"><label for="gwPassword">Senha</label><input id="gwPassword" class="form-control" name="password" type="password" autocomplete="current-password" placeholder="Use a senha salva"></div>
+          <div class="gw-field"><label>Servidor de login</label><input class="form-control" value="{{ login_base_url }}" readonly></div>
+          <div class="gw-field"><label>Servidor de dados</label><input class="form-control" value="{{ openapi_base_url }}" readonly></div>
+        </div>
+        <label class="gw-note" style="display:flex;gap:.5rem;align-items:center"><input type="checkbox" name="use_saved_password" checked> Usar a senha salva quando o campo estiver vazio</label>
+        <div class="gw-actions"><button class="btn btn-primary" name="action" value="discover" type="submit">Descobrir conta</button></div>
+      </article>
+
+      <article class="card glass gw-section">
+        <h3>Planta e inversor</h3>
+        <div class="gw-fields">
+          <div class="gw-field" style="grid-column:span 2">
+            <label for="gwPlant">Planta na Growatt</label>
+            <select id="gwPlant" class="form-control" name="plant_id">
+              <option value="">Selecione</option>
+              {% for row in plants %}<option value="{{ row.plant_id }}"{% if selected_plant_id|stringformat:'s' == row.plant_id|stringformat:'s' %} selected{% endif %}>{{ row.name }} (#{{ row.plant_id }})</option>{% endfor %}
+            </select>
+          </div>
+          <div class="gw-field" style="grid-column:span 2">
+            <label for="gwDevice">Inversor</label>
+            <select id="gwDevice" class="form-control" name="device_sn">
+              <option value="">Selecione</option>
+              {% for row in devices %}<option value="{{ row.device_sn }}"{% if selected_device_sn == row.device_sn %} selected{% endif %}>{{ row.alias|default:row.device_sn }} - tipo {{ row.device_type }}{% if row.model %} - {{ row.model }}{% endif %}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <p class="gw-note">Ao mudar a planta, clique em “Descobrir conta” para atualizar a lista de inversores; depois confirme o vínculo.</p>
+        <div class="gw-actions"><button class="btn btn-primary" name="action" value="bind" type="submit">Vincular seleção</button></div>
+      </article>
+
+      <article class="card glass gw-section">
+        <h3>Período de aquisição</h3>
+        <div class="gw-fields">
+          <div class="gw-field"><label for="gwStart">Data inicial</label><input id="gwStart" class="form-control" name="start_day" type="date" value="{{ request.POST.start_day|default:default_start_day }}"></div>
+          <div class="gw-field"><label for="gwEnd">Data final</label><input id="gwEnd" class="form-control" name="end_day" type="date" value="{{ request.POST.end_day|default:default_end_day }}"></div>
+          <div class="gw-field"><label>Dispositivo vinculado</label><input class="form-control" value="{{ cred.growatt_device_sn|default:'Nenhum' }}" readonly></div>
+          <div class="gw-field"><label>Tipo Growatt</label><input class="form-control" value="{{ cred.growatt_device_type|default:'-' }}" readonly></div>
+        </div>
+        <p class="gw-note">A Open API limita cada chamada a sete dias; períodos maiores são divididos automaticamente e persistidos em UTC.</p>
+        <div class="gw-actions">
+          <button class="btn btn-secondary" name="action" value="fetch" type="submit">Carregar prévia</button>
+          <button class="btn btn-primary" name="action" value="sync" type="submit">Sincronizar e salvar</button>
+        </div>
+      </article>
+
+      {% if result %}
+      <article class="card glass gw-section accent-green">
+        <h3>Resultado</h3>
+        <div class="gw-meta">
+          {% if result.inserted is not None %}
+            <div class="gw-kpi"><span>Novos registros</span><strong>{{ result.inserted }}</strong></div>
+            <div class="gw-kpi"><span>Registros atualizados</span><strong>{{ result.updated }}</strong></div>
+            <div class="gw-kpi"><span>Amostras válidas</span><strong>{{ result.valid_rows }}</strong></div>
+            <div class="gw-kpi"><span>Timestamps inválidos</span><strong>{{ result.bad_ts }}</strong></div>
+          {% else %}
+            <div class="gw-kpi"><span>Amostras encontradas</span><strong>{{ result.meta.rows }}</strong></div>
+            <div class="gw-kpi"><span>Páginas consultadas</span><strong>{{ result.meta.pages }}</strong></div>
+            <div class="gw-kpi"><span>Blocos de até 7 dias</span><strong>{{ result.meta.chunks }}</strong></div>
+            <div class="gw-kpi"><span>Fuso do retorno</span><strong>{{ result.meta.timestamp_timezone }}</strong></div>
+          {% endif %}
+        </div>
+
+        {% if result.preview_rows %}
+        <div class="gw-table-wrap">
+          <table class="gw-table">
+            <thead><tr><th>Data e hora (UTC)</th><th>Potência AC (W)</th><th>Vpv1 (V)</th><th>Ipv1 (A)</th><th>Vpv2 (V)</th><th>Ipv2 (A)</th><th>Vac1 (V)</th><th>Iac1 (A)</th><th>Frequência (Hz)</th><th>Temperatura (°C)</th><th>Status</th></tr></thead>
+            <tbody>{% for row in result.preview_rows %}<tr><td>{{ row.time|default:row.createTime }}</td><td>{{ row.power|default:row.pac }}</td><td>{{ row.vpv1 }}</td><td>{{ row.ipv1 }}</td><td>{{ row.vpv2 }}</td><td>{{ row.ipv2 }}</td><td>{{ row.vac1|default:row.vacr }}</td><td>{{ row.iac1|default:row.iacr }}</td><td>{{ row.fac }}</td><td>{{ row.temperature }}</td><td>{{ row.status }}</td></tr>{% endfor %}</tbody>
+          </table>
+        </div>
+        <p class="gw-note">Prévia limitada a 200 linhas. A sincronização processa todo o período selecionado.</p>
+        {% endif %}
+      </article>
+      {% endif %}
+    </section>
+  </form>
+</div>
+{% endblock %}

@@ -33,6 +33,7 @@ from core.services.fdd.param_catalog import (
     DEFAULT_SOURCE_METEO,
     DEFAULT_SOURCE_OPER,
 )
+from core.services.dashboard.model_fit import paired_model_metrics
 
 
 def get_mismatch_backend_param_defaults(gpoa_gate: float = 250.0, pmin_w: float = 300.0) -> Dict[str, Any]:
@@ -663,6 +664,10 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
     sev_mismatch, reason_mismatch, counts_mismatch = _build_mismatch_classes(times_utc, model, pipeline, params)
 
     freq_series = _series_with_fallback(pipeline.get("freq_hz") or [], agg.get("freq_hz") or [])
+    p_dc_model_fit = paired_model_metrics(
+        agg.get("p_dc_w") or [],
+        model.get("pdc_model_w") or [],
+    )
 
     if params.display_mode == "tipologia":
         sev_selected = sev_typology
@@ -703,6 +708,9 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
             "residual_global_confidence_mean": mean_none(residual_series.get("global_confidence") or []),
             "time_shift_mode": model.get("time_shift_mode"),
             "time_shift_minutes_selected": model.get("time_shift_minutes_selected"),
+        },
+        "model_fit": {
+            "p_dc": p_dc_model_fit,
         },
         "sources": {
             "source_meteo": src_meteo,

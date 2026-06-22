@@ -8,7 +8,7 @@
   .op-kpi{ padding:.8rem; border:1px solid rgba(95,176,255,.15); border-radius:14px; background:rgba(10,35,65,.22); }
   .op-kpi span{ display:block; font-size:.72rem; opacity:.72; }
   .op-kpi strong{ display:block; margin-top:.2rem; font-size:1.05rem; }
-  .op-filters{ display:grid; grid-template-columns:repeat(5,minmax(150px,1fr)); gap:.75rem; align-items:end; }
+  .op-filters{ display:grid; grid-template-columns:repeat(6,minmax(135px,1fr)); gap:.75rem; align-items:end; }
   .op-field{ display:grid; gap:.35rem; }
   .op-field label{ font-size:.8rem; font-weight:700; opacity:.82; }
   .op-field input,.op-field select{ width:100%; }
@@ -41,6 +41,7 @@
     <form method="get" class="op-filters">
       <div class="op-field"><label for="opStart">Data inicial</label><input id="opStart" class="form-control" type="date" name="start" value="{{ start }}"></div>
       <div class="op-field"><label for="opEnd">Data final</label><input id="opEnd" class="form-control" type="date" name="end" value="{{ end }}"></div>
+      <div class="op-field"><label for="opProvider">Provedor</label><select id="opProvider" class="form-control" name="provider"><option value="">Todos</option><option value="RENOVIGI"{% if provider == 'RENOVIGI' %} selected{% endif %}>Renovigi</option><option value="GROWATT"{% if provider == 'GROWATT' %} selected{% endif %}>Growatt</option></select></div>
       <div class="op-field"><label for="opPn">Identificador PN</label><input id="opPn" class="form-control" name="pn" value="{{ pn }}" placeholder="Opcional"></div>
       <div class="op-field"><label for="opSn">Número de série</label><input id="opSn" class="form-control" name="sn" value="{{ sn }}" placeholder="Opcional"></div>
       <div class="op-field"><label for="opPageSize">Registros por página</label><select id="opPageSize" class="form-control" name="page_size"><option{% if page_size == 50 %} selected{% endif %}>50</option><option{% if page_size == 100 %} selected{% endif %}>100</option><option{% if page_size == 200 %} selected{% endif %}>200</option><option{% if page_size == 500 %} selected{% endif %}>500</option></select></div>
@@ -49,20 +50,20 @@
 
     <div class="op-table-wrap">
       <table class="op-table">
-        <thead><tr><th>Data e hora (UTC)</th><th>PN</th><th>Código do dispositivo</th><th>Endereço</th><th>Número de série</th><th>Dados recebidos</th></tr></thead>
+        <thead><tr><th>Data e hora (UTC)</th><th>Provedor</th><th>PN</th><th>Código do dispositivo</th><th>Endereço</th><th>Número de série</th><th>Dados recebidos</th></tr></thead>
         <tbody>
           {% for o in page_obj.object_list %}
             <tr>
-              <td>{{ o.ts_utc|date:"d/m/Y H:i:s" }}</td><td>{{ o.pn }}</td><td>{{ o.devcode }}</td><td>{{ o.devaddr }}</td><td>{{ o.sn }}</td>
+              <td>{{ o.ts_utc|date:"d/m/Y H:i:s" }}</td><td>{{ o.provedor }}</td><td>{{ o.pn }}</td><td>{{ o.devcode }}</td><td>{{ o.devaddr }}</td><td>{{ o.sn }}</td>
               <td class="op-code"><details><summary>Ver medições</summary><pre>{{ o.payload }}</pre></details></td>
             </tr>
-          {% empty %}<tr><td colspan="6">Nenhum dado encontrado no período.</td></tr>{% endfor %}
+          {% empty %}<tr><td colspan="7">Nenhum dado encontrado no período.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
     <nav class="op-pagination" aria-label="Paginação dos dados operativos">
-      <div>{% if page_obj.has_previous %}<a class="btn btn-secondary" href="?start={{ start }}&end={{ end }}&pn={{ pn }}&sn={{ sn }}&page_size={{ page_size }}&page={{ page_obj.previous_page_number }}">Página anterior</a>{% endif %}</div>
-      <div>{% if page_obj.has_next %}<a class="btn btn-secondary" href="?start={{ start }}&end={{ end }}&pn={{ pn }}&sn={{ sn }}&page_size={{ page_size }}&page={{ page_obj.next_page_number }}">Próxima página</a>{% endif %}</div>
+      <div>{% if page_obj.has_previous %}<a class="btn btn-secondary" href="?start={{ start }}&end={{ end }}&provider={{ provider }}&pn={{ pn }}&sn={{ sn }}&page_size={{ page_size }}&page={{ page_obj.previous_page_number }}">Página anterior</a>{% endif %}</div>
+      <div>{% if page_obj.has_next %}<a class="btn btn-secondary" href="?start={{ start }}&end={{ end }}&provider={{ provider }}&pn={{ pn }}&sn={{ sn }}&page_size={{ page_size }}&page={{ page_obj.next_page_number }}">Próxima página</a>{% endif %}</div>
     </nav>
   </article>
 </div>

@@ -827,7 +827,25 @@
     </div>
   </div>
 
-  <div class="card glass span-12" id="validationSummaryCard">
+  <div class="card glass span-12" id="modelFitCard" style="order:997;">
+    <div class="page-head">
+      <div style="min-width:0;">
+        <h3 style="margin:0">Aderência entre P<sub>DC</sub> modelado e medido</h3>
+        <div class="sub">Dispersão dos pares válidos no período. A linha tracejada representa a concordância ideal entre o modelo físico e a medição.</div>
+      </div>
+    </div>
+    <div style="height:.8rem"></div>
+    <div class="kpi" id="modelFitKpiGrid">
+      <div class="tile"><p class="t">Correlação linear</p><p class="v" id="modelFitPearson">—</p><p class="s">Pearson r</p></div>
+      <div class="tile"><p class="t">Correlação não linear</p><p class="v" id="modelFitSpearman">—</p><p class="s">Spearman ρ</p></div>
+      <div class="tile"><p class="t">RMSE</p><p class="v" id="modelFitRmse">—</p><p class="s">erro em W</p></div>
+      <div class="tile"><p class="t">Pares válidos</p><p class="v" id="modelFitPairs">—</p><p class="s">modelo × medição</p></div>
+    </div>
+    <div style="height:.8rem"></div>
+    <div class="chart-wrap sm"><canvas id="chartModelFit"></canvas></div>
+  </div>
+
+  <div class="card glass span-12" id="validationSummaryCard" style="order:998;">
     <div class="page-head">
       <div style="min-width:0;">
         <h3 style="margin:0">Validação do FDD mismatch</h3>
@@ -935,7 +953,7 @@
     </div>
   </div>
 
-  <div class="card glass span-12">
+  <div class="card glass span-12" id="implementationExplanationCard" style="order:999;">
     <div class="kpi">
       <div class="tile"><p class="t">Detector</p><p class="v mono">{{ version_summary.detector_version|default:"—" }}</p><p class="s">EWMA + CUSUM sobre sinal residual canônico multicanal</p></div>
       <div class="tile"><p class="t">Classificação</p><p class="v mono">RCA explicável</p><p class="s">regras físico-estatísticas + alarmes + estado operacional</p></div>
@@ -1898,6 +1916,7 @@
 
   /* Charts */
   let chartPower = null;
+  let chartModelFit = null;
   let chartResidualProfile = null;
   let chartDetailDay = null;
   let chartDetailIrrDay = null;
@@ -1931,6 +1950,7 @@
 
   function destroyCharts(){
     if(chartPower){ chartPower.destroy(); chartPower = null; }
+    if(chartModelFit){ chartModelFit.destroy(); chartModelFit = null; }
     if(chartResidualProfile){ chartResidualProfile.destroy(); chartResidualProfile = null; }
     if(chartDetailDay){ chartDetailDay.destroy(); chartDetailDay = null; }
     if(chartDetailIrrDay){ chartDetailIrrDay.destroy(); chartDetailIrrDay = null; }
@@ -1938,8 +1958,79 @@
     if(chartPrTemp){ chartPrTemp.destroy(); chartPrTemp = null; }
   }
 
+  function resetModelFitKpis(){
+    $("modelFitPearson").textContent = "—";
+    $("modelFitSpearman").textContent = "—";
+    $("modelFitRmse").textContent = "—";
+    $("modelFitPairs").textContent = "—";
+  }
+
+  function renderModelFit(payload){
+    const metrics = payload?.model_fit?.p_dc || {};
+    const series = payload?.series || {};
+    const measured = Array.isArray(series.p_dc_w) ? series.p_dc_w : [];
+    const modeled = Array.isArray(series.p_dc_model_w) ? series.p_dc_model_w : [];
+    const points = [];
+    const count = Math.min(measured.length, modeled.length);
+    for (let index = 0; index < count; index++){
+      const x = Number(modeled[index]);
+      const y = Number(measured[index]);
+      if (Number.isFinite(x) && Number.isFinite(y)) points.push({x, y});
+    }
+
+    $("modelFitPearson").textContent = metrics.pearson_r == null ? "—" : fmtN(metrics.pearson_r, 3);
+    $("modelFitSpearman").textContent = metrics.spearman_rho == null ? "—" : fmtN(metrics.spearman_rho, 3);
+    $("modelFitRmse").textContent = metrics.rmse == null ? "—" : `${fmtN(metrics.rmse, 2)} W`;
+    $("modelFitPairs").textContent = String(metrics.pairs ?? points.length);
+
+    const canvas = $("chartModelFit");
+    if (!canvas || !window.Chart) return;
+    const maxValue = points.length
+      ? Math.max(...points.flatMap((point) => [point.x, point.y]), 1)
+      : 1;
+    chartModelFit = new Chart(canvas, {
+      type: "scatter",
+      data: {
+        datasets: [
+          {
+            label: "PDC medido × modelo",
+            data: points,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            backgroundColor: "rgba(85,194,255,.72)",
+            borderColor: "rgba(85,194,255,.95)",
+          },
+          {
+            type: "line",
+            label: "Concordância ideal",
+            data: [{x:0,y:0},{x:maxValue,y:maxValue}],
+            borderColor: "rgba(255,209,102,.95)",
+            borderDash: [8,6],
+            borderWidth: 2,
+            pointRadius: 0,
+          },
+        ],
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {mode:"nearest", intersect:false},
+        plugins: {
+          legend: {labels:{color:"rgba(233,246,255,.95)"}},
+          tooltip: {callbacks:{label:(context)=>`Modelo=${fmtN(context.raw?.x,1)} W | Medido=${fmtN(context.raw?.y,1)} W`}},
+        },
+        scales: {
+          x: {beginAtZero:true,title:{display:true,text:"PDC modelado (W)"},ticks:{color:"rgba(233,246,255,.85)"},grid:{color:"rgba(255,255,255,.06)"}},
+          y: {beginAtZero:true,title:{display:true,text:"PDC medido (W)"},ticks:{color:"rgba(233,246,255,.85)"},grid:{color:"rgba(255,255,255,.06)"}},
+        },
+      },
+    });
+  }
+
   function buildCharts(payload){
     destroyCharts();
+    renderModelFit(payload);
     if (!window.Chart) return;
 
     const s = payload?.series || {};
@@ -2632,9 +2723,14 @@
   }
 
   function reorderPostHeatmapSections(){
+    const page = $("fddPage");
+    const modelFit = $("modelFitCard");
     const validation = $("validationSummaryCard");
-    const lastChapterCard = $("chapter08DiagnosticsCard");
-    if (validation && lastChapterCard) lastChapterCard.after(validation);
+    const explanation = $("implementationExplanationCard");
+    if (!page) return;
+    [modelFit, validation, explanation].forEach((card) => {
+      if (card) page.appendChild(card);
+    });
   }
 
   /* Séries / Aliases */
@@ -4444,6 +4540,7 @@
 
   function resetUi(){
     destroyCharts();
+    resetModelFitKpis();
     clearSelection();
 
     const c = $("hmCanvas");

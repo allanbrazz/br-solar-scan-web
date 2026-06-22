@@ -18,28 +18,28 @@
 {% block content %}
 <header class="page-head">
   <h1 class="page-title">Dados operativos</h1>
-  <p class="page-sub">Consulte o histórico salvo e gerencie a aquisição Renovigi de cada planta.</p>
+  <p class="page-sub">Consulte o histórico salvo e gerencie a aquisição Renovigi ou Growatt de cada planta.</p>
 </header>
 <section class="opdata-grid">
   {% for row in rows %}
     <article class="card glass opdata-plant">
       <div class="opdata-plant-head">
         <div><h3>{{ row.plant.nome }}</h3><small>{{ row.plant.timezone }}</small></div>
-        <span class="opdata-state{% if not row.has_renovigi_cred %} pending{% endif %}">{% if row.has_renovigi_cred %}Renovigi configurada{% else %}Credenciais pendentes{% endif %}</span>
+        <span class="opdata-state{% if not row.has_renovigi_cred and not row.has_growatt_cred %} pending{% endif %}">{% if row.has_renovigi_cred or row.has_growatt_cred %}Aquisição configurada{% else %}Credenciais pendentes{% endif %}</span>
       </div>
       <div class="opdata-stats">
         <div class="opdata-stat"><span>Registros salvos</span><strong>{{ row.records_count }}</strong></div>
         <div class="opdata-stat"><span>Último registro</span><strong>{{ row.last_ts|date:"d/m/Y H:i"|default:"-" }}</strong></div>
         <div class="opdata-stat"><span>Primeiro registro</span><strong>{{ row.first_ts|date:"d/m/Y H:i"|default:"-" }}</strong></div>
-        <div class="opdata-stat"><span>Fonte</span><strong>Renovigi / ShineMonitor</strong></div>
+        <div class="opdata-stat"><span>Fontes salvas</span><strong>{% for item in row.provider_stats %}{{ item.provedor }} ({{ item.total }}){% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</strong></div>
       </div>
       <div class="opdata-actions">
         <a class="btn btn-primary" href="{% url 'opdata_list' row.plant.pk %}">Consultar dados</a>
         {% if row.has_renovigi_cred %}
-          <a class="btn btn-secondary" href="{% url 'renovigi_console' row.plant.pk %}">Adquirir dados</a>
-        {% else %}
-          <a class="btn btn-secondary" href="{% url 'plants:cred_save' row.plant.pk %}">Configurar credenciais</a>
+          <a class="btn btn-secondary" href="{% url 'renovigi_console' row.plant.pk %}">Adquirir Renovigi</a>
         {% endif %}
+        {% if row.has_growatt_cred %}<a class="btn btn-secondary" href="{% url 'plants:growatt_console' row.plant.pk %}">Adquirir Growatt</a>{% endif %}
+        {% if not row.has_renovigi_cred and not row.has_growatt_cred %}<a class="btn btn-secondary" href="{% url 'plants:detail' row.plant.pk %}#credentials">Configurar credenciais</a>{% endif %}
       </div>
     </article>
   {% empty %}

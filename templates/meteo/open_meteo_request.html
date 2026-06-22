@@ -40,7 +40,7 @@
 <section class="meteo-layout">
   <article class="card glass meteo-card">
     <h3>Importar ou atualizar</h3>
-    <form method="post" class="meteo-form" id="meteoForm">
+    <form method="post" action="{% url 'open_meteo_view' %}" class="meteo-form" id="meteoForm">
       {% csrf_token %}
       {% if form.non_field_errors %}<div class="flash flash-error">{{ form.non_field_errors }}</div>{% endif %}
 
@@ -246,7 +246,9 @@
       end_date: document.getElementById("id_end_date")?.value || "",
       interval_min: document.getElementById("id_interval_min")?.value || "60",
     });
-    window.location.href = `${form.action || window.location.pathname}?${params.toString()}`;
+    const selectionUrl = new URL("{% url 'open_meteo_view' %}", window.location.origin);
+    selectionUrl.search = params.toString();
+    window.location.assign(selectionUrl.toString());
   });
 </script>
 {% endblock %}

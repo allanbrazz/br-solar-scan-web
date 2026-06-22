@@ -126,7 +126,15 @@ def merge_run_view(request: HttpRequest) -> HttpResponse:
             want_hourly = bool(form.cleaned_data.get("want_hourly"))
             source_oper = (form.cleaned_data.get("source_oper") or "SHINEMONITOR").strip()
             source_meteo = (form.cleaned_data.get("source_meteo") or "OPENMETEO").strip()
-            fetch_cfg = FetchConfig(meteo_source=source_meteo)
+            provider_by_source = {
+                "SHINEMONITOR": "RENOVIGI",
+                "RENOVIGI": "RENOVIGI",
+                "GROWATT": "GROWATT",
+            }
+            fetch_cfg = FetchConfig(
+                meteo_source=source_meteo,
+                inverter_provider=provider_by_source.get(source_oper.upper()),
+            )
 
             time_shift_mode = (form.cleaned_data.get("time_shift_mode") or "none").strip().lower()
             time_shift_target = (form.cleaned_data.get("time_shift_target") or "operational").strip().lower()

@@ -332,6 +332,13 @@ RENOVIGI_PAGE_SIZE = env_int("RENOVIGI_PAGE_SIZE", 200)
 RENOVIGI_SLEEP_SEC = env_float("RENOVIGI_SLEEP_SEC", 0.3)
 RENOVIGI_MAX_RETRIES = env_int("RENOVIGI_MAX_RETRIES", 5)
 
+# Growatt / ShinePhone. O login mobile e a Open API usam hosts distintos.
+GROWATT_LOGIN_BASE_URL = env_str("GROWATT_LOGIN_BASE_URL", "https://server-api.growatt.com/")
+GROWATT_OPENAPI_BASE_URL = env_str("GROWATT_OPENAPI_BASE_URL", "https://openapi.growatt.com/v1/")
+GROWATT_HTTP_TIMEOUT = env_float("GROWATT_HTTP_TIMEOUT", 45.0)
+GROWATT_MAX_RETRIES = env_int("GROWATT_MAX_RETRIES", 4)
+GROWATT_RETRY_BASE_SEC = env_float("GROWATT_RETRY_BASE_SEC", 1.0)
+
 # Aliases para compatibilidade com código legado
 SHINEMONITOR_BASE_URL = RENOVIGI_BASE_URL
 SHINEMONITOR_HTTP_TIMEOUT = RENOVIGI_HTTP_TIMEOUT

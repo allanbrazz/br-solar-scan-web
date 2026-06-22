@@ -34,7 +34,8 @@ from core.views.plantas import (
     PlantCablesEditView
 )
 from core.views.growatt import (
-    PlantGrowattDebugView, 
+    GrowattConsoleView,
+    PlantGrowattDebugView,
     PlantGrowattDailyJsonView,
  )
 from core.views.renovigi import (
@@ -93,6 +94,7 @@ plants_patterns = [
     path("<int:pk>/detalhes/", PlantDetailsEditView.as_view(), name="details_edit"),
     path("<int:pk>/cabos/",    PlantCablesEditView.as_view(),  name="cables_edit"),
     path("<int:pk>/credenciais/", PlantCredSaveView.as_view(), name="cred_save"),
+    path("<int:pk>/growatt/console/", GrowattConsoleView.as_view(), name="growatt_console"),
     # API Growatt read-only
     # === GROWATT ===
     path("<int:pk>/growatt/debug/", PlantGrowattDebugView.as_view(),

@@ -602,11 +602,16 @@ class MergeRunForm(forms.Form):
     )
 
     # Se quiser expor, mantenha; caso contrário, fixe na view.
-    source_oper = forms.CharField(
-        label="Fonte operativa (tag)",
-        required=False,
+    source_oper = forms.ChoiceField(
+        label="Fonte dos dados do inversor",
+        required=True,
         initial="SHINEMONITOR",
-        widget=forms.TextInput(attrs={"class": "form-control"}),
+        choices=(
+            ("SHINEMONITOR", "Renovigi / ShineMonitor"),
+            ("GROWATT", "Growatt / ShinePhone"),
+            ("MANUAL", "Manual / outros"),
+        ),
+        widget=forms.Select(attrs={"class": "form-control"}),
     )
     source_meteo = forms.ChoiceField(
         label="Fonte meteo (tag)",

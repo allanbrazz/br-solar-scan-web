@@ -294,6 +294,31 @@ class ManualAndAuditViewTests(TestCase):
         self.assertContains(response, "Manual de utilizacao")
         self.assertContains(response, "Funcionalidades principais")
 
+    def test_meteorology_plant_selector_uses_stable_route_and_switches_owned_plant(self):
+        selected = PVPlant.objects.create(
+            owner=self.user,
+            nome="Segunda planta meteorologica",
+            latitude=-31.0,
+            longitude=-52.0,
+            timezone="America/Sao_Paulo",
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("open_meteo_view"),
+            {
+                "plant": selected.pk,
+                "start_date": "2026-06-01",
+                "end_date": "2026-06-02",
+                "interval_min": "60",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["meteo_summary"]["plant"], selected)
+        self.assertContains(response, f'action="{reverse("open_meteo_view")}"')
+        self.assertContains(response, "selectionUrl.search = params.toString()")
+
     def test_audit_list_respects_plant_access_and_exports_csv(self):
         self.client.force_login(self.user)
         MeteoRecord.objects.create(
@@ -791,6 +816,11 @@ class RenovigiWorkflowTests(TestCase):
         self.assertContains(response, "basicParamHelpData")
         self.assertContains(response, "help-dot")
         self.assertContains(response, "chartDetailAcVoltageDay")
+        self.assertContains(response, "modelFitCard")
+        self.assertContains(response, "chartModelFit")
+        self.assertContains(response, "modelFitPearson")
+        self.assertContains(response, "implementationExplanationCard")
+        self.assertContains(response, "[modelFit, validation, explanation]")
         self.assertContains(response, "Frequência da rede [Hz]")
         self.assertContains(response, "Código do alarme")
         self.assertContains(response, "Score do evento residual")
@@ -825,6 +855,10 @@ class RenovigiWorkflowTests(TestCase):
         self.assertIn(60.03, payload["series"]["freq_hz"])
         self.assertIn(7, payload["series"]["alarm_code"])
         self.assertIn(2, payload["series"]["alarm_sev"])
+        self.assertIn("model_fit", payload)
+        self.assertIn("p_dc", payload["model_fit"])
+        self.assertEqual(payload["model_fit"]["p_dc"]["pairs"], 8)
+        self.assertIsNotNone(payload["model_fit"]["p_dc"]["rmse"])
 
         first_dump = next(iter(payload["dump_by_tkey"].values()))
         self.assertEqual(first_dump["chosen_total"]["alarm_code"], 7)
@@ -982,3 +1016,286 @@ class RenovigiWorkflowTests(TestCase):
 
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertGreater(len(pdf), 4_000)
+
+
+class GrowattWorkflowTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="growatt-owner", password="Strong-test-pass-7291"
+        )
+        self.plant = PVPlant.objects.create(
+            owner=self.user,
+            nome="Planta Growatt",
+            latitude=-34.9,
+            longitude=-56.2,
+            timezone="America/Montevideo",
+        )
+        self.client.force_login(self.user)
+
+    def _credential(self):
+        return PlantMonitoringCredential.objects.create(
+            plant=self.plant,
+            provedor="GROWATT",
+            username="shine-user",
+            password="saved-password",
+            growatt_plant_id="10225508",
+            growatt_device_sn="INV-TEST-001",
+            growatt_device_type="1",
+            growatt_datalogger_sn="DL-TEST-001",
+        )
+
+    def test_saving_growatt_credentials_redirects_to_console(self):
+        response = self.client.post(
+            reverse("plants:cred_save", kwargs={"pk": self.plant.pk}),
+            {
+                "provedor": "GROWATT",
+                "username": "shine-user",
+                "password": "saved-password",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("plants:growatt_console", kwargs={"pk": self.plant.pk}),
+        )
+
+    def test_growatt_console_and_operational_index_are_integrated(self):
+        self._credential()
+
+        detail = self.client.get(reverse("plants:detail", kwargs={"pk": self.plant.pk}))
+        console = self.client.get(
+            reverse("plants:growatt_console", kwargs={"pk": self.plant.pk})
+        )
+        index = self.client.get(reverse("opdata_index"))
+
+        self.assertContains(detail, "Adquirir dados (Growatt)")
+        self.assertContains(console, "Growatt / ShinePhone")
+        self.assertContains(index, "Adquirir Growatt")
+
+    def test_growatt_client_normalizes_discovery_and_paginates_history(self):
+        from core.services.dados_inversor.growatt_client import GrowattClient
+
+        class FakeLegacyApi:
+            def __init__(self, **kwargs):
+                self.server_url = ""
+
+            def login(self, username, password):
+                return {
+                    "success": True,
+                    "userId": "user-1",
+                    "user": {"token": "temporary-token", "timeZone": 8},
+                }
+
+            def plant_list(self, user_id):
+                return {
+                    "success": True,
+                    "data": [{"plantId": "plant-1", "plantName": "Usina A"}],
+                }
+
+            def device_list(self, plant_id):
+                return [
+                    {
+                        "deviceSn": "INV-1",
+                        "datalogSn": "DL-1",
+                        "deviceType": "inverter",
+                        "type": "1",
+                        "deviceStatus": 1,
+                    }
+                ]
+
+        class FakeResponse:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def json(self):
+                return self.payload
+
+        class FakeHttpSession:
+            def __init__(self):
+                self.calls = []
+
+            def request(self, method, url, params=None, data=None, timeout=None):
+                request_data = params or data
+                self.calls.append((method, url, request_data, timeout))
+                page = int(request_data["page"])
+                if page == 1:
+                    rows = [
+                        {"time": f"2026-06-21 10:{index:02d}:00", "power": index}
+                        for index in range(100)
+                    ]
+                else:
+                    rows = [{"time": "2026-06-21 08:00:00", "power": 101}]
+                return FakeResponse(
+                    {
+                        "error_code": 0,
+                        "error_msg": "",
+                        "data": {
+                            "count": 101,
+                            "datas": rows,
+                            "datalogger_sn": "DL-1",
+                        },
+                    }
+                )
+
+        fake_http = FakeHttpSession()
+
+        class FakeOpenApi:
+            def __init__(self, token):
+                self.token = token
+                self.api_url = ""
+                self.session = fake_http
+
+            def _get_url(self, path):
+                return f"{self.api_url}{path}"
+
+        client = GrowattClient(
+            "user",
+            "password",
+            login_base_url="https://login.example/",
+            openapi_base_url="https://api.example/v1/",
+            api_factory=FakeLegacyApi,
+            openapi_factory=FakeOpenApi,
+        )
+
+        self.assertEqual(client.list_plants()[0]["plant_id"], "plant-1")
+        self.assertEqual(client.list_devices("plant-1")[0]["device_sn"], "INV-1")
+        result = client.fetch_history(
+            device_sn="INV-1",
+            device_type="1",
+            start_day=date(2026, 6, 21),
+            end_day=date(2026, 6, 21),
+        )
+
+        self.assertEqual(result["meta"]["pages"], 2)
+        self.assertEqual(result["meta"]["datalogger_sn"], "DL-1")
+        self.assertEqual(len(result["rows"]), 101)
+        self.assertEqual(fake_http.calls[0][0], "GET")
+        self.assertIn("device/inverter/data", fake_http.calls[0][1])
+        self.assertEqual(client.api.server_url, "https://login.example/")
+
+    def test_growatt_sync_is_idempotent_and_payload_feeds_merge_contract(self):
+        from core.services.dados_inversor.growatt_ingest import sync_growatt_operational_data
+        from core.services.series_juntar.timeseries_io import FetchConfig, fetch_inverter_df
+
+        credential = self._credential()
+
+        class FakeClient:
+            def fetch_history(self, **kwargs):
+                return {
+                    "rows": [
+                        {
+                            "time": "2026-06-21 12:00:00",
+                            "power": 3600,
+                            "ppv": 3900,
+                            "vpv1": 320,
+                            "ipv1": 6,
+                            "vpv2": 310,
+                            "ipv2": 6,
+                            "vac1": 228,
+                            "vac2": 229,
+                            "vac3": 227,
+                            "iac1": 15.6,
+                            "iac2": 15.5,
+                            "iac3": 15.7,
+                            "fac": 60.02,
+                            "faultCode1": 0,
+                            "warnCode": 0,
+                            "status": 1,
+                        },
+                        {"time": "2026-06-21 12:05:00", "power": 3700, "fac": 60.01},
+                    ],
+                    "meta": {"datalogger_sn": "DL-TEST-001", "pages": 1, "chunks": 1},
+                }
+
+        kwargs = {
+            "plant": self.plant,
+            "cred": credential,
+            "username": credential.username,
+            "password": credential.password,
+            "start_day": date(2026, 6, 21),
+            "end_day": date(2026, 6, 21),
+            "client": FakeClient(),
+        }
+        first = sync_growatt_operational_data(**kwargs)
+        second = sync_growatt_operational_data(**kwargs)
+
+        self.assertEqual(first["inserted"], 2)
+        self.assertEqual(second["inserted"], 0)
+        self.assertEqual(second["updated"], 2)
+        self.assertEqual(
+            InverterOperationalData.objects.filter(plant=self.plant, provedor="GROWATT").count(),
+            2,
+        )
+
+        start = datetime(2026, 6, 21, 11, 55, tzinfo=dt_timezone.utc)
+        end = datetime(2026, 6, 21, 12, 10, tzinfo=dt_timezone.utc)
+        frame = fetch_inverter_df(
+            plant=self.plant,
+            dt_start_utc=start,
+            dt_end_utc=end,
+            cfg=FetchConfig(inverter_provider="GROWATT"),
+        )
+        self.assertEqual(len(frame), 2)
+        self.assertAlmostEqual(frame.iloc[0]["p_ac_w"], 3600.0)
+        self.assertAlmostEqual(frame.iloc[0]["p_dc_w"], 3900.0)
+        self.assertAlmostEqual(frame.iloc[0]["freq_hz"], 60.02)
+        self.assertEqual(frame.iloc[0]["alarm_code"], 0.0)
+
+    def test_growatt_payload_extractor_translates_alarm_and_three_phase_values(self):
+        from core.services.series_juntar.timeseries_io import _extract_payload
+
+        metrics = _extract_payload(
+            "GROWATT",
+            {
+                "power": 4200,
+                "ppv": 4550,
+                "vpv1": 320,
+                "ipv1": 7,
+                "vpv2": 310,
+                "ipv2": 7,
+                "vac1": 228,
+                "vac2": 229,
+                "vac3": 227,
+                "iac1": 18,
+                "iac2": 18.2,
+                "iac3": 17.8,
+                "fac": 59.99,
+                "faultCode1": 23,
+                "status": 3,
+            },
+        )
+
+        self.assertEqual(metrics["p_ac_w"], 4200.0)
+        self.assertAlmostEqual(metrics["v_ac_v"], 228.0)
+        self.assertAlmostEqual(metrics["i_ac_a"], 18.0)
+        self.assertAlmostEqual(metrics["freq_hz"], 59.99)
+        self.assertEqual(metrics["alarm_code"], 23.0)
+        self.assertEqual(metrics["alarm_sev"], 2.0)
+
+    def test_operational_list_filters_growatt_provider(self):
+        now = timezone.now()
+        common = {
+            "plant": self.plant,
+            "pn": "PN",
+            "devcode": "TYPE_1",
+            "devaddr": 1,
+            "sn": "INV",
+            "ts_utc": now,
+        }
+        InverterOperationalData.objects.create(
+            **common, provedor="GROWATT", payload={"source": "growatt"}
+        )
+        InverterOperationalData.objects.create(
+            **{**common, "sn": "REN", "ts_utc": now + timedelta(seconds=1)},
+            provedor="RENOVIGI",
+            payload={"source": "renovigi"},
+        )
+
+        response = self.client.get(
+            reverse("opdata_list", kwargs={"pk": self.plant.pk}),
+            {"provider": "GROWATT"},
+        )
+
+        self.assertEqual(response.context["filtered_count"], 1)
+        self.assertContains(response, "growatt")
+        self.assertNotContains(response, "renovigi")

@@ -51,6 +51,7 @@ class FetchConfig:
     inv_ts_field: str = "ts_utc"
     inv_payload_field: str = "payload"
     inv_provider_field: str = "provedor"
+    inverter_provider: Optional[str] = None
 
     # Chave de tempo dentro do payload
     inv_payload_time_key: str = "Data E Hora"
@@ -275,6 +276,95 @@ def _extract_renovigi(payload: Dict[str, Any]) -> Dict[str, float]:
     }
 
 
+def _extract_growatt(payload: Dict[str, Any]) -> Dict[str, float]:
+    """Normaliza o historico Growatt Open API v1 para o contrato do merge/FDD."""
+    pac = _parse_float(_payload_value(payload, ("power", "pac", "p_ac_w")))
+    pdc_total = _parse_float(_payload_value(payload, ("ppv", "pdc", "p_dc_w")))
+
+    mppt_v = [
+        _parse_float(_payload_value(payload, (f"vpv{i}", f"Vpv{i}")))
+        for i in range(1, 5)
+    ]
+    mppt_i = [
+        _parse_float(_payload_value(payload, (f"ipv{i}", f"Ipv{i}")))
+        for i in range(1, 5)
+    ]
+    mppt_p = []
+    for index, (voltage, current) in enumerate(zip(mppt_v, mppt_i), start=1):
+        explicit = _parse_float(_payload_value(payload, (f"ppv{index}", f"Ppv{index}")))
+        if math.isfinite(explicit):
+            mppt_p.append(explicit)
+        elif math.isfinite(voltage) and math.isfinite(current) and current >= 0:
+            mppt_p.append(float(voltage * current))
+        else:
+            mppt_p.append(float("nan"))
+    if not math.isfinite(pdc_total):
+        finite_powers = [value for value in mppt_p if math.isfinite(value)]
+        pdc_total = float(sum(finite_powers)) if finite_powers else float("nan")
+
+    vdc, idc = _weighted_vdc(mppt_v, mppt_i)
+    vac = _mean_nonzero(
+        [
+            _parse_float(_payload_value(payload, ("vac1", "vacr"))),
+            _parse_float(_payload_value(payload, ("vac2", "vacs"))),
+            _parse_float(_payload_value(payload, ("vac3", "vact"))),
+        ],
+        min_abs=5.0,
+    )
+    iac = _mean_nonzero(
+        [
+            _parse_float(_payload_value(payload, ("iac1", "iacr"))),
+            _parse_float(_payload_value(payload, ("iac2", "iacs"))),
+            _parse_float(_payload_value(payload, ("iac3", "iact"))),
+        ],
+        min_abs=0.01,
+    )
+    freq_hz = _parse_float(_payload_value(payload, ("fac", "frequency", "freq_hz")))
+
+    fault_values = [
+        _parse_int_or_none(_payload_value(payload, (key,)))
+        for key in ("faultCode1", "faultCode2", "faultType", "faultValue")
+    ]
+    warning_values = [
+        _parse_int_or_none(_payload_value(payload, (key,)))
+        for key in ("warnCode", "warnCode1", "WarnBit", "warningValue1", "warningValue2", "warningValue3")
+    ]
+    fault_code = next((value for value in fault_values if value not in (None, 0)), None)
+    warning_code = next((value for value in warning_values if value not in (None, 0)), None)
+    any_alarm_field = any(value is not None for value in fault_values + warning_values)
+    alarm_code = fault_code if fault_code is not None else warning_code
+    if alarm_code is None and any_alarm_field:
+        alarm_code = 0
+
+    status = _parse_int_or_none(_payload_value(payload, ("status",)))
+    if fault_code is not None or status == 3:
+        alarm_sev = 2
+    elif warning_code is not None:
+        alarm_sev = 1
+    elif alarm_code is not None:
+        alarm_sev = 0
+    else:
+        alarm_sev = None
+
+    return {
+        "p_ac_w": pac,
+        "p_dc_w": pdc_total,
+        "v_dc_v": vdc,
+        "i_dc_a": idc,
+        "v_ac_v": vac,
+        "i_ac_a": iac,
+        "freq_hz": freq_hz,
+        "alarm_code": float("nan") if alarm_code is None else float(alarm_code),
+        "alarm_sev": float("nan") if alarm_sev is None else float(alarm_sev),
+        "mppt1_v_dc_v": mppt_v[0], "mppt2_v_dc_v": mppt_v[1],
+        "mppt3_v_dc_v": mppt_v[2], "mppt4_v_dc_v": mppt_v[3],
+        "mppt1_i_dc_a": mppt_i[0], "mppt2_i_dc_a": mppt_i[1],
+        "mppt3_i_dc_a": mppt_i[2], "mppt4_i_dc_a": mppt_i[3],
+        "mppt1_p_dc_w": mppt_p[0], "mppt2_p_dc_w": mppt_p[1],
+        "mppt3_p_dc_w": mppt_p[2], "mppt4_p_dc_w": mppt_p[3],
+    }
+
+
 def _extract_generic(payload: Dict[str, Any]) -> Dict[str, float]:
     nan = float("nan")
     return {
@@ -297,6 +387,8 @@ def _extract_payload(provider: str, payload: Dict[str, Any]) -> Dict[str, float]
     prov = (provider or "").upper()
     if prov == "RENOVIGI":
         return _extract_renovigi(payload or {})
+    if prov == "GROWATT":
+        return _extract_growatt(payload or {})
     return _extract_generic(payload or {})
 
 
@@ -410,6 +502,8 @@ def fetch_inverter_df(
         f"{cfg.inv_ts_field}__gte": dt0,
         f"{cfg.inv_ts_field}__lt": dt1,
     }
+    if cfg.inverter_provider:
+        filters[cfg.inv_provider_field] = str(cfg.inverter_provider).upper()
 
     raw_fields = [cfg.inv_ts_field, cfg.inv_provider_field, cfg.inv_payload_field]
     qs = Model.objects.filter(**filters).values(*raw_fields).order_by(cfg.inv_ts_field)

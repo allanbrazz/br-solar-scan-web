@@ -151,6 +151,15 @@
             Configurar Renovigi
           </a>
         {% endif %}
+        {% if has_growatt_cred %}
+          <a class="btn btn-primary" href="{{ growatt_console_url }}">
+            Adquirir dados (Growatt)
+          </a>
+        {% else %}
+          <a class="btn btn-secondary" href="#credentials">
+            Configurar Growatt
+          </a>
+        {% endif %}
         <a class="btn btn-primary" href="{% url 'opdata_list' p.pk %}">
           Ver dados operativos salvos
         </a>
@@ -168,7 +177,7 @@
     </div>
 
     <div class="text-muted small" style="margin-top:6px;">
-      Para habilitar “Dados operativos (Renovigi)”, salve uma credencial com provedor <strong>RENOVIGI</strong> e usuário/senha abaixo.
+      Selecione <strong>RENOVIGI</strong> para contas ShineMonitor ou <strong>GROWATT</strong> para contas ShinePhone. Depois de salvar, use a console do provedor para descobrir e vincular o inversor.
     </div>
 
     <form method="post" action="{% url 'plants:cred_save' p.pk %}" class="mt-2" novalidate>

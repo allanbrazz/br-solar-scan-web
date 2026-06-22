@@ -128,6 +128,11 @@ class PlantDetailView(LoginRequiredMixin, DetailView):
             provedor="RENOVIGI",
         ).exists()
         ctx["renovigi_console_url"] = reverse("renovigi_console", kwargs={"pk": p.pk})
+        ctx["has_growatt_cred"] = PlantMonitoringCredential.objects.filter(
+            plant=p,
+            provedor="GROWATT",
+        ).exists()
+        ctx["growatt_console_url"] = reverse("plants:growatt_console", kwargs={"pk": p.pk})
 
         return ctx
 
@@ -305,6 +310,8 @@ class PlantCredSaveView(LoginRequiredMixin, View):
 
             if obj.provedor == "RENOVIGI":
                 return redirect("renovigi_console", pk=plant.pk)
+            if obj.provedor == "GROWATT":
+                return redirect("plants:growatt_console", pk=plant.pk)
 
             return redirect("plants:detail", pk=plant.pk)
 

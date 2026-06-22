@@ -411,6 +411,14 @@ class PlantMonitoringCredential(models.Model):
     shinemonitor_plants_cache = models.JSONField(blank=True, default=list)   # list[dict]
     shinemonitor_devices_cache = models.JSONField(blank=True, default=list)  # list[dict]
 
+    # Growatt / ShinePhone (preenchido pelo discovery da conta)
+    growatt_plant_id = models.CharField(max_length=80, blank=True, default="")
+    growatt_device_sn = models.CharField(max_length=120, blank=True, default="")
+    growatt_device_type = models.CharField(max_length=20, blank=True, default="")
+    growatt_datalogger_sn = models.CharField(max_length=120, blank=True, default="")
+    growatt_plants_cache = models.JSONField(blank=True, default=list)
+    growatt_devices_cache = models.JSONField(blank=True, default=list)
+
     class Meta:
         verbose_name = "Credencial de monitoramento"
         verbose_name_plural = "Credenciais de monitoramento"

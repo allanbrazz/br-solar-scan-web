@@ -437,12 +437,24 @@ class OperationalDataIndexView(LoginRequiredMixin, View):
                 .annotate(total=Count("id"), first_ts=Min("ts_utc"), last_ts=Max("ts_utc"))
             )
         }
+        provider_stats = {}
+        for item in (
+            InverterOperationalData.objects.filter(plant__in=plants)
+            .values("plant_id", "provedor")
+            .annotate(total=Count("id"))
+            .order_by("plant_id", "provedor")
+        ):
+            provider_stats.setdefault(item["plant_id"], []).append(item)
         rows = [
             {
                 "plant": plant,
                 "has_renovigi_cred": any(
                     cred.provedor == "RENOVIGI" for cred in plant.credentials.all()
                 ),
+                "has_growatt_cred": any(
+                    cred.provedor == "GROWATT" for cred in plant.credentials.all()
+                ),
+                "provider_stats": provider_stats.get(plant.pk, []),
                 "records_count": stats.get(plant.pk, {}).get("total", 0),
                 "first_ts": stats.get(plant.pk, {}).get("first_ts"),
                 "last_ts": stats.get(plant.pk, {}).get("last_ts"),
@@ -475,18 +487,23 @@ class PlantOperationalDataListView(LoginRequiredMixin, View):
 
         pn = (request.GET.get("pn") or "").strip()
         sn = (request.GET.get("sn") or "").strip()
+        provider = (request.GET.get("provider") or "").strip().upper()
 
         qs = (
             InverterOperationalData.objects
             .filter(plant=plant, ts_utc__gte=start_dt, ts_utc__lt=end_dt)
             .order_by("-ts_utc")
-            .only("id", "ts_utc", "pn", "devcode", "devaddr", "sn", "payload")
+            .only("id", "ts_utc", "provedor", "pn", "devcode", "devaddr", "sn", "payload")
         )
 
         if pn:
             qs = qs.filter(pn=pn)
         if sn:
             qs = qs.filter(sn=sn)
+        if provider in {"RENOVIGI", "GROWATT"}:
+            qs = qs.filter(provedor=provider)
+        else:
+            provider = ""
 
         try:
             page_size = int(request.GET.get("page_size") or 200)
@@ -513,6 +530,7 @@ class PlantOperationalDataListView(LoginRequiredMixin, View):
             "end": end_d.isoformat(),
             "pn": pn,
             "sn": sn,
+            "provider": provider,
             "page_size": page_size,
             "devices": devices,
             "filtered_count": paginator.count,
