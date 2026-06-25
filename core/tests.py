@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta, timezone as dt_timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pandas as pd
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core import mail
@@ -10,10 +11,13 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.forms import MeteoRequestForm
+from core.services.dados_satelite.cams import CamsFetchResult, ingest_cams_range, parse_cams_csv_bytes
 from core.services.fdd.dashboard_runtime import get_mismatch_backend_param_defaults
 from core.services.fdd.param_catalog import DEFAULT_CONFIG_NAME
 from core.services.fdd.report_pdf import build_mismatch_pdf_report
 from core.services.pvmodule.villalva import VillalvaInput, extract_villalva_parameters
+from core.services.series_juntar.build_merged_dataset import build_plant_merged_dataset
+from core.services.series_juntar.timeseries_io import FetchConfig
 from core.views.dashboard import paired_model_metrics
 from core.models import (
     AccountNotification,
@@ -467,6 +471,114 @@ class ManualAndAuditViewTests(TestCase):
         self.assertEqual(records.first().interval_min, 5)
         self.assertEqual(records.first().gti, 760)
 
+    def test_cams_csv_parser_converts_irradiation_to_bucket_average(self):
+        csv_bytes = (
+            b"title;CAMS Radiation Service\n"
+            b"Observation period;GHI;BNI;DHI\n"
+            b"2025-01-01T12:00:00/2025-01-01T12:15:00;200;180;20\n"
+        )
+
+        result = parse_cams_csv_bytes(csv_bytes, interval_min=15)
+        row = result.df.iloc[0]
+
+        self.assertEqual(row["ts_utc"].to_pydatetime(), datetime(2025, 1, 1, 12, 0, tzinfo=dt_timezone.utc))
+        self.assertEqual(row["ghi"], 800)
+        self.assertEqual(row["dni"], 720)
+        self.assertEqual(row["dhi"], 80)
+        self.assertEqual(result.meta["source_time_label_original"], "period_end")
+        self.assertEqual(result.meta["stored_time_label"], "period_start")
+
+    def test_cams_ingest_persists_radiation_and_openmeteo_temperature(self):
+        df = pd.DataFrame(
+            {
+                "ts_utc": [pd.Timestamp("2025-01-01T12:00:00Z")],
+                "ghi": [800.0],
+                "dni": [720.0],
+                "dhi": [80.0],
+                "gti": [pd.NA],
+                "temp_air": [pd.NA],
+                "wind_speed": [pd.NA],
+                "rh": [pd.NA],
+                "pressure": [pd.NA],
+                "interval_min": [15],
+            }
+        )
+        df_with_temp = df.copy()
+        df_with_temp["temp_air"] = 25.5
+
+        with patch("core.services.dados_satelite.cams.fetch_cams_radiation") as fetch_mock, patch(
+            "core.services.dados_satelite.cams._merge_openmeteo_temperature"
+        ) as temp_mock:
+            fetch_mock.return_value = CamsFetchResult(df=df, meta={"inputs": {"sky_type": "observed_cloud"}})
+            temp_mock.return_value = (df_with_temp, {"matched_temperature_rows": 1})
+
+            count, meta = ingest_cams_range(
+                plant=self.plant,
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 1),
+                interval_min=15,
+                api_key="test-token",
+                include_openmeteo_temperature=True,
+            )
+
+        self.assertEqual(count, 1)
+        self.assertEqual(meta["temperature_source"], "OPENMETEO")
+        record = MeteoRecord.objects.get(plant=self.plant, source=MeteoSource.CAMS)
+        self.assertEqual(record.ghi, 800)
+        self.assertEqual(record.temp_air, 25.5)
+        self.assertIn("OMTemp", record.dataset_model)
+
+    def test_cams_records_merge_with_inverter_data(self):
+        ts = datetime(2025, 1, 1, 12, 0, tzinfo=dt_timezone.utc)
+        MeteoRecord.objects.create(
+            plant=self.plant,
+            source=MeteoSource.CAMS,
+            dataset_model="CAMS_observed_cloud_15min+OMTemp_best_match",
+            data_typology="REANALYSIS_MODELED",
+            ts_utc=ts,
+            interval_min=15,
+            ghi=800,
+            dni=720,
+            dhi=80,
+            temp_air=25,
+        )
+        InverterOperationalData.objects.create(
+            plant=self.plant,
+            provedor="GROWATT",
+            pn="growatt",
+            devcode="device",
+            devaddr=1,
+            sn="SN123",
+            ts_utc=ts,
+            payload={
+                "Data E Hora": "2025-01-01T12:00:00",
+                "power": 1000,
+                "ppv1": 1100,
+                "vpv1": 500,
+                "ipv1": 2.2,
+                "vac1": 220,
+                "iac1": 4.5,
+                "fac": 60,
+            },
+        )
+
+        run = build_plant_merged_dataset(
+            plant=self.plant,
+            dt_start_utc=ts,
+            dt_end_utc=ts + timedelta(minutes=15),
+            want_hourly=False,
+            fetch_cfg=FetchConfig(meteo_source=MeteoSource.CAMS, inverter_provider="GROWATT"),
+            persist=True,
+            source_oper="GROWATT",
+            source_meteo=MeteoSource.CAMS,
+        )
+
+        self.assertEqual(run.stats["merged_rows_15"], 1)
+        self.assertEqual(run.df15.iloc[0]["ghi"], 800)
+        self.assertEqual(run.df15.iloc[0]["temp_air"], 25)
+        self.assertFalse(bool(run.df15.iloc[0]["flag_meteo_missing"]))
+        self.assertTrue(PVPlantMergedRecord15m.objects.filter(plant=self.plant, source_meteo=MeteoSource.CAMS).exists())
+
     def test_merge_uses_selected_user_csv_meteo_source(self):
         self.client.force_login(self.user)
         with patch("core.views.juntar.build_plant_merged_dataset") as build_mock:
@@ -490,6 +602,30 @@ class ManualAndAuditViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(build_mock.called)
         self.assertEqual(build_mock.call_args.kwargs["fetch_cfg"].meteo_source, MeteoSource.USER_CSV)
+
+    def test_merge_uses_selected_cams_meteo_source(self):
+        self.client.force_login(self.user)
+        with patch("core.views.juntar.build_plant_merged_dataset") as build_mock:
+            build_mock.return_value = SimpleNamespace(stats={}, df15=SimpleNamespace(empty=True), df_hour=SimpleNamespace(empty=True))
+            response = self.client.post(
+                reverse("merge_run_view"),
+                {
+                    "plant": self.plant.pk,
+                    "start_date": "2025-01-01",
+                    "end_date": "2025-01-01",
+                    "source_oper": "SHINEMONITOR",
+                    "source_meteo": MeteoSource.CAMS,
+                    "time_shift_mode": "none",
+                    "time_shift_target": "operational",
+                    "time_shift_manual_minutes": "0",
+                    "time_shift_max_abs_minutes": "120",
+                    "time_shift_step_minutes": "15",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(build_mock.called)
+        self.assertEqual(build_mock.call_args.kwargs["fetch_cfg"].meteo_source, MeteoSource.CAMS)
 
 
 @override_settings(

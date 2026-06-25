@@ -324,6 +324,20 @@ NREL_AFFILIATION = env_str("NREL_AFFILIATION", "UTEC")
 NREL_REASON = env_str("NREL_REASON", "research")
 NREL_MAILING_LIST = env_str("NREL_MAILING_LIST", "false")
 
+# Copernicus ADS / CAMS Solar Radiation Service
+CAMS_ADS_RETRIEVE_BASE_URL = env_str(
+    "CAMS_ADS_RETRIEVE_BASE_URL",
+    "https://ads.atmosphere.copernicus.eu/api/retrieve/v1",
+)
+CAMS_ADS_API_KEY = (
+    env_str("CAMS_ADS_API_KEY")
+    or env_str("ADS_API_KEY")
+    or env_str("CDSAPI_KEY", "")
+)
+CAMS_HTTP_TIMEOUT = env_float("CAMS_HTTP_TIMEOUT", 60.0)
+CAMS_POLL_INTERVAL_SEC = env_float("CAMS_POLL_INTERVAL_SEC", 5.0)
+CAMS_MAX_WAIT_SEC = env_float("CAMS_MAX_WAIT_SEC", 900.0)
+
 # Renovigi / ShineMonitor
 RENOVIGI_BASE_URL = env_str("RENOVIGI_BASE_URL", "https://web.shinemonitor.com/public/")
 RENOVIGI_COMPANY_KEY = env_str("RENOVIGI_COMPANY_KEY", "bnrl_frRFjEz8Mkn")

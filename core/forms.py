@@ -694,7 +694,13 @@ class MergeRunForm(forms.Form):
             .order_by("source")
         )
         source_values = []
-        for value in [MeteoSource.OPENMETEO.value, MeteoSource.USER_CSV.value, MeteoSource.NSRDB.value, *known_sources]:
+        for value in [
+            MeteoSource.OPENMETEO.value,
+            MeteoSource.CAMS.value,
+            MeteoSource.USER_CSV.value,
+            MeteoSource.NSRDB.value,
+            *known_sources,
+        ]:
             value = str(value)
             if value and value not in source_values:
                 source_values.append(value)
@@ -765,8 +771,30 @@ OPENMETEO_MODEL_CHOICES = [
     ("cerra", "CERRA"),
 ]
 
+METEO_API_SOURCE_CHOICES = [
+    (MeteoSource.OPENMETEO, "Open-Meteo"),
+    (MeteoSource.CAMS, "CAMS Solar Radiation Service"),
+]
+
+CAMS_SKY_TYPE_CHOICES = [
+    ("observed_cloud", "Céu real / observado por satélite"),
+    ("clear", "Céu claro / McClear"),
+]
+
+CAMS_TIME_REFERENCE_CHOICES = [
+    ("universal_time", "UTC / Universal Time"),
+    ("true_solar_time", "Tempo solar verdadeiro"),
+]
+
 
 class MeteoRequestForm(forms.Form):
+    source = forms.ChoiceField(
+        label="Fonte de aquisição",
+        choices=METEO_API_SOURCE_CHOICES,
+        initial=MeteoSource.OPENMETEO,
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+
     plant = forms.ModelChoiceField(
         queryset=PVPlant.objects.all(),
         label="Planta",
@@ -806,6 +834,55 @@ class MeteoRequestForm(forms.Form):
         widget=forms.Select(attrs={"class": "form-control"})
     )
 
+    cams_sky_type = forms.ChoiceField(
+        label="Produto CAMS",
+        required=False,
+        initial="observed_cloud",
+        choices=CAMS_SKY_TYPE_CHOICES,
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+
+    cams_altitude_m = forms.FloatField(
+        label="Altitude CAMS (m)",
+        required=False,
+        initial=-999.0,
+        help_text="Use -999 para lookup automático pela base NASA SRTM da ADS.",
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "any"}),
+    )
+
+    cams_time_reference = forms.ChoiceField(
+        label="Referência temporal CAMS",
+        required=False,
+        initial="universal_time",
+        choices=CAMS_TIME_REFERENCE_CHOICES,
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+
+    cams_include_openmeteo_temperature = forms.BooleanField(
+        label="Complementar temperatura pela Open-Meteo",
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
+    cams_openmeteo_model = forms.ChoiceField(
+        label="Modelo Open-Meteo para temperatura",
+        required=False,
+        initial="",
+        choices=OPENMETEO_MODEL_CHOICES,
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+
+    cams_api_key = forms.CharField(
+        label="Token ADS/Copernicus",
+        required=False,
+        help_text="Opcional se CAMS_ADS_API_KEY estiver configurado no ambiente.",
+        widget=forms.PasswordInput(
+            render_value=False,
+            attrs={"class": "form-control", "autocomplete": "off", "placeholder": "Personal Access Token da ADS"},
+        ),
+    )
+
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         qs = PVPlant.objects.none()
@@ -821,6 +898,10 @@ class MeteoRequestForm(forms.Form):
             raise forms.ValidationError("Data final deve ser >= data inicial.")
         if s and e and (e - s).days > 370:
             raise forms.ValidationError("Intervalo muito grande. Quebre em janelas (ex.: 60-120 dias).")
+        source = cleaned.get("source") or MeteoSource.OPENMETEO
+        interval = int(cleaned.get("interval_min") or 60)
+        if source == MeteoSource.CAMS and interval not in {15, 60}:
+            self.add_error("interval_min", "CAMS aceita 15 ou 60 minutos neste fluxo.")
         return cleaned
 
 

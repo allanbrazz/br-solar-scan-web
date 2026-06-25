@@ -25,6 +25,7 @@
   .meteo-csv-grid .meteo-wide{ grid-column:1 / -1; }
   .meteo-csv-checks{ display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; }
   .meteo-csv-note{ margin-top:.7rem; padding:.75rem; border-radius:13px; border:1px solid rgba(255,217,94,.18); background:rgba(255,217,94,.07); color:var(--ink-dim); }
+  .meteo-source-note{ padding:.75rem; border-radius:13px; border:1px solid rgba(95,176,255,.18); background:rgba(95,176,255,.07); color:var(--ink-dim); line-height:1.45; }
   @media (max-width:1000px){ .meteo-layout{ grid-template-columns:1fr; } }
   @media (max-width:900px){ .meteo-csv-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media (max-width:700px){ .meteo-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); } .meteo-csv-grid{ grid-template-columns:1fr; } }
@@ -45,6 +46,11 @@
       {% if form.non_field_errors %}<div class="flash flash-error">{{ form.non_field_errors }}</div>{% endif %}
 
       <div class="meteo-field">
+        <label for="{{ form.source.id_for_label }}">{{ form.source.label }}</label>
+        {{ form.source }}
+        {{ form.source.errors }}
+      </div>
+      <div class="meteo-field">
         <label for="{{ form.plant.id_for_label }}">{{ form.plant.label }}</label>
         {{ form.plant }}
         {{ form.plant.errors }}
@@ -63,19 +69,49 @@
         <label for="{{ form.interval_min.id_for_label }}">{{ form.interval_min.label }}</label>
         {{ form.interval_min }}
       </div>
-      <div class="meteo-field">
+      <div class="meteo-field" data-source-section="OPENMETEO">
         <label for="{{ form.model.id_for_label }}">{{ form.model.label }}</label>
         {{ form.model }}
         <small class="meteo-muted">{{ form.model.help_text }}</small>
       </div>
-      <label class="meteo-inline-check" for="{{ form.include_gti.id_for_label }}">
+      <label class="meteo-inline-check" data-source-section="OPENMETEO" for="{{ form.include_gti.id_for_label }}">
         {{ form.include_gti }}
         <span>{{ form.include_gti.label }}</span>
       </label>
 
+      <div class="meteo-source-note" data-source-section="CAMS">
+        CAMS fornece GHI, DHI e BNI/DNI. Como essa base nao disponibiliza temperatura do ar, marque o complemento por Open-Meteo quando a metodologia exigir temperatura.
+      </div>
+      <div class="meteo-field" data-source-section="CAMS">
+        <label for="{{ form.cams_sky_type.id_for_label }}">{{ form.cams_sky_type.label }}</label>
+        {{ form.cams_sky_type }}
+      </div>
+      <div class="meteo-field" data-source-section="CAMS">
+        <label for="{{ form.cams_altitude_m.id_for_label }}">{{ form.cams_altitude_m.label }}</label>
+        {{ form.cams_altitude_m }}
+        <small class="meteo-muted">{{ form.cams_altitude_m.help_text }}</small>
+      </div>
+      <div class="meteo-field" data-source-section="CAMS">
+        <label for="{{ form.cams_time_reference.id_for_label }}">{{ form.cams_time_reference.label }}</label>
+        {{ form.cams_time_reference }}
+      </div>
+      <label class="meteo-inline-check" data-source-section="CAMS" for="{{ form.cams_include_openmeteo_temperature.id_for_label }}">
+        {{ form.cams_include_openmeteo_temperature }}
+        <span>{{ form.cams_include_openmeteo_temperature.label }}</span>
+      </label>
+      <div class="meteo-field" data-source-section="CAMS">
+        <label for="{{ form.cams_openmeteo_model.id_for_label }}">{{ form.cams_openmeteo_model.label }}</label>
+        {{ form.cams_openmeteo_model }}
+      </div>
+      <div class="meteo-field" data-source-section="CAMS">
+        <label for="{{ form.cams_api_key.id_for_label }}">{{ form.cams_api_key.label }}</label>
+        {{ form.cams_api_key }}
+        <small class="meteo-muted">{{ form.cams_api_key.help_text }}</small>
+      </div>
+
       <div class="meteo-actions">
         <button type="submit" name="action" value="import" class="btn btn-primary">Importar / atualizar período</button>
-        <a class="btn btn-secondary" href="{% url 'open_meteo_view_api_json' %}?plant={{ form.plant.value }}&start_date={{ form.start_date.value }}&end_date={{ form.end_date.value }}&interval_min={{ form.interval_min.value }}">Consultar JSON</a>
+        <a id="meteoJsonLink" class="btn btn-secondary" href="{% url 'open_meteo_view_api_json' %}?plant={{ form.plant.value }}&source={{ form.source.value }}&start_date={{ form.start_date.value }}&end_date={{ form.end_date.value }}&interval_min={{ form.interval_min.value }}">Consultar JSON</a>
       </div>
     </form>
   </article>
@@ -83,8 +119,10 @@
   <article class="card glass meteo-card">
     <h3>Gestão dos dados importados</h3>
     {% if meteo_summary %}
+      <p class="meteo-muted">Fonte selecionada: <strong>{{ meteo_summary.source_label }}</strong>.</p>
       <p class="meteo-muted">Síntese de <strong>{{ meteo_summary.plant.nome }}</strong>, fuso <strong>{{ meteo_summary.plant.timezone }}</strong>.</p>
       <div class="meteo-summary">
+        <div class="meteo-kpi"><span>Fonte</span><strong>{{ meteo_summary.source|default:"-" }}</strong></div>
         <div class="meteo-kpi"><span>Registros salvos</span><strong>{{ meteo_summary.total|default:0 }}</strong></div>
         <div class="meteo-kpi"><span>Primeiro registro</span><strong>{{ meteo_summary.first_ts|date:"d/m/Y H:i"|default:"-" }}</strong></div>
         <div class="meteo-kpi"><span>Último registro</span><strong>{{ meteo_summary.last_ts|date:"d/m/Y H:i"|default:"-" }}</strong></div>
@@ -118,6 +156,7 @@
           <form method="post" class="meteo-actions" onsubmit="return confirm('Excluir os dados meteorológicos deste período? Esta ação não pode ser desfeita.');">
             {% csrf_token %}
             <input type="hidden" name="plant" value="{{ form.plant.value }}">
+            <input type="hidden" name="source" value="{{ form.source.value }}">
             <input type="hidden" name="start_date" value="{{ form.start_date.value }}">
             <input type="hidden" name="end_date" value="{{ form.end_date.value }}">
             <input type="hidden" name="interval_min" value="{{ form.interval_min.value }}">
@@ -238,10 +277,43 @@
 </details>
 
 <script>
+  function currentMeteoSource(){
+    return document.getElementById("id_source")?.value || "OPENMETEO";
+  }
+  function syncMeteoSourceSections(){
+    const source = currentMeteoSource();
+    document.querySelectorAll("[data-source-section]").forEach((el) => {
+      el.style.display = el.dataset.sourceSection === source ? "" : "none";
+    });
+  }
+  function syncMeteoJsonLink(){
+    const link = document.getElementById("meteoJsonLink");
+    if (!link) return;
+    const params = new URLSearchParams({
+      plant: document.getElementById("id_plant")?.value || "",
+      source: currentMeteoSource(),
+      start_date: document.getElementById("id_start_date")?.value || "",
+      end_date: document.getElementById("id_end_date")?.value || "",
+      interval_min: document.getElementById("id_interval_min")?.value || "60",
+    });
+    const url = new URL("{% url 'open_meteo_view_api_json' %}", window.location.origin);
+    url.search = params.toString();
+    link.href = url.toString();
+  }
+  document.getElementById("id_source")?.addEventListener("change", () => {
+    syncMeteoSourceSections();
+    syncMeteoJsonLink();
+  });
+  syncMeteoSourceSections();
+  syncMeteoJsonLink();
+  ["id_start_date", "id_end_date", "id_interval_min"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("change", syncMeteoJsonLink);
+  });
+
   document.getElementById("id_plant")?.addEventListener("change", (event) => {
-    const form = document.getElementById("meteoForm");
     const params = new URLSearchParams({
       plant: event.target.value,
+      source: currentMeteoSource(),
       start_date: document.getElementById("id_start_date")?.value || "",
       end_date: document.getElementById("id_end_date")?.value || "",
       interval_min: document.getElementById("id_interval_min")?.value || "60",

@@ -4,6 +4,7 @@ from core.views._imports import *
 from datetime import datetime, timedelta, timezone as dt_timezone
 from core.services.dados_satelite.openmeteo import ingest_openmeteo_range
 from core.services.dados_satelite.csv_import import ingest_user_meteo_csv
+from core.services.dados_satelite.cams import ingest_cams_range
 from django.utils.timezone import make_aware
 from core.services.coverage import compute_time_coverage
 from zoneinfo import ZoneInfo
@@ -129,15 +130,24 @@ def open_meteo_view(request):
     selected_plant = next((plant for plant in visible_plants if str(plant.pk) == str(selected_id)), None)
     if selected_plant is None and visible_plants:
         selected_plant = visible_plants[0]
+    selected_source = (
+        request.POST.get("source") if request.method == "POST" else request.GET.get("source")
+    ) or MeteoSource.OPENMETEO
 
     today = date.today()
     initial = {
+        "source": selected_source,
         "plant": selected_plant,
         "start_date": today - timedelta(days=30),
         "end_date": today,
         "interval_min": "60",
         "include_gti": True,
         "model": "",
+        "cams_sky_type": "observed_cloud",
+        "cams_altitude_m": -999.0,
+        "cams_time_reference": "universal_time",
+        "cams_include_openmeteo_temperature": True,
+        "cams_openmeteo_model": "",
     }
     action = (request.POST.get("action") or "import").strip().lower() if request.method == "POST" else ""
     if request.method == "POST" and action != "upload_csv":
@@ -147,6 +157,7 @@ def open_meteo_view(request):
         query_data.setdefault("start_date", initial["start_date"].isoformat())
         query_data.setdefault("end_date", initial["end_date"].isoformat())
         query_data.setdefault("interval_min", "60")
+        query_data.setdefault("source", selected_source)
         form = MeteoRequestForm(query_data, user=request.user)
     else:
         form = MeteoRequestForm(initial=initial, user=request.user)
@@ -206,6 +217,7 @@ def open_meteo_view(request):
         start_date = form.cleaned_data["start_date"]
         end_date = form.cleaned_data["end_date"]
         interval_min = form.cleaned_data["interval_min"]
+        source = form.cleaned_data.get("source") or MeteoSource.OPENMETEO
 
         if action == "delete_range":
             start_utc, end_utc, _ = _local_dates_to_utc_range(
@@ -215,20 +227,57 @@ def open_meteo_view(request):
             )
             deleted, _ = MeteoRecord.objects.filter(
                 plant=plant,
-                source=MeteoSource.OPENMETEO,
+                source=source,
                 ts_utc__gte=start_utc,
                 ts_utc__lt=end_utc,
             ).delete()
             messages.success(request, f"Foram excluídos {deleted} registros meteorológicos do período selecionado.")
-            return redirect(f"{reverse('open_meteo_view')}?plant={plant.pk}&start_date={start_date}&end_date={end_date}&interval_min={interval_min}")
+            return redirect(
+                f"{reverse('open_meteo_view')}?plant={plant.pk}&source={source}"
+                f"&start_date={start_date}&end_date={end_date}&interval_min={interval_min}"
+            )
 
         include_gti = form.cleaned_data["include_gti"]
         model = (form.cleaned_data.get("model") or "").strip() or None
+        if source == MeteoSource.CAMS:
+            try:
+                include_temp = bool(form.cleaned_data.get("cams_include_openmeteo_temperature"))
+                count, meta = ingest_cams_range(
+                    plant=plant,
+                    start_date=start_date,
+                    end_date=end_date,
+                    interval_min=int(interval_min),
+                    sky_type=form.cleaned_data.get("cams_sky_type") or "observed_cloud",
+                    altitude_m=form.cleaned_data.get("cams_altitude_m") or -999.0,
+                    time_reference=form.cleaned_data.get("cams_time_reference") or "universal_time",
+                    api_key=form.cleaned_data.get("cams_api_key") or None,
+                    include_openmeteo_temperature=include_temp,
+                    openmeteo_model=form.cleaned_data.get("cams_openmeteo_model") or None,
+                )
+                temp_msg = "com temperatura Open-Meteo" if include_temp else "sem temperatura"
+                messages.success(
+                    request,
+                    f"CAMS: {count} registros importados ou atualizados ({temp_msg}). Produto: {meta.get('sky_type')}.",
+                )
+                if not include_temp:
+                    messages.warning(
+                        request,
+                        "A CAMS Solar Radiation Service nao fornece temperatura do ar. "
+                        "Para metodos que dependem dessa variavel, solicite o complemento via Open-Meteo.",
+                    )
+            except Exception as exc:
+                messages.error(request, f"Falha ao importar dados meteorologicos da CAMS: {exc}")
+            return redirect(
+                f"{reverse('open_meteo_view')}?plant={plant.pk}&source={source}"
+                f"&start_date={start_date}&end_date={end_date}&interval_min={interval_min}"
+            )
+
         try:
             count, _meta = ingest_openmeteo_range(
                 plant=plant,
                 start_date=start_date,
                 end_date=end_date,
+                interval_min=int(interval_min),
                 include_gti=include_gti,
                 model=model,
             )
@@ -236,7 +285,10 @@ def open_meteo_view(request):
                 request,
                 f"Open-Meteo: {count} registros importados ou atualizados. Modelo: {model or 'melhor correspondência'}.",
             )
-            return redirect(f"{reverse('open_meteo_view')}?plant={plant.pk}&start_date={start_date}&end_date={end_date}&interval_min={interval_min}")
+            return redirect(
+                f"{reverse('open_meteo_view')}?plant={plant.pk}&source={source}"
+                f"&start_date={start_date}&end_date={end_date}&interval_min={interval_min}"
+            )
         except Exception as exc:
             messages.error(request, f"Falha ao importar dados meteorológicos da Open-Meteo: {exc}")
 
@@ -245,13 +297,16 @@ def open_meteo_view(request):
     missing_ranges_local = []
     if form.is_bound and form.is_valid():
         selected_plant = form.cleaned_data["plant"]
+        selected_source = form.cleaned_data.get("source") or selected_source
 
     if selected_plant is not None:
-        qs = MeteoRecord.objects.filter(plant=selected_plant, source=MeteoSource.OPENMETEO)
+        qs = MeteoRecord.objects.filter(plant=selected_plant, source=selected_source)
         stats = qs.aggregate(total=Count("id"), first_ts=Min("ts_utc"), last_ts=Max("ts_utc"))
         meteo_summary = {
             **stats,
             "plant": selected_plant,
+            "source": selected_source,
+            "source_label": dict(MeteoSource.choices).get(selected_source, selected_source),
             "models": list(qs.exclude(dataset_model="").values_list("dataset_model", flat=True).distinct().order_by("dataset_model")),
             "intervals": list(qs.values_list("interval_min", flat=True).distinct().order_by("interval_min")),
         }
@@ -293,6 +348,7 @@ def open_meteo_view_api_json(request):
         return JsonResponse({"ok": False, "errors": form.errors}, status=400)
 
     plant = form.cleaned_data["plant"]
+    source = form.cleaned_data.get("source") or MeteoSource.OPENMETEO
     start_date = form.cleaned_data["start_date"]
     end_date = form.cleaned_data["end_date"]
     interval_min = int(form.cleaned_data["interval_min"])
@@ -309,7 +365,7 @@ def open_meteo_view_api_json(request):
     )
 
     # >>> CORREÇÃO PRINCIPAL AQUI: source do Open-Meteo <<<
-    qs = MeteoRecord.objects.filter(plant=plant, source=MeteoSource.OPENMETEO)
+    qs = MeteoRecord.objects.filter(plant=plant, source=source)
 
     cov = compute_time_coverage(
         queryset=qs,
@@ -326,6 +382,7 @@ def open_meteo_view_api_json(request):
     return JsonResponse({
         "ok": True,
         "plant_id": plant.id,
+        "source": source,
         "plant_tz": str(tz_local),
         "interval_min": cov.interval_min,
         "start_utc": cov.start_utc.isoformat(),
