@@ -11,6 +11,16 @@ from django.db.models import Count
 from core.models import PVPlant, PVPlantMergedRecord15m, PlantDiagnostic15m
 from core.services.fdd.detection import DetectionParams, detect_anomalies
 from core.services.fdd.events import EventBuildParams, build_fault_events_for_range
+from core.services.fdd.detection_flow import (
+    DEFAULT_DETECTION_FLOW_MODE,
+    LEGACY_BATCH_NORMAL_LABELS,
+    build_detection_flow_audit,
+    decide_anomaly_flag,
+    decide_operational_deviation_flag,
+    detection_flow_label,
+    detector_version_for_flow,
+    normalize_detection_flow_mode,
+)
 from core.services.fdd.rca import RCAParams, diagnose_rca_series
 from core.services.fdd.reliability import (
     compute_data_reliability,
@@ -267,10 +277,13 @@ def run_detection_pipeline(
     source_oper: Optional[str] = None,
     source_meteo: Optional[str] = None,
     detector_version: str = "hybrid_rules_v1",
+    detection_flow_mode: str = DEFAULT_DETECTION_FLOW_MODE,
     detection_params: Optional[DetectionParams] = None,
     rca_params: Optional[RCAParams] = None,
     delete_existing: bool = True,
 ) -> dict:
+    detection_flow_mode = normalize_detection_flow_mode(detection_flow_mode)
+    detector_version = detector_version_for_flow(detector_version, detection_flow_mode)
     plant = (
         PVPlant.objects.filter(id=plant_id)
         .select_related("details", "details__module", "details__inverter")
@@ -444,6 +457,9 @@ def run_detection_pipeline(
     )
 
     objs: list[PlantDiagnostic15m] = []
+    residual_anomaly_flags: list[bool] = []
+    anomaly_flags: list[bool] = []
+    operational_deviation_flags: list[bool] = []
     detection_signal = list(det.get("detection_signal_rel") or [None] * len(rows))
     for i, row in enumerate(rows):
         ewma_z = det["ewma_z"][i]
@@ -467,7 +483,23 @@ def run_detection_pipeline(
         domain_label = str(rca["domain_labels"][i])
         direct_grid = bool(rca["direct_grid_evidence"][i])
         zero_inj = bool(rca["zero_injection_flag"][i])
-        anomaly_final = bool(det["anomaly"][i]) or direct_grid or diagnosis_label not in {"ok", "invalid"}
+        residual_anomaly = bool(det["anomaly"][i])
+        anomaly_final = decide_anomaly_flag(
+            detection_flow_mode=detection_flow_mode,
+            residual_anomaly=residual_anomaly,
+            diagnosis_label=diagnosis_label,
+            direct_grid_evidence=direct_grid,
+            normal_labels=LEGACY_BATCH_NORMAL_LABELS,
+        )
+        operational_deviation = decide_operational_deviation_flag(
+            diagnosis_label=diagnosis_label,
+            direct_grid_evidence=direct_grid,
+            zero_injection_flag=zero_inj,
+            rca_code=rca["codes"][i],
+        )
+        residual_anomaly_flags.append(residual_anomaly)
+        anomaly_flags.append(bool(anomaly_final))
+        operational_deviation_flags.append(bool(operational_deviation))
 
         data_rel = compute_data_reliability(
             row=row,
@@ -502,7 +534,22 @@ def run_detection_pipeline(
             "data_reliability": data_rel,
             "detection_confidence": detection_rel,
             "diagnosis_confidence": diagnosis_rel,
+            "detection_flow": {
+                "mode": detection_flow_mode,
+                "label": detection_flow_label(detection_flow_mode),
+                "residual_anomaly": residual_anomaly,
+                "operational_deviation_flag": operational_deviation,
+                "anomaly_flag": bool(anomaly_final),
+            },
         }
+        evidence_i = dict(rca["evidence_json"][i] or {})
+        evidence_i.update({
+            "detection_flow_mode": detection_flow_mode,
+            "detection_flow_label": detection_flow_label(detection_flow_mode),
+            "residual_anomaly": residual_anomaly,
+            "operational_deviation_flag": operational_deviation,
+            "anomaly_flag": bool(anomaly_final),
+        })
 
         objs.append(
             PlantDiagnostic15m(
@@ -544,7 +591,7 @@ def run_detection_pipeline(
                 freq_hz=None if not np.isfinite(freq[i]) else float(freq[i]),
                 alarm_code_oper=None if not np.isfinite(alarm_code[i]) else int(alarm_code[i]),
                 alarm_sev_oper=None if not np.isfinite(alarm_sev[i]) else int(alarm_sev[i]),
-                evidence_json=rca["evidence_json"][i],
+                evidence_json=evidence_i,
                 confidence_notes_json=confidence_notes,
             )
         )
@@ -570,7 +617,19 @@ def run_detection_pipeline(
             source_oper=src_oper,
             source_meteo=src_meteo,
             replace_existing=delete_existing,
+            detection_flow_mode=detection_flow_mode,
         ),
+    )
+    audit = build_detection_flow_audit(
+        detection_flow_mode=detection_flow_mode,
+        valid=[bool(v) for v in det["valid_period"]],
+        ewma_flags=[bool(v) for v in det.get("ewma_flag") or []],
+        cusum_flags=[bool(v) for v in det.get("cusum_flag") or []],
+        residual_anomalies=residual_anomaly_flags,
+        operational_deviation_flags=operational_deviation_flags,
+        anomaly_flags=anomaly_flags,
+        diagnosis_labels=[str(v) for v in rca["diagnosis_labels"]],
+        n_events=int(events_out.get("events", 0)),
     )
 
     return {
@@ -579,11 +638,14 @@ def run_detection_pipeline(
         "source_oper": src_oper,
         "source_meteo": src_meteo,
         "detector_version": detector_version,
+        "detection_flow_mode": detection_flow_mode,
+        "detection_flow_label": detection_flow_label(detection_flow_mode),
         "ts_start_utc": ts_start_utc.isoformat(),
         "ts_end_utc": ts_end_utc.isoformat(),
         "written_diag": len(objs),
         "events": int(events_out.get("events", 0)),
         "event_summary": events_out,
+        "detection_flow_audit": audit,
         "baseline": det.get("baseline"),
         "rca_baseline": rca.get("baseline"),
         "synthesized_agg": synthesized_agg,

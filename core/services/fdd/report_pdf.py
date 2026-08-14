@@ -890,13 +890,14 @@ def build_mismatch_pdf_report(
     thresholds = payload.get("thresholds") or {}
     versions = payload.get("versions") or {}
     sources = payload.get("sources") or {}
+    detection_flow = payload.get("detection_flow") or {}
 
     # Scope
     story.append(_paragraph("Escopo e parâmetros de execução", styles["section"]))
     scope_rows = [
         ["Campo", "Valor", "Campo", "Valor"],
         ["Planta", plant_name, "Período", f"{_safe_text(rng.get('start'))} -> {_safe_text(rng.get('end'))}"],
-        ["Intervalo de análise [min]", _safe_text(filters.get("dt_minutes")), "Fluxo de processamento", "Modelo físico + detector estatístico + diagnóstico explicável"],
+        ["Intervalo de análise [min]", _safe_text(filters.get("dt_minutes")), "Fluxo de processamento", _safe_text(detection_flow.get("label") or versions.get("detection_flow_label") or "Modelo físico + detector estatístico + diagnóstico explicável")],
         ["Versão do detector", _safe_text(versions.get("detector_version")), "Fonte meteorológica", _safe_text(sources.get("source_meteo"))],
         ["Visualização temporal", _selected_heatmap_label(payload, filters), "Política de consolidação", "Soma preferencial das entradas MPPT"],
         ["Limiar de atenção", _safe_text(filters.get("warn_abs") or thresholds.get("warn_abs")), "Limiar de falha", _safe_text(filters.get("fault_abs") or thresholds.get("fault_abs"))],

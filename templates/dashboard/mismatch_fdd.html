@@ -784,6 +784,15 @@
         </select>
       </div>
 
+      <div class="ctl" style="min-width: 300px;">
+        <label for="detection_flow_mode">Fluxo de detecção e diagnóstico</label>
+        <select id="detection_flow_mode">
+          <option value="legacy_hybrid" {% if detection_flow_mode|default:'legacy_hybrid' == 'legacy_hybrid' %}selected{% endif %}>Legado — estatística + regras</option>
+          <option value="thesis_sequential" {% if detection_flow_mode == 'thesis_sequential' %}selected{% endif %}>Sequencial — EWMA/CUSUM → RCA</option>
+        </select>
+        <div class="sub" id="detectionFlowHelp" style="margin-top:.35rem;">As regras diagnósticas e evidências diretas podem participar da sinalização final.</div>
+      </div>
+
 
 
       <div class="ctl sm">
@@ -1290,6 +1299,7 @@
     detector_version: "{{ detector_version|default:'mismatch_runtime_v1'|escapejs }}",
     source_oper: "ALL",
     source_meteo: "{{ source_meteo|default:'OPENMETEO'|escapejs }}",
+    detection_flow_mode: "{{ detection_flow_mode|default:'legacy_hybrid'|escapejs }}",
     persist: true,
   };
   let savedDetectorConfigurations = [];
@@ -1355,6 +1365,8 @@
     }
     detectorMetadata = { ...detectorMetadata, ...params };
     if (params.config_name && $("configurationName")) $("configurationName").value = String(params.config_name);
+    if (params.detection_flow_mode && $("detection_flow_mode")) $("detection_flow_mode").value = String(params.detection_flow_mode);
+    updateDetectionFlowHelp();
   }
 
   function detectorConfigurationPayload(){
@@ -1364,6 +1376,7 @@
       detector_version: "mismatch_runtime_v1",
       source_oper: "ALL",
       source_meteo: detectorMetadata.source_meteo || "OPENMETEO",
+      detection_flow_mode: currentDetectionFlowMode(),
       display_mode: currentDisplayMode(),
       persist: true,
       warn_abs: getNum("warn_abs", 0.47),
@@ -3069,6 +3082,22 @@
     return (v === "tipologia") ? "tipologia" : "mismatch";
   }
 
+  function currentDetectionFlowMode(){
+    const el = $("detection_flow_mode");
+    const v = String(el?.value || detectorMetadata.detection_flow_mode || "legacy_hybrid").trim().toLowerCase();
+    return (v === "thesis_sequential") ? "thesis_sequential" : "legacy_hybrid";
+  }
+
+  function updateDetectionFlowHelp(){
+    const mode = currentDetectionFlowMode();
+    detectorMetadata.detection_flow_mode = mode;
+    const help = $("detectionFlowHelp");
+    if (!help) return;
+    help.textContent = mode === "thesis_sequential"
+      ? "EWMA/CUSUM realizam a detecção; o RCA é utilizado posteriormente para interpretação diagnóstica."
+      : "As regras diagnósticas e evidências diretas podem participar da sinalização final.";
+  }
+
   function currentOriginSignalVisibility(){
     return {
       ewma: $("showEwmaCusumSignals")?.checked !== false,
@@ -4632,6 +4661,7 @@
       detector_version: "mismatch_runtime_v1",
       source_oper: "ALL",
       source_meteo: detectorMetadata.source_meteo || "OPENMETEO",
+      detection_flow_mode: currentDetectionFlowMode(),
       persist: 1,
     };
     Object.assign(payload, collectAdvancedPayload());
@@ -4942,6 +4972,13 @@
         if (obj) renderDetail(hmState.payload, obj);
       }
     });
+    $("detection_flow_mode")?.addEventListener("change", () => {
+      updateDetectionFlowHelp();
+      if (hmState.payload && hmState.selectedKey){
+        const obj = hmState.cell.get(hmState.selectedKey);
+        if (obj) renderDetail(hmState.payload, obj);
+      }
+    });
     $("showEwmaCusumSignals")?.addEventListener("change", () => {
       if (hmState.payload) drawHeatmapCanvas();
     });
@@ -4951,6 +4988,7 @@
 
     bindDetailButtons();
     bindHeatmapFit();
+    updateDetectionFlowHelp();
     renderValidationDashboard({ summary: { validation: {}, events: [] } });
     loadSavedConfigurations({applyDefault:true});
     refreshPrTemp({ silent:true });

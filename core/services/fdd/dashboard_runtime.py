@@ -15,6 +15,16 @@ from core.services.fdd.dashboard_common import (
     parse_date,
     runtime_severity,
 )
+from core.services.fdd.detection_flow import (
+    DEFAULT_DETECTION_FLOW_MODE,
+    LEGACY_RUNTIME_NORMAL_LABELS,
+    build_anomaly_flags,
+    build_detection_flow_audit,
+    build_operational_deviation_flags,
+    detection_flow_label,
+    detector_version_for_flow,
+    normalize_detection_flow_mode,
+)
 from core.services.fdd.aggregation import DUMP_FIELDS, RCA_CODE_TO_SEV, aggregate_runtime_series
 from core.services.fdd.dump_builder import build_runtime_dump
 from core.services.fdd.runtime_confidence import build_runtime_confidence, compute_plot_mismatch
@@ -419,6 +429,8 @@ def parse_dashboard_params(data: Mapping[str, Any], tz_name: str) -> MismatchDas
             return default
         return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
+    detection_flow_mode = normalize_detection_flow_mode(data.get("detection_flow_mode") or DEFAULT_DETECTION_FLOW_MODE)
+
     return MismatchDashboardParams(
         raw_data=data,
         start=d0,
@@ -433,6 +445,7 @@ def parse_dashboard_params(data: Mapping[str, Any], tz_name: str) -> MismatchDas
         pmin_w=pmin_w,
         thr=thr,
         use_legacy=(str(data.get("legacy") or data.get("use_legacy") or "").strip().lower() in ("1", "true", "yes", "on")),
+        detection_flow_mode=detection_flow_mode,
         persist=_gb("persist", DEFAULT_PERSIST),
         gpoa_plot_min=_gf("gpoa_plot_min", backend_defaults["gpoa_plot_min"]),
         pmodel_plot_min=_gf("pmodel_plot_min", backend_defaults["pmodel_plot_min"]),
@@ -765,7 +778,29 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
         agg=agg,
         model=model,
         pipeline=pipeline,
+        params=params,
     )
+    detection_origin = _build_detection_origin(times_utc, model, pipeline, confidence, params)
+    operational_deviation_flags = build_operational_deviation_flags(
+        diagnosis_labels=confidence["diag_diagnosis_labels"],
+        direct_grid_evidence=confidence["diag_direct_grid"],
+        zero_injection_flags=confidence["diag_zero_inj"],
+        rca_codes=pipeline["codes"],
+        operational_thresholds=detection_origin["operational_threshold"],
+        n=len(times_utc),
+    )
+    final_anomaly_flags = build_anomaly_flags(
+        detection_flow_mode=params.detection_flow_mode,
+        residual_anomalies=pipeline["anomaly"],
+        diagnosis_labels=confidence["diag_diagnosis_labels"],
+        direct_grid_evidence=confidence["diag_direct_grid"],
+        normal_labels=LEGACY_RUNTIME_NORMAL_LABELS,
+    )
+    pipeline["residual_anomaly"] = list(pipeline["anomaly"])
+    pipeline["anomaly_flag"] = final_anomaly_flags
+    pipeline["operational_deviation_flag"] = operational_deviation_flags
+    pipeline["detection_flow_mode"] = [params.detection_flow_mode] * len(times_utc)
+
     plot_data = compute_plot_mismatch(params, agg, model)
     persist = persist_runtime_outputs(
         plant=plant,
@@ -792,19 +827,24 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
     )
 
     canonical_oper = canonical_source_oper(selected_sources)
-    pred_positive_runtime = [
-        bool(a) or bool(g) or str(d or "").strip().lower() not in {"ok", "normal", "invalid", "low_irradiance", ""}
-        for a, g, d in zip(pipeline["anomaly"], confidence["diag_direct_grid"], confidence["diag_diagnosis_labels"])
-    ]
+    base_detector_version = str(MISMATCH_VERSION_SUMMARY.get("detector_version") or "mismatch_runtime_v1")
+    effective_detector_version = detector_version_for_flow(base_detector_version, params.detection_flow_mode)
+    version_summary = {
+        **MISMATCH_VERSION_SUMMARY,
+        "algorithm_detector_version": base_detector_version,
+        "detector_version": effective_detector_version,
+        "detection_flow_mode": params.detection_flow_mode,
+        "detection_flow_label": detection_flow_label(params.detection_flow_mode),
+    }
     validation_ctx = build_dashboard_validation_context(
         plant_id=plant.id,
         tz=params.tz,
         times_utc=times_utc,
-        pred_anomaly_flags=pred_positive_runtime,
+        pred_anomaly_flags=final_anomaly_flags,
         pred_labels=confidence["diag_diagnosis_labels"],
         g_poa=model["g_poa_used"],
         meteo_quality_ok=pipeline["meteo_quality_ok"],
-        detector_version=str(MISMATCH_VERSION_SUMMARY.get("detector_version") or "mismatch_runtime_v1"),
+        detector_version=effective_detector_version,
         source_oper=canonical_oper,
         source_meteo=src_meteo,
     )
@@ -813,7 +853,17 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
 
     sev_typology, reason_typology, counts_typology = _build_typology_classes(times_utc, confidence, pipeline)
     sev_mismatch, reason_mismatch, counts_mismatch = _build_mismatch_classes(times_utc, model, pipeline, params)
-    detection_origin = _build_detection_origin(times_utc, model, pipeline, confidence, params)
+    detection_flow_audit = build_detection_flow_audit(
+        detection_flow_mode=params.detection_flow_mode,
+        valid=pipeline["valid_period"],
+        ewma_flags=pipeline.get("ewma_flag"),
+        cusum_flags=pipeline.get("cusum_flag"),
+        residual_anomalies=pipeline["residual_anomaly"],
+        operational_deviation_flags=operational_deviation_flags,
+        anomaly_flags=final_anomaly_flags,
+        diagnosis_labels=confidence["diag_diagnosis_labels"],
+        n_events=int(((persist or {}).get("events") or {}).get("events", 0)) if isinstance((persist or {}).get("events"), dict) else 0,
+    )
 
     freq_series = _series_with_fallback(pipeline.get("freq_hz") or [], agg.get("freq_hz") or [])
     p_dc_model_fit = paired_model_metrics(
@@ -852,7 +902,14 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
             "source_meteo": src_meteo,
             "selected_sources": selected_sources,
         },
-        "versions": MISMATCH_VERSION_SUMMARY,
+        "versions": version_summary,
+        "version_summary": version_summary,
+        "detection_flow": {
+            "mode": params.detection_flow_mode,
+            "label": detection_flow_label(params.detection_flow_mode),
+            "legacy_note": "As regras diagnosticas e evidencias diretas podem participar da sinalizacao final.",
+            "sequential_note": "EWMA/CUSUM realizam a deteccao; o RCA interpreta diagnosticos sem iniciar anomalias.",
+        },
         "confidence_summary": {
             "data_reliability_mean": mean_none(confidence["data_reliability_score"]),
             "detection_confidence_mean": mean_none(confidence["detection_confidence_score"]),
@@ -961,9 +1018,13 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
             "fine_diag_allowed": pipeline["fine_period"],
             "stable_sky": pipeline["stable_sky"],
             "anomaly": pipeline["anomaly"],
+            "anomaly_flag": final_anomaly_flags,
+            "residual_anomaly": pipeline["residual_anomaly"],
+            "operational_deviation_flag": operational_deviation_flags,
             "anomaly_power": pipeline.get("anomaly_power") or [False] * len(times_utc),
             "residual_trigger": pipeline.get("residual_trigger") or [False] * len(times_utc),
-            "ev_residual_anomaly": pipeline.get("residual_trigger") or [False] * len(times_utc),
+            "ev_residual_anomaly": pipeline["residual_anomaly"],
+            "detection_flow_mode": [params.detection_flow_mode] * len(times_utc),
             "residual_event_score": pipeline.get("residual_event_score") or [None] * len(times_utc),
             "combined_event_score": pipeline.get("combined_event_score") or [None] * len(times_utc),
             "detection_origin_ewma_cusum": detection_origin["ewma_cusum"],
@@ -1003,6 +1064,7 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
             "events": validation_ctx.get("events") or [],
             "validation": validation_ctx.get("summary") or {},
             "detection_origin_counts": detection_origin["counts"],
+            "detection_flow_audit": detection_flow_audit,
             "n_points": len(times_utc),
             "n_oper_sources": len(selected_sources),
             "persist": persist,

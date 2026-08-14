@@ -8,6 +8,7 @@ from django.db.models import Count
 from django.utils import timezone
 
 from core.models import PVPlant, PVPlantMergedRecord15m, PlantDiagnostic15m
+from core.services.fdd.detection_flow import DEFAULT_DETECTION_FLOW_MODE, detection_flow_label, normalize_detection_flow_mode
 
 
 MISMATCH_VERSION_SUMMARY = {
@@ -205,8 +206,14 @@ def upsert_diag15m(
     alarm_sev_oper: List[Optional[int]],
     evidence_json: List[dict],
     confidence_notes_json: List[dict],
+    detection_flow_mode: str = DEFAULT_DETECTION_FLOW_MODE,
+    residual_anomaly_flags: Optional[List[bool]] = None,
+    operational_deviation_flags: Optional[List[bool]] = None,
 ) -> Dict[str, Any]:
     n = len(times_utc)
+    detection_flow_mode = normalize_detection_flow_mode(detection_flow_mode)
+    residual_anomaly_flags = list(residual_anomaly_flags or anomaly_flags)
+    operational_deviation_flags = list(operational_deviation_flags or ([False] * n))
     seqs = [
         rca_codes, rca_labels, valid, anomaly_flags, detector_scores, ewma_z,
         cusum_scores, stable_sky, g_poa, tcell_c, pac_real_w, pac_model_w,
@@ -216,6 +223,7 @@ def upsert_diag15m(
         data_reliability_level, detection_confidence_score, detection_confidence_level,
         diagnosis_confidence_level, v_ac_v, i_ac_a, freq_hz, alarm_code_oper,
         alarm_sev_oper, evidence_json, confidence_notes_json,
+        residual_anomaly_flags, operational_deviation_flags,
     ]
     if not all(len(seq) == n for seq in seqs):
         raise ValueError("upsert_diag15m: sequências com tamanhos inconsistentes")
@@ -227,6 +235,7 @@ def upsert_diag15m(
             "source_oper": source_oper,
             "source_meteo": source_meteo,
             "detector_version": detector_version,
+            "detection_flow_mode": detection_flow_mode,
         }
 
     root = source_root(source_oper)
@@ -235,6 +244,23 @@ def upsert_diag15m(
     objs: List[PlantDiagnostic15m] = []
 
     for i, ts in enumerate(times_utc):
+        evidence_i = dict(evidence_json[i] or {})
+        evidence_i.update({
+            "detection_flow_mode": detection_flow_mode,
+            "detection_flow_label": detection_flow_label(detection_flow_mode),
+            "residual_anomaly": bool(residual_anomaly_flags[i]),
+            "operational_deviation_flag": bool(operational_deviation_flags[i]),
+            "anomaly_flag": bool(anomaly_flags[i]),
+        })
+        notes_i = dict(confidence_notes_json[i] or {})
+        notes_i["detection_flow"] = {
+            "mode": detection_flow_mode,
+            "label": detection_flow_label(detection_flow_mode),
+            "residual_anomaly": bool(residual_anomaly_flags[i]),
+            "operational_deviation_flag": bool(operational_deviation_flags[i]),
+            "anomaly_flag": bool(anomaly_flags[i]),
+        }
+
         objs.append(
             PlantDiagnostic15m(
                 plant=plant,
@@ -274,8 +300,8 @@ def upsert_diag15m(
                 freq_hz=freq_hz[i],
                 alarm_code_oper=alarm_code_oper[i],
                 alarm_sev_oper=alarm_sev_oper[i],
-                evidence_json=evidence_json[i],
-                confidence_notes_json=confidence_notes_json[i],
+                evidence_json=evidence_i,
+                confidence_notes_json=notes_i,
                 updated_at=now,
             )
         )
@@ -317,4 +343,5 @@ def upsert_diag15m(
         "source_oper": source_oper,
         "source_meteo": source_meteo,
         "detector_version": detector_version,
+        "detection_flow_mode": detection_flow_mode,
     }

@@ -9,6 +9,7 @@ from django.db import transaction
 from django.db.models import QuerySet
 
 from core.models import FaultEvent, PlantDiagnostic15m
+from core.services.fdd.detection_flow import DEFAULT_DETECTION_FLOW_MODE, detection_flow_label, normalize_detection_flow_mode
 from core.services.fdd.reliability import aggregate_event_confidence
 
 
@@ -37,6 +38,7 @@ class EventBuildParams:
     source_oper: str = ""
     source_meteo: str = ""
     replace_existing: bool = True
+    detection_flow_mode: str = DEFAULT_DETECTION_FLOW_MODE
 
 
 def _bucket_minutes(ts0: datetime, ts1: datetime) -> int:
@@ -121,6 +123,7 @@ def build_fault_events_for_range(
     params: Optional[EventBuildParams] = None,
 ) -> dict:
     p = params or EventBuildParams()
+    detection_flow_mode = normalize_detection_flow_mode(p.detection_flow_mode)
 
     qs: QuerySet[PlantDiagnostic15m] = PlantDiagnostic15m.objects.filter(
         plant_id=plant_id,
@@ -188,6 +191,8 @@ def build_fault_events_for_range(
                 "novelty_score": None,
                 "meta": {
                     "n_bins": len(g),
+                    "detection_flow_mode": detection_flow_mode,
+                    "detection_flow_label": detection_flow_label(detection_flow_mode),
                     "rca_labels": [r.rca_label for r in g],
                     "diagnosis_labels": [getattr(r, "diagnosis_label", None) for r in g],
                     "dominant_diagnosis": _dominant(diagnosis_counter, "unknown"),
@@ -219,6 +224,7 @@ def build_fault_events_for_range(
         "detector_version": p.detector_version,
         "source_oper": p.source_oper,
         "source_meteo": p.source_meteo,
+        "detection_flow_mode": detection_flow_mode,
         "events": len(groups),
         "created": created,
         "updated": updated,

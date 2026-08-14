@@ -24,6 +24,7 @@ BASIC_PARAM_HELP: Dict[str, str] = {
     "dt_minutes": "Resolucao visual do heatmap; nao altera a base 15 min persistida.",
     "warn_abs": "Desvio relativo absoluto a partir do qual o ponto entra em atencao.",
     "display_mode": "Escolhe se as celulas priorizam o desvio numerico ou a tipologia diagnosticada.",
+    "detection_flow_mode": "Define se a sinalizacao final usa o fluxo legado hibrido ou o fluxo sequencial EWMA/CUSUM seguido de RCA.",
     "fault_abs": "Desvio negativo relativo a partir do qual o ponto e tratado como falha severa.",
     "gpoa_min": "Irradiancia minima no plano do modulo para considerar que ha sol suficiente.",
     "pmin_w": "Potencia minima usada para filtrar pontos sem geracao util.",

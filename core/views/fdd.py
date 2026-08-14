@@ -21,6 +21,7 @@ from django.db import IntegrityError, transaction
 from core.models import PVPlant, FaultEvent, GroundTruthEvent, PlantDetectorConfiguration
 from core.services.fdd.dashboard_common import MISMATCH_VERSION_SUMMARY, DashboardServiceError
 from core.services.fdd.dashboard_runtime import build_mismatch_dashboard_payload, parse_dashboard_params
+from core.services.fdd.detection_flow import DEFAULT_DETECTION_FLOW_MODE, detector_version_for_flow, normalize_detection_flow_mode
 from core.services.fdd.param_catalog import (
     ADVANCED_PARAM_KEYS,
     ADVANCED_PARAM_HELP,
@@ -246,6 +247,7 @@ def mismatch_fdd_view(request: HttpRequest):
             "random_search_url": reverse("mismatch_fdd_random_search_api"),
             "pr_temp_url": reverse("mismatch_fdd_pr_temp_api"),
             "display_mode": (request.GET.get("display_mode") or DEFAULT_DISPLAY_MODE),
+            "detection_flow_mode": normalize_detection_flow_mode(request.GET.get("detection_flow_mode") or DEFAULT_DETECTION_FLOW_MODE),
             "config_name": request.GET.get("config_name") or DEFAULT_CONFIG_NAME,
             "detector_version": DEFAULT_DETECTOR_VERSION,
             "source_oper": request.GET.get("source_oper") or DEFAULT_SOURCE_OPER,
@@ -287,11 +289,12 @@ def _clean_saved_detector_config(raw: Any) -> Dict[str, Any]:
         raise DashboardServiceError("A configuracao deve ser um objeto JSON", status_code=400)
     allowed = set(ADVANCED_PARAM_KEYS) | {
         "config_name", "detector_version", "source_oper", "source_meteo",
-        "display_mode", "persist", "warn_abs", "fault_abs", "gpoa_gate",
+        "display_mode", "detection_flow_mode", "persist", "warn_abs", "fault_abs", "gpoa_gate",
         "gpoa_min", "pmin_w",
     }
     cleaned = {str(key): value for key, value in raw.items() if str(key) in allowed}
     cleaned["detector_version"] = DEFAULT_DETECTOR_VERSION
+    cleaned["detection_flow_mode"] = normalize_detection_flow_mode(cleaned.get("detection_flow_mode") or DEFAULT_DETECTION_FLOW_MODE)
     cleaned.setdefault("source_oper", DEFAULT_SOURCE_OPER)
     cleaned.setdefault("source_meteo", DEFAULT_SOURCE_METEO)
     cleaned.setdefault("display_mode", DEFAULT_DISPLAY_MODE)
@@ -540,7 +543,7 @@ def mismatch_fdd_validation_api(request: HttpRequest) -> JsonResponse:
         plant = _load_authorized_plant(request, _parse_plant_id(data))
         tz_name = getattr(plant, "timezone", "UTC") or "UTC"
         params = parse_dashboard_params(data, tz_name)
-        detector_version = str(data.get("detector_version") or "mismatch_runtime_v1").strip()
+        detector_version = detector_version_for_flow(data.get("detector_version") or DEFAULT_DETECTOR_VERSION, params.detection_flow_mode)
         source_oper = str(data.get("source_oper") or data.get("src_oper") or "").strip()
         source_meteo = str(data.get("source_meteo") or data.get("src_meteo") or "").strip()
         report = compute_validation_report_from_db(

@@ -6,6 +6,13 @@ from typing import Any, Dict, List, Optional
 from core.models import PVPlant
 from core.services.fdd.events import EventBuildParams, build_fault_events_for_range
 from core.services.fdd.dashboard_common import MISMATCH_VERSION_SUMMARY, canonical_source_oper, upsert_diag15m
+from core.services.fdd.detection_flow import (
+    LEGACY_RUNTIME_NORMAL_LABELS,
+    build_anomaly_flags,
+    build_operational_deviation_flags,
+    detection_flow_label,
+    detector_version_for_flow,
+)
 from core.services.fdd.runtime_types import MismatchDashboardParams
 
 def persist_runtime_outputs(
@@ -22,8 +29,23 @@ def persist_runtime_outputs(
 ) -> Optional[Dict[str, Any]]:
     if not params.persist:
         return None
-    detector_version = str(MISMATCH_VERSION_SUMMARY.get("detector_version") or "mismatch_runtime_v1")
+    base_detector_version = str(MISMATCH_VERSION_SUMMARY.get("detector_version") or "mismatch_runtime_v1")
+    detector_version = detector_version_for_flow(base_detector_version, params.detection_flow_mode)
     canonical_oper = canonical_source_oper(selected_sources)
+    final_anomaly_flags = list(pipeline.get("anomaly_flag") or build_anomaly_flags(
+        detection_flow_mode=params.detection_flow_mode,
+        residual_anomalies=pipeline["anomaly"],
+        diagnosis_labels=confidence["diag_diagnosis_labels"],
+        direct_grid_evidence=confidence["diag_direct_grid"],
+        normal_labels=LEGACY_RUNTIME_NORMAL_LABELS,
+    ))
+    operational_deviation_flags = list(pipeline.get("operational_deviation_flag") or build_operational_deviation_flags(
+        diagnosis_labels=confidence["diag_diagnosis_labels"],
+        direct_grid_evidence=confidence["diag_direct_grid"],
+        zero_injection_flags=confidence["diag_zero_inj"],
+        rca_codes=pipeline["codes"],
+        n=len(times_utc),
+    ))
     detector_scores_runtime: List[Optional[float]] = []
     alarm_code_runtime: List[Optional[int]] = []
     alarm_sev_runtime: List[Optional[int]] = []
@@ -46,7 +68,7 @@ def persist_runtime_outputs(
         rca_codes=pipeline["codes"],
         rca_labels=pipeline["labels"],
         valid=pipeline["valid_period"],
-        anomaly_flags=[bool(a) or bool(g) or str(d or "").strip().lower() not in {"ok", "normal", "invalid", "low_irradiance"} for a, g, d in zip(pipeline["anomaly"], confidence["diag_direct_grid"], confidence["diag_diagnosis_labels"])],
+        anomaly_flags=final_anomaly_flags,
         detector_scores=detector_scores_runtime,
         ewma_z=pipeline["ewma_z"],
         cusum_scores=pipeline["cusum_score"],
@@ -77,6 +99,9 @@ def persist_runtime_outputs(
         alarm_sev_oper=alarm_sev_runtime,
         evidence_json=confidence["diag_evidence_json"],
         confidence_notes_json=confidence["confidence_notes"],
+        detection_flow_mode=params.detection_flow_mode,
+        residual_anomaly_flags=pipeline["anomaly"],
+        operational_deviation_flags=operational_deviation_flags,
     )
     upsert_events = build_fault_events_for_range(
         plant_id=plant.id,
@@ -87,7 +112,14 @@ def persist_runtime_outputs(
             source_oper=canonical_oper,
             source_meteo=src_meteo,
             replace_existing=True,
+            detection_flow_mode=params.detection_flow_mode,
         ),
     )
-    return {"diagnostics": upsert_diag, "events": upsert_events}
+    return {
+        "diagnostics": upsert_diag,
+        "events": upsert_events,
+        "detection_flow_mode": params.detection_flow_mode,
+        "detection_flow_label": detection_flow_label(params.detection_flow_mode),
+        "detector_version": detector_version,
+    }
 

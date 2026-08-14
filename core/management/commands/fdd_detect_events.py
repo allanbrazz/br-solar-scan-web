@@ -20,6 +20,7 @@ class Command(BaseCommand):
         parser.add_argument("--source-oper", type=str, default="")
         parser.add_argument("--source-meteo", type=str, default="")
         parser.add_argument("--detector-version", type=str, default="hybrid_rules_v1")
+        parser.add_argument("--detection-flow-mode", type=str, default="legacy_hybrid")
         parser.add_argument("--delete-existing", type=int, default=1)
 
     def handle(self, *args, **opts):
@@ -52,6 +53,7 @@ class Command(BaseCommand):
             source_oper=(str(opts["source_oper"]).strip() or None),
             source_meteo=(str(opts["source_meteo"]).strip() or None),
             detector_version=str(opts["detector_version"]),
+            detection_flow_mode=str(opts["detection_flow_mode"]),
             delete_existing=bool(int(opts["delete_existing"])),
         )
         self.stdout.write(json.dumps(out, ensure_ascii=False, indent=2, default=str))

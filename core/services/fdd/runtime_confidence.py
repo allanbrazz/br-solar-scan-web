@@ -8,6 +8,12 @@ from core.services.fdd.reliability import (
     compute_detection_confidence,
     compute_diagnosis_confidence,
 )
+from core.services.fdd.detection_flow import (
+    DEFAULT_DETECTION_FLOW_MODE,
+    LEGACY_RUNTIME_NORMAL_LABELS,
+    decide_anomaly_flag,
+    normalize_detection_flow_mode,
+)
 from core.services.fdd.runtime_detection import pick_diag_row_for_ts
 from core.services.fdd.runtime_types import MismatchDashboardParams
 
@@ -27,6 +33,7 @@ def build_runtime_confidence(
     agg: Dict[str, Any],
     model: Dict[str, Any],
     pipeline: Dict[str, Any],
+    params: Optional[MismatchDashboardParams] = None,
 ) -> Dict[str, Any]:
     n = len(times_utc)
     rca = pipeline["rca"]
@@ -47,6 +54,9 @@ def build_runtime_confidence(
     diag_direct_grid = [bool(v) for v in _pad_or_trim(list(rca.get("direct_grid_evidence") or []), n, False)]
     diag_zero_inj = [bool(v) for v in _pad_or_trim(list(rca.get("zero_injection_flag") or []), n, False)]
     diag_evidence_json = _pad_or_trim(list(rca.get("evidence_json") or []), n, {})
+    detection_flow_mode = normalize_detection_flow_mode(
+        getattr(params, "detection_flow_mode", None) if params is not None else DEFAULT_DETECTION_FLOW_MODE
+    )
 
     data_reliability_score: List[Optional[float]] = [None] * n
     data_reliability_level: List[str] = [""] * n
@@ -81,7 +91,13 @@ def build_runtime_confidence(
             cusum_i = cusum_seq[i]
 
         diag_label = str(diag_diagnosis_labels[i] or labels[i] or "invalid")
-        anomaly_final = bool(anomaly[i]) or bool(diag_direct_grid[i]) or (diag_label not in {"normal", "ok", "invalid", "low_irradiance"})
+        anomaly_final = decide_anomaly_flag(
+            detection_flow_mode=detection_flow_mode,
+            residual_anomaly=bool(anomaly[i]),
+            diagnosis_label=diag_label,
+            direct_grid_evidence=bool(diag_direct_grid[i]),
+            normal_labels=LEGACY_RUNTIME_NORMAL_LABELS,
+        )
 
         data_rel = compute_data_reliability(
             row=row_runtime,
@@ -131,6 +147,8 @@ def build_runtime_confidence(
                 "zero_injection_flag": bool(diag_zero_inj[i]),
                 "irradiance_tier": str(irradiance_tier[i] or "N"),
                 "evidence_json": diag_evidence_json[i] if i < len(diag_evidence_json) else {},
+                "detection_flow_mode": detection_flow_mode,
+                "anomaly_flag": bool(anomaly_final),
             },
         }
 

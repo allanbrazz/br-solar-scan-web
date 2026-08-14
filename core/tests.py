@@ -12,6 +12,12 @@ from django.utils import timezone
 
 from core.forms import MeteoRequestForm
 from core.services.dados_satelite.cams import CamsFetchResult, ingest_cams_range, parse_cams_csv_bytes
+from core.services.fdd.detection_flow import (
+    LEGACY_HYBRID,
+    THESIS_SEQUENTIAL,
+    decide_anomaly_flag,
+)
+from core.services.fdd.events import EventBuildParams, build_fault_events_for_range
 from core.services.fdd.dashboard_runtime import get_mismatch_backend_param_defaults
 from core.services.fdd.param_catalog import DEFAULT_CONFIG_NAME
 from core.services.fdd.report_pdf import build_mismatch_pdf_report
@@ -29,6 +35,8 @@ from core.models import (
     PlantMonitoringCredential,
     PlantDetectorConfiguration,
     PlantPerformanceRatio,
+    PlantDiagnostic15m,
+    FaultEvent,
     PVPlantMergedRecord15m,
     PVInverter,
     PVModule,
@@ -65,6 +73,137 @@ class DashboardMetricTests(TestCase):
         self.assertIsNone(empty["rmse"])
         self.assertIsNone(constant["pearson_r"])
         self.assertIsNone(constant["spearman_rho"])
+
+
+class DetectionFlowModeTests(TestCase):
+    def test_legacy_uses_rca_label_as_detector_input(self):
+        anomaly = decide_anomaly_flag(
+            detection_flow_mode=LEGACY_HYBRID,
+            residual_anomaly=False,
+            diagnosis_label="dc_shading_soiling_probable",
+            direct_grid_evidence=False,
+        )
+
+        self.assertTrue(anomaly)
+
+    def test_sequential_does_not_let_rca_label_create_anomaly(self):
+        anomaly = decide_anomaly_flag(
+            detection_flow_mode=THESIS_SEQUENTIAL,
+            residual_anomaly=False,
+            diagnosis_label="dc_shading_soiling_probable",
+            direct_grid_evidence=False,
+        )
+
+        self.assertFalse(anomaly)
+
+    def test_sequential_keeps_residual_detection_as_anomaly(self):
+        anomaly = decide_anomaly_flag(
+            detection_flow_mode=THESIS_SEQUENTIAL,
+            residual_anomaly=True,
+            diagnosis_label="dc_shading_soiling_probable",
+            direct_grid_evidence=False,
+        )
+
+        self.assertTrue(anomaly)
+
+    def test_direct_grid_evidence_is_diagnostic_only_in_sequential_mode(self):
+        legacy = decide_anomaly_flag(
+            detection_flow_mode=LEGACY_HYBRID,
+            residual_anomaly=False,
+            diagnosis_label="normal",
+            direct_grid_evidence=True,
+        )
+        sequential = decide_anomaly_flag(
+            detection_flow_mode=THESIS_SEQUENTIAL,
+            residual_anomaly=False,
+            diagnosis_label="normal",
+            direct_grid_evidence=True,
+        )
+
+        self.assertTrue(legacy)
+        self.assertFalse(sequential)
+
+    def test_sequential_fault_events_require_residual_anomaly_bins(self):
+        user = get_user_model().objects.create_user(username="flow-owner", password="test-pass")
+        plant = PVPlant.objects.create(owner=user, nome="Fluxo FDD", latitude=-5.0, longitude=-35.0)
+        base = datetime(2026, 6, 12, 12, 0, tzinfo=dt_timezone.utc)
+        detector_version = "mismatch_runtime_v2_sequential"
+
+        for idx in range(3):
+            PlantDiagnostic15m.objects.create(
+                plant=plant,
+                ts_utc=base + timedelta(minutes=15 * idx),
+                source_oper="SHINEMONITOR",
+                source_meteo="OPENMETEO",
+                detector_version=detector_version,
+                valid=True,
+                anomaly_flag=decide_anomaly_flag(
+                    detection_flow_mode=THESIS_SEQUENTIAL,
+                    residual_anomaly=False,
+                    diagnosis_label="dc_shading_soiling_probable",
+                    direct_grid_evidence=False,
+                ),
+                diagnosis_label="dc_shading_soiling_probable",
+                direct_grid_evidence=False,
+                evidence_json={
+                    "detection_flow_mode": THESIS_SEQUENTIAL,
+                    "residual_anomaly": False,
+                    "operational_deviation_flag": True,
+                },
+            )
+
+        no_event = build_fault_events_for_range(
+            plant_id=plant.id,
+            ts_start_utc=base,
+            ts_end_utc=base + timedelta(hours=1),
+            params=EventBuildParams(
+                detector_version=detector_version,
+                source_oper="SHINEMONITOR",
+                source_meteo="OPENMETEO",
+                detection_flow_mode=THESIS_SEQUENTIAL,
+            ),
+        )
+
+        self.assertEqual(no_event["events"], 0)
+        self.assertFalse(FaultEvent.objects.filter(plant=plant).exists())
+
+        for idx in range(2):
+            PlantDiagnostic15m.objects.create(
+                plant=plant,
+                ts_utc=base + timedelta(hours=2, minutes=15 * idx),
+                source_oper="SHINEMONITOR",
+                source_meteo="OPENMETEO",
+                detector_version=detector_version,
+                valid=True,
+                anomaly_flag=decide_anomaly_flag(
+                    detection_flow_mode=THESIS_SEQUENTIAL,
+                    residual_anomaly=True,
+                    diagnosis_label="dc_shading_soiling_probable",
+                    direct_grid_evidence=False,
+                ),
+                diagnosis_label="dc_shading_soiling_probable",
+                evidence_json={
+                    "detection_flow_mode": THESIS_SEQUENTIAL,
+                    "residual_anomaly": True,
+                    "operational_deviation_flag": True,
+                },
+            )
+
+        with_event = build_fault_events_for_range(
+            plant_id=plant.id,
+            ts_start_utc=base + timedelta(hours=2),
+            ts_end_utc=base + timedelta(hours=3),
+            params=EventBuildParams(
+                detector_version=detector_version,
+                source_oper="SHINEMONITOR",
+                source_meteo="OPENMETEO",
+                detection_flow_mode=THESIS_SEQUENTIAL,
+            ),
+        )
+
+        self.assertEqual(with_event["events"], 1)
+        event = FaultEvent.objects.get(plant=plant)
+        self.assertEqual(event.meta["detection_flow_mode"], THESIS_SEQUENTIAL)
 
 
 class VillalvaExtractionTests(TestCase):
@@ -1081,6 +1220,8 @@ class RenovigiWorkflowTests(TestCase):
         self.assertContains(response, "showEwmaCusumSignals")
         self.assertContains(response, "showOperationalRcaSignals")
         self.assertContains(response, "renderOriginCounts")
+        self.assertContains(response, "detection_flow_mode")
+        self.assertContains(response, "Sequencial — EWMA/CUSUM")
         self.assertContains(response, "Frequência da rede [Hz]")
         self.assertContains(response, "Código do alarme")
         self.assertContains(response, "Score do evento residual")
@@ -1120,6 +1261,11 @@ class RenovigiWorkflowTests(TestCase):
         self.assertEqual(payload["model_fit"]["p_dc"]["pairs"], 8)
         self.assertIsNotNone(payload["model_fit"]["p_dc"]["rmse"])
         self.assertIn("detection_origin_counts", payload["summary"])
+        self.assertIn("detection_flow_audit", payload["summary"])
+        self.assertIn("anomaly_flag", payload["series"])
+        self.assertIn("residual_anomaly", payload["series"])
+        self.assertIn("operational_deviation_flag", payload["series"])
+        self.assertEqual(payload["detection_flow"]["mode"], "legacy_hybrid")
         self.assertIn("detection_origin_key", payload["series"])
         self.assertIn("detection_origin_label", payload["series"])
         self.assertIn("detection_origin_ewma_cusum", payload["series"])
@@ -1138,6 +1284,36 @@ class RenovigiWorkflowTests(TestCase):
         self.assertEqual(first_dump["chosen_total"]["alarm_code"], 7)
         self.assertEqual(first_dump["chosen_total"]["alarm_sev"], 2)
         self.assertAlmostEqual(first_dump["chosen_total"]["freq_hz"], 60.03)
+
+    def test_mismatch_fdd_api_sequential_mode_tracks_flow_and_final_flags(self):
+        self._seed_temperature_corrected_pr_fixture()
+
+        response = self.client.get(
+            reverse("mismatch_fdd_api"),
+            {
+                "plant_id": self.plant.pk,
+                "start": "2026-06-12",
+                "end": "2026-06-12",
+                "source_oper": "ALL",
+                "source_meteo": "OPENMETEO",
+                "detection_flow_mode": "thesis_sequential",
+                "min_baseline_points": "4",
+                "rca_min_baseline_points": "4",
+                "stable_window_points": "2",
+                "shading_window_points": "2",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["detection_flow"]["mode"], "thesis_sequential")
+        self.assertEqual(payload["versions"]["detector_version"], "mismatch_runtime_v2_sequential")
+        self.assertEqual(payload["versions"]["detection_flow_mode"], "thesis_sequential")
+        self.assertEqual(payload["series"]["anomaly_flag"], payload["series"]["residual_anomaly"])
+        audit = payload["summary"]["detection_flow_audit"]
+        self.assertTrue(audit["anomaly_equals_residual"])
+        first_dump = next(iter(payload["dump_by_tkey"].values()))
+        self.assertEqual(first_dump["detection"]["detection_flow_mode"], "thesis_sequential")
 
     def test_mismatch_pr_temp_api_calculates_and_persists_monthly_ratio(self):
         self._seed_temperature_corrected_pr_fixture()
@@ -1206,6 +1382,7 @@ class RenovigiWorkflowTests(TestCase):
         saved = PlantDetectorConfiguration.objects.get(plant=self.plant)
         self.assertEqual(saved.config["warn_abs"], 0.52)
         self.assertEqual(saved.config["detector_version"], "mismatch_runtime_v1")
+        self.assertEqual(saved.config["detection_flow_mode"], "legacy_hybrid")
 
         default = self.client.post(
             url,
@@ -1219,6 +1396,25 @@ class RenovigiWorkflowTests(TestCase):
         listing = self.client.get(url, {"plant_id": self.plant.pk})
         self.assertEqual(listing.status_code, 200)
         self.assertEqual(listing.json()["configurations"][0]["name"], "Configuração Belarmino")
+
+        sequential = self.client.post(
+            url,
+            data={
+                "action": "save",
+                "plant_id": self.plant.pk,
+                "name": "Configuração Belarmino Sequencial",
+                "config": {
+                    "config_name": "C18_estabilidade_restritiva",
+                    "warn_abs": 0.52,
+                    "persist": True,
+                    "detection_flow_mode": "thesis_sequential",
+                },
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(sequential.status_code, 200)
+        saved_seq = PlantDetectorConfiguration.objects.get(plant=self.plant, name="Configuração Belarmino Sequencial")
+        self.assertEqual(saved_seq.config["detection_flow_mode"], "thesis_sequential")
 
     def test_meteorology_page_manages_selected_plant_data(self):
         MeteoRecord.objects.create(

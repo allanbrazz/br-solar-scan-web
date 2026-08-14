@@ -23,6 +23,7 @@ class MismatchDashboardParams:
     pmin_w: float
     thr: MismatchThresholds
     use_legacy: bool
+    detection_flow_mode: str
     persist: bool
     gpoa_plot_min: float
     pmodel_plot_min: float
