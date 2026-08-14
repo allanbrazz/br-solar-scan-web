@@ -22,6 +22,8 @@ from core.views.dashboard import paired_model_metrics
 from core.models import (
     AccountNotification,
     InverterOperationalData,
+    InverterSample,
+    MeteoImportBatch,
     MeteoRecord,
     MeteoSource,
     PlantMonitoringCredential,
@@ -189,6 +191,7 @@ class AccessControlTests(TestCase):
         protected_urls = [
             reverse("plants:detail", kwargs={"pk": self.other_plant.pk}),
             reverse("plants:cred_save", kwargs={"pk": self.other_plant.pk}),
+            reverse("plants:delete", kwargs={"pk": self.other_plant.pk}),
             reverse("renovigi_console", kwargs={"pk": self.other_plant.pk}),
             reverse("opdata_list", kwargs={"pk": self.other_plant.pk}),
         ]
@@ -259,6 +262,102 @@ class AccessControlTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.plant.nome)
         self.assertNotContains(response, self.other_plant.nome)
+        self.assertContains(response, reverse("plants:delete", kwargs={"pk": self.plant.pk}))
+
+    def test_plant_detail_offers_delete_action(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("plants:detail", kwargs={"pk": self.plant.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("plants:delete", kwargs={"pk": self.plant.pk}))
+
+    def test_plant_delete_requires_exact_name_confirmation(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("plants:delete", kwargs={"pk": self.plant.pk}),
+            {"confirm_name": "EXCLUIR"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(PVPlant.objects.filter(pk=self.plant.pk).exists())
+
+    def test_plant_delete_removes_registration_and_related_data(self):
+        self.client.force_login(self.user)
+        plant_id = self.plant.pk
+        ts = datetime(2026, 6, 12, 12, 0, tzinfo=dt_timezone.utc)
+        MeteoImportBatch.objects.create(
+            plant=self.plant,
+            source=MeteoSource.OPENMETEO,
+            dataset_model="best_match",
+            interval_min=15,
+            start_date=date(2026, 6, 12),
+            end_date=date(2026, 6, 12),
+        )
+        MeteoRecord.objects.create(
+            plant=self.plant,
+            source=MeteoSource.OPENMETEO,
+            ts_utc=ts,
+            interval_min=15,
+            ghi=800.0,
+            temp_air=28.0,
+        )
+        InverterOperationalData.objects.create(
+            plant=self.plant,
+            pn="PN-1",
+            devcode="518",
+            devaddr=1,
+            sn="SN-1",
+            ts_utc=ts,
+            payload={"p_ac_w": 1234.0},
+        )
+        InverterSample.objects.create(
+            plant=self.plant,
+            device_key="RENOVIGI:SN-1",
+            ts=ts,
+            data={"p_ac_w": 1234.0},
+        )
+        PVPlantMergedRecord15m.objects.create(
+            plant=self.plant,
+            source_oper="SHINEMONITOR",
+            source_meteo="OPENMETEO",
+            ts_utc=ts,
+            interval_min=15,
+            p_ac_w=1200.0,
+            ghi=780.0,
+        )
+        PVPlantDetails.objects.create(
+            plant=self.plant,
+            strings_count=1,
+            modules_per_string=1,
+            modules_total=1,
+        )
+        PlantMonitoringCredential.objects.create(
+            plant=self.plant,
+            provedor="RENOVIGI",
+            username="monitor-user",
+            password="monitor-password",
+        )
+
+        response = self.client.post(
+            reverse("plants:delete", kwargs={"pk": plant_id}),
+            {"confirm_name": self.plant.nome},
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("plants:list"))
+        self.assertFalse(PVPlant.objects.filter(pk=plant_id).exists())
+        self.assertFalse(MeteoRecord.objects.filter(plant_id=plant_id).exists())
+        self.assertFalse(MeteoImportBatch.objects.filter(plant_id=plant_id).exists())
+        self.assertFalse(InverterOperationalData.objects.filter(plant_id=plant_id).exists())
+        self.assertFalse(InverterSample.objects.filter(plant_id=plant_id).exists())
+        self.assertFalse(PVPlantMergedRecord15m.objects.filter(plant_id=plant_id).exists())
+        self.assertFalse(PVPlantDetails.objects.filter(plant_id=plant_id).exists())
+        self.assertFalse(PlantMonitoringCredential.objects.filter(plant_id=plant_id).exists())
+        self.assertContains(response, "Meteorológicos=1")
+        self.assertContains(response, "Operativos=1")
+        self.assertContains(response, "Merged=1")
 
     @override_settings(ALLOW_PUBLIC_SIGNUP=False)
     def test_signup_can_be_disabled_in_production(self):
@@ -957,6 +1056,10 @@ class RenovigiWorkflowTests(TestCase):
         self.assertContains(response, "modelFitPearson")
         self.assertContains(response, "implementationExplanationCard")
         self.assertContains(response, "[modelFit, validation, explanation]")
+        self.assertContains(response, "originPanel")
+        self.assertContains(response, "showEwmaCusumSignals")
+        self.assertContains(response, "showOperationalRcaSignals")
+        self.assertContains(response, "renderOriginCounts")
         self.assertContains(response, "Frequência da rede [Hz]")
         self.assertContains(response, "Código do alarme")
         self.assertContains(response, "Score do evento residual")
@@ -995,6 +1098,20 @@ class RenovigiWorkflowTests(TestCase):
         self.assertIn("p_dc", payload["model_fit"])
         self.assertEqual(payload["model_fit"]["p_dc"]["pairs"], 8)
         self.assertIsNotNone(payload["model_fit"]["p_dc"]["rmse"])
+        self.assertIn("detection_origin_counts", payload["summary"])
+        self.assertIn("detection_origin_key", payload["series"])
+        self.assertIn("detection_origin_label", payload["series"])
+        self.assertIn("detection_origin_ewma_cusum", payload["series"])
+        self.assertIn("detection_origin_operational_rca", payload["series"])
+        self.assertIn("ewma_flag", payload["series"])
+        self.assertIn("cusum_flag", payload["series"])
+        self.assertEqual(len(payload["series"]["detection_origin_key"]), len(payload["series"]["t_local"]))
+        origin_counts = payload["summary"]["detection_origin_counts"]
+        self.assertEqual(origin_counts["total_points"], len(payload["series"]["t_local"]))
+        self.assertEqual(
+            origin_counts["total_points"],
+            origin_counts["ewma_cusum_only"] + origin_counts["operational_rca_only"] + origin_counts["both"] + origin_counts["none"],
+        )
 
         first_dump = next(iter(payload["dump_by_tkey"].values()))
         self.assertEqual(first_dump["chosen_total"]["alarm_code"], 7)

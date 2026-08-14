@@ -14,9 +14,10 @@
   <article class="card glass accent-cyan" style="grid-column: 1 / -1;">
     <div class="flex-between" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
       <h3>Hardware</h3>
-      <div style="display:flex; gap:8px;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <a class="btn btn-primary" href="{% url 'plants:edit' p.pk %}">Editar planta</a>
         <a class="btn btn-primary" href="{% url 'plants:details_edit' p.pk %}">Editar detalhes</a>
+        <a class="btn btn-danger" href="{% url 'plants:delete' p.pk %}">Excluir planta</a>
       </div>
     </div>
 

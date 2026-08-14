@@ -520,6 +520,8 @@ def run_detection_and_rca(
     rca: Dict[str, Any] = {}
     ewma_z: List[Optional[float]] = [None] * n
     cusum_score: List[Optional[float]] = [None] * n
+    ewma_flag: List[bool] = [False] * n
+    cusum_flag: List[bool] = [False] * n
     freq_hz: List[Optional[float]] = list(agg.get("freq_hz") or ([None] * n))
     det_dbg: Dict[str, Any] = {}
     rca_dbg: Dict[str, Any] = {}
@@ -595,6 +597,8 @@ def run_detection_and_rca(
 
         ewma_z = list(det.get("ewma_z") or ([None] * n))
         cusum_score = list(det.get("cusum") or ([None] * n))
+        ewma_flag = [bool(v) for v in (det.get("ewma_flag") or [False] * n)]
+        cusum_flag = [bool(v) for v in (det.get("cusum_flag") or [False] * n)]
         if len(ewma_z) < n:
             ewma_z.extend([None] * (n - len(ewma_z)))
         else:
@@ -603,6 +607,14 @@ def run_detection_and_rca(
             cusum_score.extend([None] * (n - len(cusum_score)))
         else:
             cusum_score = cusum_score[:n]
+        if len(ewma_flag) < n:
+            ewma_flag.extend([False] * (n - len(ewma_flag)))
+        else:
+            ewma_flag = ewma_flag[:n]
+        if len(cusum_flag) < n:
+            cusum_flag.extend([False] * (n - len(cusum_flag)))
+        else:
+            cusum_flag = cusum_flag[:n]
 
         for i in range(n):
             score_i, trig_i = _residual_score_from_channels(i, residual_series)
@@ -630,6 +642,8 @@ def run_detection_and_rca(
             "gate_reason": gate_debug["gate_reason"],
             "ewma_z": ewma_z,
             "cusum": cusum_score,
+            "ewma_flag": ewma_flag,
+            "cusum_flag": cusum_flag,
             "baseline": det.get("baseline"),
             "detection_signal_rel": detection_signal,
             "coarse_period": coarse_period,
@@ -759,6 +773,8 @@ def run_detection_and_rca(
             "irradiance_tier": irradiance_tier,
             "ewma_z": ewma_z,
             "cusum_score": cusum_score,
+            "ewma_flag": ewma_flag,
+            "cusum_flag": cusum_flag,
             "freq_hz": freq_hz,
             "rca": rca,
             "codes": codes,
@@ -792,6 +808,8 @@ def run_detection_and_rca(
         "irradiance_tier": irradiance_tier,
         "ewma_z": ewma_z,
         "cusum_score": cusum_score,
+        "ewma_flag": ewma_flag,
+        "cusum_flag": cusum_flag,
         "freq_hz": freq_hz,
         "rca": rca,
         "codes": codes,

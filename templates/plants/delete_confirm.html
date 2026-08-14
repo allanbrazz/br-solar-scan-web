@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Excluir {{ plant.nome }}{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <h1 class="page-title">Excluir planta</h1>
+  <p class="page-sub">{{ plant.nome }} • {{ plant.latitude }}, {{ plant.longitude }}</p>
+</header>
+
+<section class="dash" style="--cols:12;">
+  <article class="card glass accent-rose" style="grid-column:1 / -1;">
+    <div class="delete-head">
+      <div>
+        <h3>Exclusão permanente</h3>
+        <p class="delete-warning">
+          Esta ação remove o cadastro da planta e todos os dados vinculados a ela,
+          incluindo meteorologia, dados operativos, registros merged, diagnósticos,
+          credenciais e configurações internas.
+        </p>
+      </div>
+      <a class="btn btn-primary" href="{% url 'plants:detail' plant.pk %}">Voltar</a>
+    </div>
+
+    <div class="delete-summary" aria-label="Resumo dos registros vinculados">
+      {% for item in deletion_summary.items %}
+        <div class="delete-stat">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.count }}</strong>
+        </div>
+      {% endfor %}
+    </div>
+
+    <form method="post" class="delete-form" novalidate>
+      {% csrf_token %}
+      <label class="form-label" for="confirm_name">
+        Para confirmar, digite exatamente o nome da planta:
+      </label>
+      <div class="confirm-name">{{ plant.nome }}</div>
+      <input
+        id="confirm_name"
+        name="confirm_name"
+        type="text"
+        class="form-control"
+        autocomplete="off"
+        placeholder="Nome da planta"
+        required
+      >
+
+      <div class="delete-actions">
+        <a class="btn btn-primary" href="{% url 'plants:detail' plant.pk %}">Cancelar</a>
+        <button class="btn btn-danger" type="submit">Excluir definitivamente</button>
+      </div>
+    </form>
+  </article>
+</section>
+
+<style>
+  .delete-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .delete-warning{
+    max-width:840px;
+    margin:.35rem 0 0;
+    color:rgba(255,235,240,.92);
+    line-height:1.45;
+  }
+  .delete-summary{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(160px, 1fr));
+    gap:10px;
+    margin:18px 0;
+  }
+  .delete-stat{
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:10px;
+    padding:.7rem .8rem;
+    background:rgba(255,255,255,.06);
+    min-height:72px;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+  }
+  .delete-stat span{
+    color:rgba(240,248,255,.78);
+    font-size:.86rem;
+    line-height:1.2;
+  }
+  .delete-stat strong{
+    font-size:1.45rem;
+    color:#fff;
+    font-variant-numeric:tabular-nums;
+  }
+  .delete-form{
+    max-width:760px;
+    border-top:1px solid rgba(255,255,255,.12);
+    padding-top:16px;
+  }
+  .confirm-name{
+    display:inline-flex;
+    margin:.25rem 0 .55rem;
+    padding:.35rem .55rem;
+    border-radius:9px;
+    background:rgba(255,255,255,.10);
+    color:#fff;
+    font-weight:700;
+  }
+  .delete-form .form-control{
+    width:100%;
+    max-width:520px;
+  }
+  .delete-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:14px;
+  }
+  @media (max-width: 920px){
+    .delete-summary{ grid-template-columns:repeat(2, minmax(150px, 1fr)); }
+  }
+  @media (max-width: 560px){
+    .delete-summary{ grid-template-columns:1fr; }
+  }
+</style>
+{% endblock %}

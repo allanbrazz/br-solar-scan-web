@@ -20,6 +20,11 @@ from core.models import (
     PlantCableSegment,
 )
 from core.access import plants_accessible_to
+from core.services.plant_deletion import (
+    delete_plant_with_related_data,
+    summarize_plant_related_data,
+)
+from django.db.models.deletion import ProtectedError
 #---------------------------
 #---------------------------  P L A N T A S
 #---------------------------
@@ -269,6 +274,63 @@ class PlantUpdateView(LoginRequiredMixin, UpdateView):
         resp = super().form_valid(form)
         messages.success(self.request, "Planta atualizada com sucesso.")
         return resp
+
+
+class PlantDeleteView(LoginRequiredMixin, View):
+    template_name = "plants/delete_confirm.html"
+
+    def _get_plant(self, request, pk):
+        return get_object_or_404(plants_accessible_to(request.user), pk=pk)
+
+    def get(self, request, pk):
+        plant = self._get_plant(request, pk)
+        return render(
+            request,
+            self.template_name,
+            {
+                "plant": plant,
+                "deletion_summary": summarize_plant_related_data(plant),
+            },
+        )
+
+    def post(self, request, pk):
+        plant = self._get_plant(request, pk)
+        confirm_name = (request.POST.get("confirm_name") or "").strip()
+
+        if confirm_name != plant.nome:
+            messages.error(
+                request,
+                "Confirmação inválida. Digite exatamente o nome da planta para excluir.",
+            )
+            return render(
+                request,
+                self.template_name,
+                {
+                    "plant": plant,
+                    "deletion_summary": summarize_plant_related_data(plant),
+                },
+                status=400,
+            )
+
+        try:
+            summary = delete_plant_with_related_data(plant)
+        except ProtectedError as exc:
+            logger.exception("Erro de proteção ao excluir planta %s: %s", plant.pk, exc)
+            messages.error(
+                request,
+                "Não foi possível excluir a planta porque há registros protegidos vinculados a ela.",
+            )
+            return redirect("plants:detail", pk=plant.pk)
+
+        counts = summary["counts"]
+        messages.success(
+            request,
+            "Planta excluída com sucesso. "
+            f"Meteorológicos={counts.get('meteo_records', 0)}, "
+            f"Operativos={counts.get('operational_records', 0)}, "
+            f"Merged={counts.get('merged_records', 0)}.",
+        )
+        return redirect("plants:list")
 
 class PlantCredSaveView(LoginRequiredMixin, View):
     def get(self, request, pk):

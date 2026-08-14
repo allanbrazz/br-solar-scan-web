@@ -278,6 +278,125 @@
       font-size:.90rem; white-space: nowrap; user-select:none;
     }
     .dot{ width:11px; height:11px; border-radius:99px; box-shadow: 0 0 0 1px rgba(0,0,0,.18) inset; }
+    .origin-panel{
+      margin-top:.75rem;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      background:rgba(255,255,255,.035);
+      overflow:hidden;
+    }
+    .origin-panel summary{
+      cursor:pointer;
+      list-style:none;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding:.75rem .9rem;
+      font-weight:800;
+    }
+    .origin-panel summary::-webkit-details-marker{ display:none; }
+    .origin-panel summary::after{
+      content:"+";
+      display:inline-grid;
+      place-items:center;
+      width:24px;
+      height:24px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.05);
+      color:rgba(233,246,255,.9);
+      flex:0 0 auto;
+    }
+    .origin-panel[open] summary::after{ content:"-"; }
+    .origin-summary{
+      font-weight:700;
+      color:rgba(233,246,255,.72);
+      font-size:.88rem;
+      text-align:right;
+      overflow-wrap:anywhere;
+    }
+    .origin-body{
+      border-top:1px solid rgba(255,255,255,.10);
+      padding:.85rem .9rem .95rem;
+      display:grid;
+      gap:.8rem;
+    }
+    .origin-tools{
+      display:flex;
+      align-items:end;
+      gap:.75rem;
+      flex-wrap:wrap;
+    }
+    .origin-tools .origin-toggle-label{
+      color:rgba(233,246,255,.76);
+      font-size:.85rem;
+      font-weight:800;
+      flex-basis:100%;
+    }
+    .origin-toggle{
+      display:inline-flex;
+      align-items:center;
+      gap:.5rem;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.045);
+      border-radius:999px;
+      padding:.46rem .68rem;
+      color:rgba(233,246,255,.9);
+      font-size:.88rem;
+      font-weight:800;
+      user-select:none;
+    }
+    .origin-toggle input{
+      width:15px;
+      height:15px;
+      accent-color:#5ad7ff;
+      margin:0;
+    }
+    .origin-swatch{
+      display:inline-block;
+      width:18px;
+      height:12px;
+      border-radius:4px;
+      border:1px solid rgba(255,255,255,.14);
+      background:
+        linear-gradient(135deg, transparent 42%, var(--hm-origin-ewma) 43%, var(--hm-origin-ewma) 57%, transparent 58%),
+        rgba(255,255,255,.04);
+    }
+    .origin-swatch.operational{
+      background:
+        linear-gradient(45deg, transparent 42%, var(--hm-origin-rca) 43%, var(--hm-origin-rca) 57%, transparent 58%),
+        rgba(255,255,255,.04);
+    }
+    .origin-counts{
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+      gap:.55rem;
+    }
+    .origin-count{
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      background:rgba(255,255,255,.045);
+      padding:.62rem .7rem;
+      min-width:0;
+    }
+    .origin-count .t{
+      margin:0 0 .28rem;
+      color:rgba(233,246,255,.72);
+      font-size:.80rem;
+      font-weight:700;
+    }
+    .origin-count .v{
+      margin:0;
+      color:rgba(255,255,255,.96);
+      font:800 1.18rem/1.1 ui-monospace, Menlo, Consolas, monospace;
+    }
+    .origin-hint{
+      margin:0;
+      color:rgba(233,246,255,.68);
+      font-size:.84rem;
+      line-height:1.35;
+    }
 
     /* cinza=sem dados operativos do inversor no bin, verde=normal, amarelo=warn, vermelho=falha */
     :root{
@@ -288,6 +407,9 @@
       --hm-warn: #ffd25a;
       --hm-crit: #ff5a6e;
       --hm-sel:  rgba(90,200,255,.95);
+      --hm-origin-ewma: #5ad7ff;
+      --hm-origin-rca: #d78cff;
+      --hm-origin-both: #ffffff;
     }
 
     .status{
@@ -924,6 +1046,34 @@
       <canvas id="hmCanvas" class="hm-canvas" width="800" height="420" title="Clique para selecionar um ponto"></canvas>
     </div>
     <div id="hmTip" class="hm-tip"></div>
+    <details class="origin-panel" id="originPanel">
+      <summary>
+        <span>Origem dos destaques</span>
+        <span class="origin-summary mono" id="originPanelSummary">Execute para contabilizar</span>
+      </summary>
+      <div class="origin-body">
+        <div class="origin-tools">
+          <span class="origin-toggle-label">Sinalizações visíveis</span>
+          <label class="origin-toggle" for="showEwmaCusumSignals">
+            <input id="showEwmaCusumSignals" type="checkbox" checked>
+            <span class="origin-swatch" aria-hidden="true"></span>
+            <span>EWMA/CUSUM</span>
+          </label>
+          <label class="origin-toggle" for="showOperationalRcaSignals">
+            <input id="showOperationalRcaSignals" type="checkbox" checked>
+            <span class="origin-swatch operational" aria-hidden="true"></span>
+            <span>Limiar/RCA</span>
+          </label>
+        </div>
+        <div class="origin-counts" id="originCountsGrid">
+          <div class="origin-count"><p class="t">EWMA/CUSUM</p><p class="v">—</p></div>
+          <div class="origin-count"><p class="t">Limiar/RCA</p><p class="v">—</p></div>
+          <div class="origin-count"><p class="t">Ambos</p><p class="v">—</p></div>
+          <div class="origin-count"><p class="t">Sem destaque</p><p class="v">—</p></div>
+        </div>
+        <p class="origin-hint">As cores dos bins continuam representando a classe final do heatmap. As marcas sobrepostas apenas indicam quais métodos sinalizaram cada bin.</p>
+      </div>
+    </details>
   </div>
 
   <div class="card glass span-12" id="chapter08ProfileCard">
@@ -1417,6 +1567,13 @@
     diagnosis_confidence_level: "Nível de confiança do diagnóstico",
     ewma_z: "EWMA z",
     cusum_score: "CUSUM score",
+    ewma_flag: "Flag EWMA",
+    cusum_flag: "Flag CUSUM",
+    detection_origin: "Origem do destaque",
+    detection_origin_label: "Origem do destaque",
+    detection_origin_reason: "Razão da origem",
+    operational_threshold_flag: "Flag limiar operativo",
+    rca_trigger_flag: "Flag RCA",
     residual_event_score: "Score do evento residual",
     combined_event_score: "Score combinado do evento",
     valid_period: "Período válido",
@@ -2912,6 +3069,54 @@
     return (v === "tipologia") ? "tipologia" : "mismatch";
   }
 
+  function currentOriginSignalVisibility(){
+    return {
+      ewma: $("showEwmaCusumSignals")?.checked !== false,
+      operational: $("showOperationalRcaSignals")?.checked !== false,
+    };
+  }
+
+  function originLabelForKey(key){
+    const k = String(key || "none");
+    if (k === "ewma_cusum") return "EWMA/CUSUM";
+    if (k === "operational_rca") return "Limiar operativo/RCA";
+    if (k === "both") return "EWMA/CUSUM + limiar/RCA";
+    return "Sem destaque";
+  }
+
+  function originSignalColor(kind){
+    const styles = getComputedStyle(document.documentElement);
+    if (kind === "ewma") return styles.getPropertyValue("--hm-origin-ewma").trim() || "#5ad7ff";
+    if (kind === "operational") return styles.getPropertyValue("--hm-origin-rca").trim() || "#d78cff";
+    return "rgba(255,255,255,.18)";
+  }
+
+  function originInfo(payload, idx){
+    const keyRaw = seriesAt(payload, "detection_origin_key", idx);
+    const labelRaw = seriesAt(payload, "detection_origin_label", idx);
+    const reasonRaw = seriesAt(payload, "detection_origin_reason", idx);
+    const ewma = isExplicitTrue(seriesAt(payload, "detection_origin_ewma_cusum", idx))
+      || isExplicitTrue(seriesAt(payload, "ewma_flag", idx))
+      || isExplicitTrue(seriesAt(payload, "cusum_flag", idx))
+      || isExplicitTrue(seriesAt(payload, "anomaly_power", idx))
+      || isExplicitTrue(seriesAt(payload, "residual_trigger", idx));
+    const operational = isExplicitTrue(seriesAt(payload, "detection_origin_operational_rca", idx))
+      || isExplicitTrue(seriesAt(payload, "operational_threshold_flag", idx))
+      || isExplicitTrue(seriesAt(payload, "rca_trigger_flag", idx))
+      || isExplicitTrue(seriesAt(payload, "direct_grid_evidence", idx))
+      || isExplicitTrue(seriesAt(payload, "zero_injection_flag", idx));
+    let key = String(keyRaw || "").trim();
+    if (!key) key = ewma && operational ? "both" : (ewma ? "ewma_cusum" : (operational ? "operational_rca" : "none"));
+    if (!["ewma_cusum", "operational_rca", "both", "none"].includes(key)) key = "none";
+    return {
+      key,
+      label: String(labelRaw || originLabelForKey(key)),
+      reason: String(reasonRaw || "sem origem de destaque"),
+      ewma,
+      operational,
+    };
+  }
+
   function pointClass(payload, idx){
     const s = payload?.series || {};
     const mode = currentDisplayMode();
@@ -3083,6 +3288,7 @@
 
       const lbl = seriesAt(payload, "label", i);
       const code = seriesAt(payload, "code", i);
+      const origin = originInfo(payload, i);
 
       const localIso = (typeof t[i] === "string") ? t[i] : null;
       const tkey = localIso ? String(localIso).slice(0,16) : null;
@@ -3095,6 +3301,11 @@
         mm: (Number.isFinite(mm) ? mm : null),
         lbl: (lbl == null ? null : String(lbl)),
         code: (code == null ? null : String(code)),
+        origin_key: origin.key,
+        origin_label: origin.label,
+        origin_reason: origin.reason,
+        origin_ewma: origin.ewma,
+        origin_operational: origin.operational,
         day: ds,
         minute: Number(minutes),
         tkey,
@@ -3123,6 +3334,96 @@
     const scale = Math.min(1, avail / W);
     canvas.style.width = (W * scale) + "px";
     canvas.style.height = (H * scale) + "px";
+  }
+
+  function originCountsFromCellMap(){
+    const counts = {
+      total_bins: hmState.cell?.size || 0,
+      bins_with_oper: 0,
+      highlighted_total: 0,
+      ewma_cusum_total: 0,
+      operational_rca_total: 0,
+      ewma_cusum_only: 0,
+      operational_rca_only: 0,
+      both: 0,
+      none: 0,
+      no_operatives: 0,
+    };
+    for (const v of hmState.cell.values()){
+      if (!v.has_oper){
+        counts.no_operatives++;
+        continue;
+      }
+      counts.bins_with_oper++;
+      const origin = {
+        key: v.origin_key || "none",
+        ewma: Boolean(v.origin_ewma),
+        operational: Boolean(v.origin_operational),
+      };
+      if (origin.ewma) counts.ewma_cusum_total++;
+      if (origin.operational) counts.operational_rca_total++;
+      if (origin.key === "both"){
+        counts.both++;
+        counts.highlighted_total++;
+      } else if (origin.key === "ewma_cusum"){
+        counts.ewma_cusum_only++;
+        counts.highlighted_total++;
+      } else if (origin.key === "operational_rca"){
+        counts.operational_rca_only++;
+        counts.highlighted_total++;
+      } else {
+        counts.none++;
+      }
+    }
+    return counts;
+  }
+
+  function renderOriginCounts(counts){
+    const grid = $("originCountsGrid");
+    const summary = $("originPanelSummary");
+    if (!grid || !summary) return;
+    const c = counts || originCountsFromCellMap();
+    summary.textContent = `EWMA/CUSUM=${c.ewma_cusum_total || 0} | Limiar/RCA=${c.operational_rca_total || 0} | Ambos=${c.both || 0}`;
+    const items = [
+      ["EWMA/CUSUM", c.ewma_cusum_total || 0],
+      ["Apenas EWMA/CUSUM", c.ewma_cusum_only || 0],
+      ["Limiar/RCA", c.operational_rca_total || 0],
+      ["Apenas limiar/RCA", c.operational_rca_only || 0],
+      ["Ambos", c.both || 0],
+      ["Sem destaque", c.none || 0],
+      ["Bins com operativos", c.bins_with_oper || 0],
+      ["Sem operativos", c.no_operatives || 0],
+    ];
+    grid.innerHTML = items.map(([label, value]) => (
+      `<div class="origin-count"><p class="t">${escHtml(label)}</p><p class="v">${escHtml(String(value))}</p></div>`
+    )).join("");
+  }
+
+  function drawOriginOverlay(ctx, x, y, cellSz, obj){
+    if (!obj || !obj.has_oper) return;
+    const visible = currentOriginSignalVisibility();
+    const showEwma = visible.ewma && Boolean(obj.origin_ewma);
+    const showOperational = visible.operational && Boolean(obj.origin_operational);
+    if (!showEwma && !showOperational) return;
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineWidth = 2.2;
+    if (showEwma){
+      ctx.strokeStyle = originSignalColor("ewma");
+      ctx.beginPath();
+      ctx.moveTo(x + 2.3, y + 2.3);
+      ctx.lineTo(x + cellSz - 2.3, y + cellSz - 2.3);
+      ctx.stroke();
+    }
+    if (showOperational){
+      ctx.strokeStyle = originSignalColor("operational");
+      ctx.beginPath();
+      ctx.moveTo(x + 2.3, y + cellSz - 2.3);
+      ctx.lineTo(x + cellSz - 2.3, y + 2.3);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function drawHeatmapCanvas(){
@@ -3192,6 +3493,7 @@
 
         ctx.fillStyle = sevColor(tone);
         ctx.fillRect(x, y, cellSz, cellSz);
+        drawOriginOverlay(ctx, x, y, cellSz, obj);
       }
     }
 
@@ -3231,11 +3533,13 @@
       else if (v.cls === "crit") crit++;
       else none++;
     }
+    const originCounts = originCountsFromCellMap();
 
     $("hmBadgeTxt").textContent =
-      `normal=${ok} | warn=${warn} | falha=${crit} | cinza=${none} | bins com ponto=${any} | bins com operativos=${oper}`;
+      `normal=${ok} | warn=${warn} | falha=${crit} | cinza=${none} | bins com ponto=${any} | bins com operativos=${oper} | origem destacada=${originCounts.highlighted_total}`;
 
     $("kpiNoData").textContent = (hmState.days.length && hmState.nBins) ? String(none) : "—";
+    renderOriginCounts(originCounts);
 
     drawHeatmapCanvas();
   }
@@ -3743,6 +4047,10 @@
         combined_event_score: seriesAt(payload, "combined_event_score", idx),
         ewma_z: seriesAt(payload, "ewma_z", idx),
         cusum_score: seriesAt(payload, "cusum_score", idx),
+        ewma_flag: seriesAt(payload, "ewma_flag", idx),
+        cusum_flag: seriesAt(payload, "cusum_flag", idx),
+        detection_origin_label: seriesAt(payload, "detection_origin_label", idx),
+        detection_origin_reason: seriesAt(payload, "detection_origin_reason", idx),
         irradiance_tier: seriesAt(payload, "irradiance_tier", idx),
         rca_code: seriesAt(payload, "code", idx),
         rca_label: seriesAt(payload, "label", idx),
@@ -4120,7 +4428,7 @@
     const clsTxt = cellObj?.cls || 'none';
     const tsLocal = dumpPoint?.ts_local || cellObj?.exact_ts_local || '—';
     const tsUtc = dumpPoint?.ts_utc || '—';
-    if (meta) meta.textContent = `Data/hora local: ${fmtAny(tsLocal)} • UTC: ${fmtAny(tsUtc)} • classe=${translatedToken(clsTxt)} • razão=${translatedReasonText(cellObj?.reason || '—')} • idx=${idx >= 0 ? idx : '—'}`;
+    if (meta) meta.textContent = `Data/hora local: ${fmtAny(tsLocal)} • UTC: ${fmtAny(tsUtc)} • classe=${translatedToken(clsTxt)} • origem=${cellObj?.origin_label || 'Sem destaque'} • razão=${translatedReasonText(cellObj?.reason || '—')} • idx=${idx >= 0 ? idx : '—'}`;
 
     const confBlock = mergeDefined(fallbackPoint?.confidence || {}, dumpPoint?.confidence || {});
     const detBlock = mergeDefined(fallbackPoint?.detection || {}, dumpPoint?.detection || {});
@@ -4135,6 +4443,10 @@
     detBlock.cusum_score = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.cusum_score","cusum_score"]);
     detBlock.residual_event_score = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.residual_event_score","residual_event_score"]);
     detBlock.combined_event_score = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.combined_event_score","combined_event_score"]);
+    detBlock.ewma_flag = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.ewma_flag","ewma_flag"]);
+    detBlock.cusum_flag = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.cusum_flag","cusum_flag"]);
+    detBlock.detection_origin = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.detection_origin_label","detection_origin_label"]);
+    detBlock.detection_origin_reason = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.detection_origin_reason","detection_origin_reason"]);
     detBlock.rca_code = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.rca_code","rca_code","code"]);
     detBlock.rca_label = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.rca_label","rca_label","label"]);
     acBlock.p_ac_w = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.p_ac_w","p_ac_w","p_ac_real_w","p_ac_w","p_ac_mppt_sum_w","p_ac_agg_w"]);
@@ -4165,7 +4477,7 @@
     }
     if (tblMeteo) tblMeteo.innerHTML = renderKvRows(meteoBlock, ['g_poa_used','ghi','dni','dhi','temp_air','wind_speed','rh','meteo_qc_score','flag_meteo_missing','flag_meteo_low_confidence','flag_meteo_interpolated','flag_meteo_outlier','flag_meteo_artifact']);
     if (tblConf) tblConf.innerHTML = renderKvRows(confBlock, ['data_reliability_score','data_reliability_level','detection_confidence_score','detection_confidence_level','diagnosis_confidence_score','diagnosis_confidence_level']);
-    if (tblDet) tblDet.innerHTML = renderKvRows(detBlock, ['valid_period','stable_sky','anomaly','anomaly_power','residual_trigger','residual_event_score','combined_event_score','ewma_z','cusum_score','irradiance_tier','rca_code','rca_label']);
+    if (tblDet) tblDet.innerHTML = renderKvRows(detBlock, ['valid_period','stable_sky','anomaly','anomaly_power','residual_trigger','residual_event_score','combined_event_score','ewma_z','cusum_score','ewma_flag','cusum_flag','detection_origin','detection_origin_reason','irradiance_tier','rca_code','rca_label']);
     if (tblAC) tblAC.innerHTML = renderKvRows(acBlock, ['p_ac_w','p_ac_mppt_sum_w','p_ac_agg_w','v_ac_v','i_ac_a','freq_hz','alarm_code','alarm_sev','inv_coverage','flag_inv_missing_all','flag_inv_missing_partial']);
     renderCompareTable(tblCompare, { ...dumpPoint, chosen_total: acBlock, meteo: meteoBlock, model: modelBlock, residuals: residualBlock }, fallbackPoint, payload, idx);
 
@@ -4181,7 +4493,7 @@
     dumpObj.__model = modelBlock;
     dumpObj.__residuals = residualBlock;
     dumpObj.__mppt_by_source = collectMpptDump(payload, idx);
-    dumpObj.__heatmap = { day: ds, time_bin: ts, dt_minutes: hmState.dtm, has_any: !!cellObj.has_any, idx: (idx >= 0 ? idx : null), has_oper: !!cellObj.has_oper, class: clsTxt, reason: cellObj.reason };
+    dumpObj.__heatmap = { day: ds, time_bin: ts, dt_minutes: hmState.dtm, has_any: !!cellObj.has_any, idx: (idx >= 0 ? idx : null), has_oper: !!cellObj.has_oper, class: clsTxt, reason: cellObj.reason, origin: cellObj.origin_label, origin_reason: cellObj.origin_reason };
     hmState.selectedSnapshot = dumpObj;
     if (dump) dump.textContent = JSON.stringify(dumpObj, null, 2);
     if (detailValidation){
@@ -4251,7 +4563,7 @@
 
       const mmTxt = (obj.mm == null) ? "—" : `${fmtN(obj.mm,3)} (${fmtPct(obj.mm,1)})`;
       if (tip) tip.textContent =
-        `${h.ds} ${h.ts} • classe=${translatedToken(obj.cls)} • operativos=${obj.has_oper ? "sim" : "não"} • razão=${translatedReasonText(obj.reason ?? "—")} • RCA=${obj.code ?? "—"} • rótulo=${translatedToken(obj.lbl ?? "—")} • mismatch=${mmTxt}`;
+        `${h.ds} ${h.ts} • classe=${translatedToken(obj.cls)} • origem=${obj.origin_label || "Sem destaque"} • operativos=${obj.has_oper ? "sim" : "não"} • razão=${translatedReasonText(obj.reason ?? "—")} • RCA=${obj.code ?? "—"} • rótulo=${translatedToken(obj.lbl ?? "—")} • mismatch=${mmTxt}`;
     });
 
     canvas.addEventListener("mouseleave", () => { if (tip) tip.textContent = ""; });
@@ -4629,6 +4941,12 @@
         const obj = hmState.cell.get(hmState.selectedKey);
         if (obj) renderDetail(hmState.payload, obj);
       }
+    });
+    $("showEwmaCusumSignals")?.addEventListener("change", () => {
+      if (hmState.payload) drawHeatmapCanvas();
+    });
+    $("showOperationalRcaSignals")?.addEventListener("change", () => {
+      if (hmState.payload) drawHeatmapCanvas();
     });
 
     bindDetailButtons();

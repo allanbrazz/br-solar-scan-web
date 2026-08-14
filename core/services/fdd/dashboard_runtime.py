@@ -506,6 +506,157 @@ def _build_mismatch_classes(times_utc: List[datetime], model: Dict[str, Any], pi
     return classes, reasons, counts
 
 
+_ORIGIN_NON_FAULT_LABELS = {"", "ok", "normal", "invalid", "low_irradiance", "telemetry_invalid"}
+
+
+def _series_bool_at(series: Any, idx: int) -> bool:
+    try:
+        return bool((series or [])[idx])
+    except Exception:
+        return False
+
+
+def _series_value_at(series: Any, idx: int, default: Any = None) -> Any:
+    try:
+        return (series or [])[idx]
+    except Exception:
+        return default
+
+
+def _is_abnormal_rca_label(label: Any) -> bool:
+    return str(label or "").strip().lower() not in _ORIGIN_NON_FAULT_LABELS
+
+
+def _build_detection_origin(
+    times_utc: List[datetime],
+    model: Dict[str, Any],
+    pipeline: Dict[str, Any],
+    confidence: Dict[str, Any],
+    params: MismatchDashboardParams,
+) -> Dict[str, Any]:
+    ewma_cusum_flags: List[bool] = []
+    operational_rca_flags: List[bool] = []
+    origin_keys: List[str] = []
+    origin_labels: List[str] = []
+    origin_reasons: List[str] = []
+    threshold_flags: List[bool] = []
+    rca_flags: List[bool] = []
+
+    counts = {
+        "total_points": len(times_utc),
+        "highlighted_total": 0,
+        "ewma_cusum_total": 0,
+        "operational_rca_total": 0,
+        "ewma_cusum_only": 0,
+        "operational_rca_only": 0,
+        "both": 0,
+        "none": 0,
+        "ewma_flag_total": 0,
+        "cusum_flag_total": 0,
+        "residual_multichannel_total": 0,
+        "operational_threshold_total": 0,
+        "rca_total": 0,
+    }
+
+    for i in range(len(times_utc)):
+        valid = _series_bool_at(pipeline.get("valid_period"), i)
+        ewma_flag = _series_bool_at(pipeline.get("ewma_flag"), i)
+        cusum_flag = _series_bool_at(pipeline.get("cusum_flag"), i)
+        anomaly_power = _series_bool_at(pipeline.get("anomaly_power"), i)
+        residual_trigger = _series_bool_at(pipeline.get("residual_trigger"), i)
+        ewma_cusum = bool(valid and (ewma_flag or cusum_flag or anomaly_power or residual_trigger))
+
+        reasons: List[str] = []
+        if ewma_flag:
+            reasons.append("EWMA")
+            counts["ewma_flag_total"] += 1
+        if cusum_flag:
+            reasons.append("CUSUM")
+            counts["cusum_flag_total"] += 1
+        if residual_trigger:
+            reasons.append("residuo multicanal")
+            counts["residual_multichannel_total"] += 1
+        elif anomaly_power and not (ewma_flag or cusum_flag):
+            reasons.append("EWMA/CUSUM agregado")
+
+        mm = _series_value_at(model.get("mismatch_rel"), i)
+        operational_threshold = False
+        try:
+            if mm is not None:
+                mm_f = float(mm)
+                operational_threshold = bool(mm_f <= -float(params.thr.fault_abs) or abs(mm_f) >= float(params.thr.warn_abs))
+        except Exception:
+            operational_threshold = False
+
+        direct_grid = _series_bool_at(confidence.get("diag_direct_grid"), i)
+        zero_inj = _series_bool_at(confidence.get("diag_zero_inj"), i)
+        diagnosis_label = _series_value_at(confidence.get("diag_diagnosis_labels"), i, "")
+        rca_label = _series_value_at(pipeline.get("labels"), i, diagnosis_label)
+        code = _series_value_at(pipeline.get("codes"), i, 0)
+        try:
+            code_int = int(code or 0)
+        except Exception:
+            code_int = 0
+
+        rca_hit = bool(direct_grid or zero_inj or (code_int > 0 and _is_abnormal_rca_label(rca_label)) or _is_abnormal_rca_label(diagnosis_label))
+        operational_rca = bool(valid and (operational_threshold or rca_hit))
+
+        if operational_threshold:
+            reasons.append("limiar operativo")
+            counts["operational_threshold_total"] += 1
+        if rca_hit:
+            reasons.append("RCA")
+            counts["rca_total"] += 1
+        if direct_grid:
+            reasons.append("evidencia direta da rede")
+        if zero_inj:
+            reasons.append("injecao zero")
+
+        threshold_flags.append(operational_threshold)
+        rca_flags.append(rca_hit)
+        ewma_cusum_flags.append(ewma_cusum)
+        operational_rca_flags.append(operational_rca)
+
+        if ewma_cusum and operational_rca:
+            key = "both"
+            label = "EWMA/CUSUM + limiar/RCA"
+            counts["both"] += 1
+        elif ewma_cusum:
+            key = "ewma_cusum"
+            label = "EWMA/CUSUM"
+            counts["ewma_cusum_only"] += 1
+        elif operational_rca:
+            key = "operational_rca"
+            label = "Limiar operativo/RCA"
+            counts["operational_rca_only"] += 1
+        else:
+            key = "none"
+            label = "Sem destaque"
+            counts["none"] += 1
+
+        if ewma_cusum:
+            counts["ewma_cusum_total"] += 1
+        if operational_rca:
+            counts["operational_rca_total"] += 1
+        if ewma_cusum or operational_rca:
+            counts["highlighted_total"] += 1
+
+        origin_keys.append(key)
+        origin_labels.append(label)
+        origin_reasons.append(" + ".join(dict.fromkeys(reasons)) if reasons else "sem origem de destaque")
+
+    return {
+        "ewma_cusum": ewma_cusum_flags,
+        "operational_rca": operational_rca_flags,
+        "key": origin_keys,
+        "label": origin_labels,
+        "reason": origin_reasons,
+        "operational_threshold": threshold_flags,
+        "rca": rca_flags,
+        "counts": counts,
+    }
+
+
 def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardParams) -> Dict[str, Any]:
     details, _ = ensure_plant_configuration(plant)
     src_meteo, source_oper_list, selected_sources, rows = query_runtime_rows(plant, params)
@@ -662,6 +813,7 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
 
     sev_typology, reason_typology, counts_typology = _build_typology_classes(times_utc, confidence, pipeline)
     sev_mismatch, reason_mismatch, counts_mismatch = _build_mismatch_classes(times_utc, model, pipeline, params)
+    detection_origin = _build_detection_origin(times_utc, model, pipeline, confidence, params)
 
     freq_series = _series_with_fallback(pipeline.get("freq_hz") or [], agg.get("freq_hz") or [])
     p_dc_model_fit = paired_model_metrics(
@@ -785,6 +937,8 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
             "residual_global_confidence": residual_series.get("global_confidence") or [None] * len(times_utc),
             "ewma_z": pipeline.get("ewma_z") or [None] * len(times_utc),
             "cusum_score": pipeline.get("cusum_score") or [None] * len(times_utc),
+            "ewma_flag": pipeline.get("ewma_flag") or [False] * len(times_utc),
+            "cusum_flag": pipeline.get("cusum_flag") or [False] * len(times_utc),
             "alarm_code": pipeline.get("alarm_code") or [None] * len(times_utc),
             "alarm_sev": pipeline.get("alarm_sev") or [None] * len(times_utc),
             "gpoa_plot_min": [float(params.gpoa_plot_min)] * len(times_utc),
@@ -812,6 +966,13 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
             "ev_residual_anomaly": pipeline.get("residual_trigger") or [False] * len(times_utc),
             "residual_event_score": pipeline.get("residual_event_score") or [None] * len(times_utc),
             "combined_event_score": pipeline.get("combined_event_score") or [None] * len(times_utc),
+            "detection_origin_ewma_cusum": detection_origin["ewma_cusum"],
+            "detection_origin_operational_rca": detection_origin["operational_rca"],
+            "detection_origin_key": detection_origin["key"],
+            "detection_origin_label": detection_origin["label"],
+            "detection_origin_reason": detection_origin["reason"],
+            "operational_threshold_flag": detection_origin["operational_threshold"],
+            "rca_trigger_flag": detection_origin["rca"],
             "rca_code": pipeline["codes"],
             "rca_label": pipeline["labels"],
             "codes": pipeline["codes"],
@@ -841,6 +1002,7 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
             },
             "events": validation_ctx.get("events") or [],
             "validation": validation_ctx.get("summary") or {},
+            "detection_origin_counts": detection_origin["counts"],
             "n_points": len(times_utc),
             "n_oper_sources": len(selected_sources),
             "persist": persist,

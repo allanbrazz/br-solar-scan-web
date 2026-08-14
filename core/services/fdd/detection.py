@@ -407,6 +407,8 @@ def detect_anomalies(
         "z": [None if (not np.isfinite(v)) else float(v) for v in z.tolist()],
         "ewma_z": [None if (not np.isfinite(v)) else float(v) for v in ewma.tolist()],
         "cusum": [None if (not np.isfinite(v)) else float(v) for v in cusum_score.tolist()],
+        "ewma_flag": ewma_flag.tolist(),
+        "cusum_flag": cusum_flag.tolist(),
         "anomaly": anomaly.tolist(),
         "detection_signal_rel": [None if (not np.isfinite(v)) else float(v) for v in fused_signal.tolist()],
         "detection_signal_support": [None if (not np.isfinite(v)) else float(v) for v in fused_support.tolist()],
