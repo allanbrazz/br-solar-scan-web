@@ -18,6 +18,7 @@ from core.services.fdd.detection_flow import (
     decide_anomaly_flag,
     decide_operational_deviation_flag,
     detection_flow_label,
+    detection_origin_for_sources,
     detector_version_for_flow,
     normalize_detection_flow_mode,
 )
@@ -497,6 +498,10 @@ def run_detection_pipeline(
             zero_injection_flag=zero_inj,
             rca_code=rca["codes"][i],
         )
+        detection_origin = detection_origin_for_sources(
+            residual_anomaly=residual_anomaly,
+            direct_grid_evidence=direct_grid,
+        )
         residual_anomaly_flags.append(residual_anomaly)
         anomaly_flags.append(bool(anomaly_final))
         operational_deviation_flags.append(bool(operational_deviation))
@@ -538,6 +543,9 @@ def run_detection_pipeline(
                 "mode": detection_flow_mode,
                 "label": detection_flow_label(detection_flow_mode),
                 "residual_anomaly": residual_anomaly,
+                "direct_grid_evidence": direct_grid,
+                "detection_origin_key": detection_origin["key"],
+                "detection_origin_label": detection_origin["label"],
                 "operational_deviation_flag": operational_deviation,
                 "anomaly_flag": bool(anomaly_final),
             },
@@ -547,6 +555,9 @@ def run_detection_pipeline(
             "detection_flow_mode": detection_flow_mode,
             "detection_flow_label": detection_flow_label(detection_flow_mode),
             "residual_anomaly": residual_anomaly,
+            "direct_grid_evidence": direct_grid,
+            "detection_origin_key": detection_origin["key"],
+            "detection_origin_label": detection_origin["label"],
             "operational_deviation_flag": operational_deviation,
             "anomaly_flag": bool(anomaly_final),
         })
@@ -626,6 +637,7 @@ def run_detection_pipeline(
         ewma_flags=[bool(v) for v in det.get("ewma_flag") or []],
         cusum_flags=[bool(v) for v in det.get("cusum_flag") or []],
         residual_anomalies=residual_anomaly_flags,
+        direct_grid_evidence=[bool(v) for v in rca.get("direct_grid_evidence") or []],
         operational_deviation_flags=operational_deviation_flags,
         anomaly_flags=anomaly_flags,
         diagnosis_labels=[str(v) for v in rca["diagnosis_labels"]],

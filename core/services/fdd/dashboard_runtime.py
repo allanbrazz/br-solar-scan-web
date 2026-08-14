@@ -18,10 +18,12 @@ from core.services.fdd.dashboard_common import (
 from core.services.fdd.detection_flow import (
     DEFAULT_DETECTION_FLOW_MODE,
     LEGACY_RUNTIME_NORMAL_LABELS,
+    THESIS_SEQUENTIAL,
     build_anomaly_flags,
     build_detection_flow_audit,
     build_operational_deviation_flags,
     detection_flow_label,
+    detection_origin_for_sources,
     detector_version_for_flow,
     normalize_detection_flow_mode,
 )
@@ -547,8 +549,11 @@ def _build_detection_origin(
     confidence: Dict[str, Any],
     params: MismatchDashboardParams,
 ) -> Dict[str, Any]:
+    is_sequential = normalize_detection_flow_mode(params.detection_flow_mode) == THESIS_SEQUENTIAL
     ewma_cusum_flags: List[bool] = []
     operational_rca_flags: List[bool] = []
+    residual_statistical_flags: List[bool] = []
+    direct_grid_flags: List[bool] = []
     origin_keys: List[str] = []
     origin_labels: List[str] = []
     origin_reasons: List[str] = []
@@ -569,6 +574,11 @@ def _build_detection_origin(
         "residual_multichannel_total": 0,
         "operational_threshold_total": 0,
         "rca_total": 0,
+        "n_residual_anomaly": 0,
+        "n_direct_grid_evidence": 0,
+        "n_residual_only": 0,
+        "n_grid_only": 0,
+        "n_residual_and_grid": 0,
     }
 
     for i in range(len(times_utc)):
@@ -602,6 +612,7 @@ def _build_detection_origin(
             operational_threshold = False
 
         direct_grid = _series_bool_at(confidence.get("diag_direct_grid"), i)
+        residual_anomaly = _series_bool_at(pipeline.get("residual_anomaly"), i) or _series_bool_at(pipeline.get("anomaly"), i)
         zero_inj = _series_bool_at(confidence.get("diag_zero_inj"), i)
         diagnosis_label = _series_value_at(confidence.get("diag_diagnosis_labels"), i, "")
         rca_label = _series_value_at(pipeline.get("labels"), i, diagnosis_label)
@@ -627,10 +638,33 @@ def _build_detection_origin(
 
         threshold_flags.append(operational_threshold)
         rca_flags.append(rca_hit)
-        ewma_cusum_flags.append(ewma_cusum)
-        operational_rca_flags.append(operational_rca)
 
-        if ewma_cusum and operational_rca:
+        if is_sequential:
+            origin = detection_origin_for_sources(
+                residual_anomaly=residual_anomaly,
+                direct_grid_evidence=direct_grid,
+            )
+            key = str(origin["key"])
+            label = str(origin["label"])
+            ewma_cusum = bool(origin["residual_statistical"])
+            operational_rca = bool(origin["direct_grid"])
+            reasons = []
+            if ewma_cusum:
+                reasons.append("EWMA/CUSUM")
+            if operational_rca:
+                reasons.append("evidencia direta da rede")
+            if key == "residual_and_grid":
+                counts["both"] += 1
+                counts["n_residual_and_grid"] += 1
+            elif key == "residual_statistical":
+                counts["ewma_cusum_only"] += 1
+                counts["n_residual_only"] += 1
+            elif key == "direct_grid":
+                counts["operational_rca_only"] += 1
+                counts["n_grid_only"] += 1
+            else:
+                counts["none"] += 1
+        elif ewma_cusum and operational_rca:
             key = "both"
             label = "EWMA/CUSUM + limiar/RCA"
             counts["both"] += 1
@@ -647,6 +681,15 @@ def _build_detection_origin(
             label = "Sem destaque"
             counts["none"] += 1
 
+        if residual_anomaly:
+            counts["n_residual_anomaly"] += 1
+        if direct_grid:
+            counts["n_direct_grid_evidence"] += 1
+        residual_statistical_flags.append(bool(residual_anomaly))
+        direct_grid_flags.append(bool(direct_grid))
+        ewma_cusum_flags.append(bool(ewma_cusum))
+        operational_rca_flags.append(bool(operational_rca))
+
         if ewma_cusum:
             counts["ewma_cusum_total"] += 1
         if operational_rca:
@@ -661,6 +704,8 @@ def _build_detection_origin(
     return {
         "ewma_cusum": ewma_cusum_flags,
         "operational_rca": operational_rca_flags,
+        "residual_statistical": residual_statistical_flags,
+        "direct_grid": direct_grid_flags,
         "key": origin_keys,
         "label": origin_labels,
         "reason": origin_reasons,
@@ -780,6 +825,7 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
         pipeline=pipeline,
         params=params,
     )
+    pipeline["residual_anomaly"] = list(pipeline["anomaly"])
     detection_origin = _build_detection_origin(times_utc, model, pipeline, confidence, params)
     operational_deviation_flags = build_operational_deviation_flags(
         diagnosis_labels=confidence["diag_diagnosis_labels"],
@@ -796,10 +842,14 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
         direct_grid_evidence=confidence["diag_direct_grid"],
         normal_labels=LEGACY_RUNTIME_NORMAL_LABELS,
     )
-    pipeline["residual_anomaly"] = list(pipeline["anomaly"])
     pipeline["anomaly_flag"] = final_anomaly_flags
     pipeline["operational_deviation_flag"] = operational_deviation_flags
     pipeline["detection_flow_mode"] = [params.detection_flow_mode] * len(times_utc)
+    pipeline["detection_origin_key"] = detection_origin["key"]
+    pipeline["detection_origin_label"] = detection_origin["label"]
+    pipeline["detection_origin_reason"] = detection_origin["reason"]
+    pipeline["detection_origin_residual_statistical"] = detection_origin["residual_statistical"]
+    pipeline["detection_origin_direct_grid"] = detection_origin["direct_grid"]
 
     plot_data = compute_plot_mismatch(params, agg, model)
     persist = persist_runtime_outputs(
@@ -859,6 +909,7 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
         ewma_flags=pipeline.get("ewma_flag"),
         cusum_flags=pipeline.get("cusum_flag"),
         residual_anomalies=pipeline["residual_anomaly"],
+        direct_grid_evidence=confidence["diag_direct_grid"],
         operational_deviation_flags=operational_deviation_flags,
         anomaly_flags=final_anomaly_flags,
         diagnosis_labels=confidence["diag_diagnosis_labels"],
@@ -908,7 +959,7 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
             "mode": params.detection_flow_mode,
             "label": detection_flow_label(params.detection_flow_mode),
             "legacy_note": "As regras diagnosticas e evidencias diretas podem participar da sinalizacao final.",
-            "sequential_note": "EWMA/CUSUM realizam a deteccao; o RCA interpreta diagnosticos sem iniciar anomalias.",
+            "sequential_note": "EWMA/CUSUM e evidencia direta da rede realizam a deteccao; o RCA interpreta diagnosticos sem iniciar anomalias.",
         },
         "confidence_summary": {
             "data_reliability_mean": mean_none(confidence["data_reliability_score"]),
@@ -1029,6 +1080,8 @@ def build_mismatch_dashboard_payload(plant: PVPlant, params: MismatchDashboardPa
             "combined_event_score": pipeline.get("combined_event_score") or [None] * len(times_utc),
             "detection_origin_ewma_cusum": detection_origin["ewma_cusum"],
             "detection_origin_operational_rca": detection_origin["operational_rca"],
+            "detection_origin_residual_statistical": detection_origin["residual_statistical"],
+            "detection_origin_direct_grid": detection_origin["direct_grid"],
             "detection_origin_key": detection_origin["key"],
             "detection_origin_label": detection_origin["label"],
             "detection_origin_reason": detection_origin["reason"],

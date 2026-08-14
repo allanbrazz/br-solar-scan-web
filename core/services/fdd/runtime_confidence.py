@@ -12,6 +12,7 @@ from core.services.fdd.detection_flow import (
     DEFAULT_DETECTION_FLOW_MODE,
     LEGACY_RUNTIME_NORMAL_LABELS,
     decide_anomaly_flag,
+    detection_origin_for_sources,
     normalize_detection_flow_mode,
 )
 from core.services.fdd.runtime_detection import pick_diag_row_for_ts
@@ -98,6 +99,10 @@ def build_runtime_confidence(
             direct_grid_evidence=bool(diag_direct_grid[i]),
             normal_labels=LEGACY_RUNTIME_NORMAL_LABELS,
         )
+        detection_origin = detection_origin_for_sources(
+            residual_anomaly=bool(anomaly[i]),
+            direct_grid_evidence=bool(diag_direct_grid[i]),
+        )
 
         data_rel = compute_data_reliability(
             row=row_runtime,
@@ -148,6 +153,8 @@ def build_runtime_confidence(
                 "irradiance_tier": str(irradiance_tier[i] or "N"),
                 "evidence_json": diag_evidence_json[i] if i < len(diag_evidence_json) else {},
                 "detection_flow_mode": detection_flow_mode,
+                "detection_origin_key": detection_origin["key"],
+                "detection_origin_label": detection_origin["label"],
                 "anomaly_flag": bool(anomaly_final),
             },
         }

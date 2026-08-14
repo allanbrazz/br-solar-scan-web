@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from core.models import PVPlant, PVPlantMergedRecord15m, PlantDiagnostic15m
 from core.services.fdd.detection_flow import DEFAULT_DETECTION_FLOW_MODE, detection_flow_label, normalize_detection_flow_mode
+from core.services.fdd.detection_flow import detection_origin_for_sources
 
 
 MISMATCH_VERSION_SUMMARY = {
@@ -244,11 +245,18 @@ def upsert_diag15m(
     objs: List[PlantDiagnostic15m] = []
 
     for i, ts in enumerate(times_utc):
+        detection_origin = detection_origin_for_sources(
+            residual_anomaly=bool(residual_anomaly_flags[i]),
+            direct_grid_evidence=bool(direct_grid_evidence[i]),
+        )
         evidence_i = dict(evidence_json[i] or {})
         evidence_i.update({
             "detection_flow_mode": detection_flow_mode,
             "detection_flow_label": detection_flow_label(detection_flow_mode),
             "residual_anomaly": bool(residual_anomaly_flags[i]),
+            "direct_grid_evidence": bool(direct_grid_evidence[i]),
+            "detection_origin_key": detection_origin["key"],
+            "detection_origin_label": detection_origin["label"],
             "operational_deviation_flag": bool(operational_deviation_flags[i]),
             "anomaly_flag": bool(anomaly_flags[i]),
         })
@@ -257,6 +265,9 @@ def upsert_diag15m(
             "mode": detection_flow_mode,
             "label": detection_flow_label(detection_flow_mode),
             "residual_anomaly": bool(residual_anomaly_flags[i]),
+            "direct_grid_evidence": bool(direct_grid_evidence[i]),
+            "detection_origin_key": detection_origin["key"],
+            "detection_origin_label": detection_origin["label"],
             "operational_deviation_flag": bool(operational_deviation_flags[i]),
             "anomaly_flag": bool(anomaly_flags[i]),
         }

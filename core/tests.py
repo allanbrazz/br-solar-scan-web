@@ -15,7 +15,10 @@ from core.services.dados_satelite.cams import CamsFetchResult, ingest_cams_range
 from core.services.fdd.detection_flow import (
     LEGACY_HYBRID,
     THESIS_SEQUENTIAL,
+    build_detection_flow_audit,
     decide_anomaly_flag,
+    detection_origin_for_sources,
+    detector_version_for_flow,
 )
 from core.services.fdd.events import EventBuildParams, build_fault_events_for_range
 from core.services.fdd.dashboard_runtime import get_mismatch_backend_param_defaults
@@ -106,7 +109,7 @@ class DetectionFlowModeTests(TestCase):
 
         self.assertTrue(anomaly)
 
-    def test_direct_grid_evidence_is_diagnostic_only_in_sequential_mode(self):
+    def test_direct_grid_evidence_is_detection_input_in_sequential_mode(self):
         legacy = decide_anomaly_flag(
             detection_flow_mode=LEGACY_HYBRID,
             residual_anomaly=False,
@@ -121,13 +124,99 @@ class DetectionFlowModeTests(TestCase):
         )
 
         self.assertTrue(legacy)
-        self.assertFalse(sequential)
+        self.assertTrue(sequential)
 
-    def test_sequential_fault_events_require_residual_anomaly_bins(self):
+        origin = detection_origin_for_sources(
+            residual_anomaly=False,
+            direct_grid_evidence=True,
+        )
+        self.assertEqual(origin["key"], "direct_grid")
+
+    def test_sequential_origin_tracks_residual_grid_and_rca_isolated_cases(self):
+        residual = detection_origin_for_sources(
+            residual_anomaly=True,
+            direct_grid_evidence=False,
+        )
+        both = detection_origin_for_sources(
+            residual_anomaly=True,
+            direct_grid_evidence=True,
+        )
+        none = detection_origin_for_sources(
+            residual_anomaly=False,
+            direct_grid_evidence=False,
+        )
+
+        self.assertEqual(residual["key"], "residual_statistical")
+        self.assertEqual(both["key"], "residual_and_grid")
+        self.assertEqual(none["key"], "none")
+        self.assertTrue(decide_anomaly_flag(
+            detection_flow_mode=THESIS_SEQUENTIAL,
+            residual_anomaly=True,
+            direct_grid_evidence=False,
+            diagnosis_label="persistent_underperformance",
+        ))
+        self.assertTrue(decide_anomaly_flag(
+            detection_flow_mode=THESIS_SEQUENTIAL,
+            residual_anomaly=True,
+            direct_grid_evidence=True,
+            diagnosis_label="grid_undervoltage_trip",
+        ))
+        self.assertFalse(decide_anomaly_flag(
+            detection_flow_mode=THESIS_SEQUENTIAL,
+            residual_anomaly=False,
+            direct_grid_evidence=False,
+            diagnosis_label="dc_shading_soiling_probable",
+        ))
+        self.assertEqual(
+            detector_version_for_flow("mismatch_runtime_v1", THESIS_SEQUENTIAL),
+            "mismatch_runtime_v3_sequential_grid",
+        )
+
+    def test_sequential_audit_counts_detection_sources(self):
+        residual = [True, False, True, False]
+        direct_grid = [False, True, True, False]
+        anomaly = [
+            decide_anomaly_flag(
+                detection_flow_mode=THESIS_SEQUENTIAL,
+                residual_anomaly=r,
+                direct_grid_evidence=g,
+                diagnosis_label="dc_shading_soiling_probable",
+            )
+            for r, g in zip(residual, direct_grid)
+        ]
+
+        audit = build_detection_flow_audit(
+            detection_flow_mode=THESIS_SEQUENTIAL,
+            valid=[True, True, True, True],
+            ewma_flags=[True, False, True, False],
+            cusum_flags=[False, False, False, False],
+            residual_anomalies=residual,
+            direct_grid_evidence=direct_grid,
+            operational_deviation_flags=[True, True, True, True],
+            anomaly_flags=anomaly,
+            diagnosis_labels=[
+                "persistent_underperformance",
+                "grid_undervoltage_trip",
+                "grid_undervoltage_trip",
+                "dc_shading_soiling_probable",
+            ],
+            n_events=2,
+        )
+
+        self.assertEqual(audit["n_residual_anomaly"], 2)
+        self.assertEqual(audit["n_direct_grid_evidence"], 2)
+        self.assertEqual(audit["n_residual_only"], 1)
+        self.assertEqual(audit["n_grid_only"], 1)
+        self.assertEqual(audit["n_residual_and_grid"], 1)
+        self.assertEqual(audit["n_anomaly_flag"], 3)
+        self.assertTrue(audit["anomaly_equals_detection_sources"])
+        self.assertFalse(audit["anomaly_equals_residual"])
+
+    def test_sequential_fault_events_use_residual_or_direct_grid_bins(self):
         user = get_user_model().objects.create_user(username="flow-owner", password="test-pass")
         plant = PVPlant.objects.create(owner=user, nome="Fluxo FDD", latitude=-5.0, longitude=-35.0)
         base = datetime(2026, 6, 12, 12, 0, tzinfo=dt_timezone.utc)
-        detector_version = "mismatch_runtime_v2_sequential"
+        detector_version = "mismatch_runtime_v3_sequential_grid"
 
         for idx in range(3):
             PlantDiagnostic15m.objects.create(
@@ -166,6 +255,46 @@ class DetectionFlowModeTests(TestCase):
 
         self.assertEqual(no_event["events"], 0)
         self.assertFalse(FaultEvent.objects.filter(plant=plant).exists())
+
+        for idx in range(2):
+            PlantDiagnostic15m.objects.create(
+                plant=plant,
+                ts_utc=base + timedelta(hours=1, minutes=15 * idx),
+                source_oper="SHINEMONITOR",
+                source_meteo="OPENMETEO",
+                detector_version=detector_version,
+                valid=True,
+                anomaly_flag=decide_anomaly_flag(
+                    detection_flow_mode=THESIS_SEQUENTIAL,
+                    residual_anomaly=False,
+                    diagnosis_label="grid_undervoltage_trip",
+                    direct_grid_evidence=True,
+                ),
+                diagnosis_label="grid_undervoltage_trip",
+                direct_grid_evidence=True,
+                evidence_json={
+                    "detection_flow_mode": THESIS_SEQUENTIAL,
+                    "residual_anomaly": False,
+                    "direct_grid_evidence": True,
+                    "detection_origin_key": "direct_grid",
+                    "operational_deviation_flag": True,
+                },
+            )
+
+        grid_event = build_fault_events_for_range(
+            plant_id=plant.id,
+            ts_start_utc=base + timedelta(hours=1),
+            ts_end_utc=base + timedelta(hours=2),
+            params=EventBuildParams(
+                detector_version=detector_version,
+                source_oper="SHINEMONITOR",
+                source_meteo="OPENMETEO",
+                detection_flow_mode=THESIS_SEQUENTIAL,
+            ),
+        )
+
+        self.assertEqual(grid_event["events"], 1)
+        FaultEvent.objects.filter(plant=plant).delete()
 
         for idx in range(2):
             PlantDiagnostic15m.objects.create(
@@ -1220,6 +1349,12 @@ class RenovigiWorkflowTests(TestCase):
         self.assertContains(response, "showEwmaCusumSignals")
         self.assertContains(response, "showOperationalRcaSignals")
         self.assertContains(response, "renderOriginCounts")
+        self.assertContains(response, "origem da detecção")
+        self.assertContains(response, "detecção estatística (EWMA/CUSUM)")
+        self.assertContains(response, "evidência direta da rede")
+        self.assertContains(response, "residual_statistical")
+        self.assertContains(response, "direct_grid")
+        self.assertContains(response, "residual_and_grid")
         self.assertContains(response, "detection_flow_mode")
         self.assertContains(response, "Sequencial — EWMA/CUSUM")
         self.assertContains(response, "Frequência da rede [Hz]")
@@ -1307,13 +1442,25 @@ class RenovigiWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["detection_flow"]["mode"], "thesis_sequential")
-        self.assertEqual(payload["versions"]["detector_version"], "mismatch_runtime_v2_sequential")
+        self.assertEqual(payload["versions"]["detector_version"], "mismatch_runtime_v3_sequential_grid")
         self.assertEqual(payload["versions"]["detection_flow_mode"], "thesis_sequential")
-        self.assertEqual(payload["series"]["anomaly_flag"], payload["series"]["residual_anomaly"])
+        expected_flags = [
+            bool(residual) or bool(grid)
+            for residual, grid in zip(payload["series"]["residual_anomaly"], payload["series"]["direct_grid_evidence"])
+        ]
+        self.assertEqual(payload["series"]["anomaly_flag"], expected_flags)
+        self.assertIn("detection_origin_key", payload["series"])
+        self.assertIn("detection_origin_direct_grid", payload["series"])
+        self.assertIn("detection_origin_residual_statistical", payload["series"])
         audit = payload["summary"]["detection_flow_audit"]
-        self.assertTrue(audit["anomaly_equals_residual"])
+        self.assertTrue(audit["anomaly_equals_detection_sources"])
+        self.assertIn("n_direct_grid_evidence", audit)
+        self.assertIn("n_residual_only", audit)
+        self.assertIn("n_grid_only", audit)
+        self.assertIn("n_residual_and_grid", audit)
         first_dump = next(iter(payload["dump_by_tkey"].values()))
         self.assertEqual(first_dump["detection"]["detection_flow_mode"], "thesis_sequential")
+        self.assertIn("detection_origin_key", first_dump["detection"])
 
     def test_mismatch_pr_temp_api_calculates_and_persists_monthly_ratio(self):
         self._seed_temperature_corrected_pr_fixture()

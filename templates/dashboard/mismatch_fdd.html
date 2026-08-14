@@ -1036,17 +1036,17 @@
         <h3 style="margin-top:0">Mapa temporal — dia × intervalo</h3>
         <div class="hm-sub">
           Linhas = dias • Colunas = bins de <b id="hmBinLbl">15</b> min •
-          cinza=sem dados operativos do inversor, verde=normal, amarelo=warn, vermelho=falha.
+          <span id="hmLegendHelp">cinza=sem dados operativos do inversor, verde=normal, amarelo=warn, vermelho=falha.</span>
         </div>
       </div>
 
       <div class="legend">
         <span class="badge"><span class="dot" style="background:var(--hm-none)"></span>sem operativos</span>
         <span class="badge"><span class="dot" style="background:var(--hm-ok)"></span>normal</span>
-        <span class="badge"><span class="dot" style="background:var(--hm-softok)"></span>perda parcial provável</span>
-        <span class="badge"><span class="dot" style="background:var(--hm-softwarn)"></span>desempenho persistentemente baixo</span>
-        <span class="badge"><span class="dot" style="background:var(--hm-warn)"></span>warn</span>
-        <span class="badge"><span class="dot" style="background:var(--hm-crit)"></span>falha</span>
+        <span class="badge" id="hmSoftOkBadge"><span class="dot" style="background:var(--hm-softok)"></span>perda parcial provável</span>
+        <span class="badge" id="hmSoftWarnBadge"><span class="dot" style="background:var(--hm-softwarn)"></span>desempenho persistentemente baixo</span>
+        <span class="badge"><span class="dot" style="background:var(--hm-warn)"></span><span id="hmWarnLegendLabel">warn</span></span>
+        <span class="badge"><span class="dot" style="background:var(--hm-crit)"></span><span id="hmCritLegendLabel">falha</span></span>
         <span class="badge"><span class="mono" id="hmBadgeTxt">—</span></span>
       </div>
     </div>
@@ -1071,7 +1071,7 @@
           <label class="origin-toggle" for="showOperationalRcaSignals">
             <input id="showOperationalRcaSignals" type="checkbox" checked>
             <span class="origin-swatch operational" aria-hidden="true"></span>
-            <span>Limiar/RCA</span>
+            <span id="originOperationalToggleLabel">Limiar/RCA</span>
           </label>
         </div>
         <div class="origin-counts" id="originCountsGrid">
@@ -1080,7 +1080,7 @@
           <div class="origin-count"><p class="t">Ambos</p><p class="v">—</p></div>
           <div class="origin-count"><p class="t">Sem destaque</p><p class="v">—</p></div>
         </div>
-        <p class="origin-hint">As cores dos bins continuam representando a classe final do heatmap. As marcas sobrepostas apenas indicam quais métodos sinalizaram cada bin.</p>
+        <p class="origin-hint" id="originHint">As cores dos bins continuam representando a classe final do heatmap. As marcas sobrepostas apenas indicam quais métodos sinalizaram cada bin.</p>
       </div>
     </details>
   </div>
@@ -1560,6 +1560,8 @@
     i_ac_a:       "Iac [A]",
     inv_coverage: "Cobertura inversor",
     anomaly:      "Anomalia (detecção/IV)",
+    anomaly_flag: "Sinalização final de anomalia",
+    residual_anomaly: "Anomalia residual/estatística",
     rca_code:     "Código diagnóstico (RCA)",
     rca_label:    "Rótulo diagnóstico (RCA)",
     g_poa:        "GPOA (POA) [W/m²]",
@@ -1583,8 +1585,10 @@
     ewma_flag: "Flag EWMA",
     cusum_flag: "Flag CUSUM",
     detection_origin: "Origem do destaque",
-    detection_origin_label: "Origem do destaque",
+    detection_origin_key: "Chave da origem da detecção",
+    detection_origin_label: "Origem da detecção",
     detection_origin_reason: "Razão da origem",
+    detection_flow_mode: "Fluxo de detecção",
     operational_threshold_flag: "Flag limiar operativo",
     rca_trigger_flag: "Flag RCA",
     residual_event_score: "Score do evento residual",
@@ -1597,6 +1601,7 @@
     domain_label: "Domínio provável",
     diagnosis_label: "Diagnóstico final",
     direct_grid_evidence: "Evidência direta de rede",
+    operational_deviation_flag: "Desvio operacional identificado",
     zero_injection_flag: "Sem injeção sob sol",
     irradiance_tier: "Tier de irradiância",
     flag_meteo_low_confidence: "Meteo baixa confiança",
@@ -1679,6 +1684,9 @@
     missing_or_low_coverage: "Dados ausentes ou baixa cobertura",
     outside_operational_gate: "Fora do filtro operacional",
     direct_grid_evidence: "Evidência direta de rede",
+    residual_statistical: "Detecção estatística (EWMA/CUSUM)",
+    residual_and_grid: "EWMA/CUSUM + evidência direta da rede",
+    sequential_no_detection: "Sem sinalização no fluxo sequencial",
     zero_injection_with_alarm: "Sem injeção com alarme",
     zero_injection_no_direct_cause: "Sem injeção sem causa direta",
     zero_injection_with_open_signature: "Sem injeção com assinatura de circuito aberto",
@@ -1701,6 +1709,8 @@
     "anomaly=true": "Anomalia marcada pelo detector",
     backend_class: "Classificação do backend",
     rca_code: "Código RCA",
+    thesis_sequential: "Sequencial — EWMA/CUSUM + rede → RCA",
+    legacy_hybrid: "Legado — estatística + regras",
     default_ok: "Sem indício relevante",
     no_point_in_bin: "Sem ponto no bin",
     no_operatives: "Sem dados operacionais",
@@ -3088,14 +3098,43 @@
     return (v === "thesis_sequential") ? "thesis_sequential" : "legacy_hybrid";
   }
 
+  function payloadDetectionFlowMode(payload){
+    const raw = payload?.detection_flow?.mode
+      || payload?.versions?.detection_flow_mode
+      || payload?.version_summary?.detection_flow_mode
+      || detectorMetadata.detection_flow_mode
+      || currentDetectionFlowMode();
+    return String(raw || "").trim().toLowerCase() === "thesis_sequential" ? "thesis_sequential" : "legacy_hybrid";
+  }
+
   function updateDetectionFlowHelp(){
     const mode = currentDetectionFlowMode();
     detectorMetadata.detection_flow_mode = mode;
     const help = $("detectionFlowHelp");
-    if (!help) return;
-    help.textContent = mode === "thesis_sequential"
-      ? "EWMA/CUSUM realizam a detecção; o RCA é utilizado posteriormente para interpretação diagnóstica."
-      : "As regras diagnósticas e evidências diretas podem participar da sinalização final.";
+    if (help) {
+      help.textContent = mode === "thesis_sequential"
+        ? "EWMA/CUSUM e evidência direta da rede realizam a detecção; o RCA é utilizado posteriormente para interpretação diagnóstica."
+        : "As regras diagnósticas e evidências diretas podem participar da sinalização final.";
+    }
+    updateHeatmapLegendForFlow(mode);
+  }
+
+  function updateHeatmapLegendForFlow(mode){
+    const sequential = String(mode || currentDetectionFlowMode()).toLowerCase() === "thesis_sequential";
+    const setText = (id, value) => { const el = $(id); if (el) el.textContent = value; };
+    const setDisplay = (id, value) => { const el = $(id); if (el) el.style.display = value; };
+
+    setText("hmLegendHelp", sequential
+      ? "cinza=sem dados operativos do inversor, verde=sem sinalização, amarelo=detecção EWMA/CUSUM, vermelho=evidência direta da rede."
+      : "cinza=sem dados operativos do inversor, verde=normal, amarelo=warn, vermelho=falha.");
+    setText("hmWarnLegendLabel", sequential ? "detecção estatística (EWMA/CUSUM)" : "warn");
+    setText("hmCritLegendLabel", sequential ? "evidência direta da rede" : "falha");
+    setText("originOperationalToggleLabel", sequential ? "Evidência direta da rede" : "Limiar/RCA");
+    setText("originHint", sequential
+      ? "No fluxo sequencial, as cores dos bins representam a origem formal da detecção. Amarelo = EWMA/CUSUM; vermelho = evidência direta da rede."
+      : "As cores dos bins continuam representando a classe final do heatmap. As marcas sobrepostas apenas indicam quais métodos sinalizaram cada bin.");
+    setDisplay("hmSoftOkBadge", sequential ? "none" : "");
+    setDisplay("hmSoftWarnBadge", sequential ? "none" : "");
   }
 
   function currentOriginSignalVisibility(){
@@ -3107,6 +3146,9 @@
 
   function originLabelForKey(key){
     const k = String(key || "none");
+    if (k === "residual_statistical") return "Detecção estatística (EWMA/CUSUM)";
+    if (k === "direct_grid") return "Evidência direta da rede";
+    if (k === "residual_and_grid") return "EWMA/CUSUM + evidência direta da rede";
     if (k === "ewma_cusum") return "EWMA/CUSUM";
     if (k === "operational_rca") return "Limiar operativo/RCA";
     if (k === "both") return "EWMA/CUSUM + limiar/RCA";
@@ -3115,15 +3157,41 @@
 
   function originSignalColor(kind){
     const styles = getComputedStyle(document.documentElement);
+    if (currentDetectionFlowMode() === "thesis_sequential"){
+      if (kind === "ewma") return styles.getPropertyValue("--hm-warn").trim() || "#ffd25a";
+      if (kind === "operational") return styles.getPropertyValue("--hm-crit").trim() || "#ff5a6e";
+    }
     if (kind === "ewma") return styles.getPropertyValue("--hm-origin-ewma").trim() || "#5ad7ff";
     if (kind === "operational") return styles.getPropertyValue("--hm-origin-rca").trim() || "#d78cff";
     return "rgba(255,255,255,.18)";
   }
 
   function originInfo(payload, idx){
+    const flowMode = payloadDetectionFlowMode(payload);
     const keyRaw = seriesAt(payload, "detection_origin_key", idx);
     const labelRaw = seriesAt(payload, "detection_origin_label", idx);
     const reasonRaw = seriesAt(payload, "detection_origin_reason", idx);
+    if (flowMode === "thesis_sequential"){
+      const residual = isExplicitTrue(seriesAt(payload, "detection_origin_residual_statistical", idx))
+        || isExplicitTrue(seriesAt(payload, "residual_anomaly", idx));
+      const directGrid = isExplicitTrue(seriesAt(payload, "detection_origin_direct_grid", idx))
+        || isExplicitTrue(seriesAt(payload, "direct_grid_evidence", idx));
+      let key = String(keyRaw || "").trim();
+      if (key === "both") key = "residual_and_grid";
+      if (key === "ewma_cusum") key = "residual_statistical";
+      if (key === "operational_rca") key = "direct_grid";
+      if (!key) key = residual && directGrid ? "residual_and_grid" : (directGrid ? "direct_grid" : (residual ? "residual_statistical" : "none"));
+      if (!["residual_statistical", "direct_grid", "residual_and_grid", "none"].includes(key)) key = "none";
+      return {
+        key,
+        label: originLabelForKey(key),
+        reason: String(reasonRaw || originLabelForKey(key)),
+        ewma: residual,
+        operational: directGrid,
+        residual,
+        directGrid,
+      };
+    }
     const ewma = isExplicitTrue(seriesAt(payload, "detection_origin_ewma_cusum", idx))
       || isExplicitTrue(seriesAt(payload, "ewma_flag", idx))
       || isExplicitTrue(seriesAt(payload, "cusum_flag", idx))
@@ -3147,6 +3215,18 @@
   }
 
   function pointClass(payload, idx){
+    if (payloadDetectionFlowMode(payload) === "thesis_sequential"){
+      const origin = originInfo(payload, idx);
+      const visible = currentOriginSignalVisibility();
+      if (origin.directGrid && visible.operational){
+        return { cls: "crit", tone: "crit", reason: "direct_grid_evidence", detection_origin_key: origin.key };
+      }
+      if (origin.residual && visible.ewma){
+        return { cls: "warn", tone: "warn", reason: "residual_statistical", detection_origin_key: origin.key };
+      }
+      return { cls: "ok", tone: "ok", reason: "sequential_no_detection", detection_origin_key: origin.key };
+    }
+
     const s = payload?.series || {};
     const mode = currentDisplayMode();
     const arr = (mode === "tipologia") ? (s.hm_class_typology || []) : (s.hm_class_mismatch || []);
@@ -3339,8 +3419,9 @@
         minute: Number(minutes),
         tkey,
         exact_ts_local: localIso,
+        detection_flow_mode: payloadDetectionFlowMode(payload),
       };
-      cellObj.tone = toneFromCell(cellObj);
+      cellObj.tone = cinfo?.tone || toneFromCell(cellObj);
       cell.set(key, cellObj);
     }
 
@@ -3366,6 +3447,7 @@
   }
 
   function originCountsFromCellMap(){
+    const sequential = payloadDetectionFlowMode(hmState.payload) === "thesis_sequential";
     const counts = {
       total_bins: hmState.cell?.size || 0,
       bins_with_oper: 0,
@@ -3377,6 +3459,11 @@
       both: 0,
       none: 0,
       no_operatives: 0,
+      residual_statistical_total: 0,
+      direct_grid_total: 0,
+      residual_statistical_only: 0,
+      direct_grid_only: 0,
+      residual_and_grid: 0,
     };
     for (const v of hmState.cell.values()){
       if (!v.has_oper){
@@ -3389,6 +3476,34 @@
         ewma: Boolean(v.origin_ewma),
         operational: Boolean(v.origin_operational),
       };
+      if (sequential){
+        const residual = Boolean(v.origin_ewma);
+        const directGrid = Boolean(v.origin_operational);
+        if (residual) {
+          counts.residual_statistical_total++;
+          counts.ewma_cusum_total++;
+        }
+        if (directGrid) {
+          counts.direct_grid_total++;
+          counts.operational_rca_total++;
+        }
+        if (residual && directGrid){
+          counts.residual_and_grid++;
+          counts.both++;
+          counts.highlighted_total++;
+        } else if (residual){
+          counts.residual_statistical_only++;
+          counts.ewma_cusum_only++;
+          counts.highlighted_total++;
+        } else if (directGrid){
+          counts.direct_grid_only++;
+          counts.operational_rca_only++;
+          counts.highlighted_total++;
+        } else {
+          counts.none++;
+        }
+        continue;
+      }
       if (origin.ewma) counts.ewma_cusum_total++;
       if (origin.operational) counts.operational_rca_total++;
       if (origin.key === "both"){
@@ -3412,17 +3527,33 @@
     const summary = $("originPanelSummary");
     if (!grid || !summary) return;
     const c = counts || originCountsFromCellMap();
-    summary.textContent = `EWMA/CUSUM=${c.ewma_cusum_total || 0} | Limiar/RCA=${c.operational_rca_total || 0} | Ambos=${c.both || 0}`;
-    const items = [
-      ["EWMA/CUSUM", c.ewma_cusum_total || 0],
-      ["Apenas EWMA/CUSUM", c.ewma_cusum_only || 0],
-      ["Limiar/RCA", c.operational_rca_total || 0],
-      ["Apenas limiar/RCA", c.operational_rca_only || 0],
-      ["Ambos", c.both || 0],
-      ["Sem destaque", c.none || 0],
-      ["Bins com operativos", c.bins_with_oper || 0],
-      ["Sem operativos", c.no_operatives || 0],
-    ];
+    const sequential = payloadDetectionFlowMode(hmState.payload) === "thesis_sequential";
+    let items;
+    if (sequential){
+      summary.textContent = `EWMA/CUSUM=${c.residual_statistical_total || 0} | Rede=${c.direct_grid_total || 0} | Ambos=${c.residual_and_grid || 0}`;
+      items = [
+        ["Detecção estatística", c.residual_statistical_total || 0],
+        ["Apenas EWMA/CUSUM", c.residual_statistical_only || 0],
+        ["Evidência de rede", c.direct_grid_total || 0],
+        ["Apenas rede", c.direct_grid_only || 0],
+        ["Ambos", c.residual_and_grid || 0],
+        ["Sem sinalização", c.none || 0],
+        ["Bins com operativos", c.bins_with_oper || 0],
+        ["Sem operativos", c.no_operatives || 0],
+      ];
+    } else {
+      summary.textContent = `EWMA/CUSUM=${c.ewma_cusum_total || 0} | Limiar/RCA=${c.operational_rca_total || 0} | Ambos=${c.both || 0}`;
+      items = [
+        ["EWMA/CUSUM", c.ewma_cusum_total || 0],
+        ["Apenas EWMA/CUSUM", c.ewma_cusum_only || 0],
+        ["Limiar/RCA", c.operational_rca_total || 0],
+        ["Apenas limiar/RCA", c.operational_rca_only || 0],
+        ["Ambos", c.both || 0],
+        ["Sem destaque", c.none || 0],
+        ["Bins com operativos", c.bins_with_oper || 0],
+        ["Sem operativos", c.no_operatives || 0],
+      ];
+    }
     grid.innerHTML = items.map(([label, value]) => (
       `<div class="origin-count"><p class="t">${escHtml(label)}</p><p class="v">${escHtml(String(value))}</p></div>`
     )).join("");
@@ -3545,6 +3676,7 @@
 
   function renderHeatmapCanvas(payload){
     hmState.payload = payload;
+    updateHeatmapLegendForFlow(payloadDetectionFlowMode(payload));
     hmState.dtm = Math.max(1, Number($("dt_minutes")?.value || 15));
     $("hmBinLbl").textContent = String(hmState.dtm);
 
@@ -3781,6 +3913,9 @@
     if (k === "state_label") return STATE_LABELS_PT[String(value).toLowerCase()] || translatedToken(value);
     if (k === "domain_label") return DOMAIN_LABELS_PT[String(value).toLowerCase()] || translatedToken(value);
     if (["diagnosis_label","rca_label","label","final_label","event_label_prelim"].includes(k)){
+      return translatedToken(value);
+    }
+    if (["detection_origin","detection_origin_key","detection_origin_label","detection_flow_mode"].includes(k)){
       return translatedToken(value);
     }
     if (k === "irradiance_tier") return IRRADIANCE_TIER_PT[String(value).toUpperCase()] || translatedToken(value);
@@ -4070,6 +4205,10 @@
         valid_period: seriesAt(payload, "valid_period", idx),
         stable_sky: seriesAt(payload, "stable_sky", idx),
         anomaly: seriesAt(payload, "anomaly", idx),
+        anomaly_flag: seriesAt(payload, "anomaly_flag", idx),
+        residual_anomaly: seriesAt(payload, "residual_anomaly", idx),
+        direct_grid_evidence: seriesAt(payload, "direct_grid_evidence", idx),
+        operational_deviation_flag: seriesAt(payload, "operational_deviation_flag", idx),
         anomaly_power: seriesAt(payload, "anomaly_power", idx),
         residual_trigger: seriesAt(payload, "residual_trigger", idx),
         residual_event_score: seriesAt(payload, "residual_event_score", idx),
@@ -4078,6 +4217,8 @@
         cusum_score: seriesAt(payload, "cusum_score", idx),
         ewma_flag: seriesAt(payload, "ewma_flag", idx),
         cusum_flag: seriesAt(payload, "cusum_flag", idx),
+        detection_flow_mode: seriesAt(payload, "detection_flow_mode", idx),
+        detection_origin_key: seriesAt(payload, "detection_origin_key", idx),
         detection_origin_label: seriesAt(payload, "detection_origin_label", idx),
         detection_origin_reason: seriesAt(payload, "detection_origin_reason", idx),
         irradiance_tier: seriesAt(payload, "irradiance_tier", idx),
@@ -4474,8 +4615,14 @@
     detBlock.combined_event_score = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.combined_event_score","combined_event_score"]);
     detBlock.ewma_flag = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.ewma_flag","ewma_flag"]);
     detBlock.cusum_flag = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.cusum_flag","cusum_flag"]);
-    detBlock.detection_origin = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.detection_origin_label","detection_origin_label"]);
-    detBlock.detection_origin_reason = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.detection_origin_reason","detection_origin_reason"]);
+    detBlock.anomaly_flag = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.anomaly_flag","anomaly_flag"]);
+    detBlock.residual_anomaly = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.residual_anomaly","residual_anomaly"]);
+    detBlock.direct_grid_evidence = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.direct_grid_evidence","direct_grid_evidence"]);
+    detBlock.operational_deviation_flag = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.operational_deviation_flag","operational_deviation_flag"]);
+    detBlock.detection_flow_mode = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.detection_flow_mode","detection_flow_mode"]);
+    const originMeta = originInfo(payload, idx);
+    detBlock.detection_origin = originMeta.label || pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.detection_origin_label","detection_origin_label"]);
+    detBlock.detection_origin_reason = originMeta.reason || pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.detection_origin_reason","detection_origin_reason"]);
     detBlock.rca_code = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.rca_code","rca_code","code"]);
     detBlock.rca_label = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["detection.rca_label","rca_label","label"]);
     acBlock.p_ac_w = pickDumpValue(dumpPoint, fallbackPoint, payload, idx, ["chosen_total.p_ac_w","p_ac_w","p_ac_real_w","p_ac_w","p_ac_mppt_sum_w","p_ac_agg_w"]);
@@ -4506,7 +4653,7 @@
     }
     if (tblMeteo) tblMeteo.innerHTML = renderKvRows(meteoBlock, ['g_poa_used','ghi','dni','dhi','temp_air','wind_speed','rh','meteo_qc_score','flag_meteo_missing','flag_meteo_low_confidence','flag_meteo_interpolated','flag_meteo_outlier','flag_meteo_artifact']);
     if (tblConf) tblConf.innerHTML = renderKvRows(confBlock, ['data_reliability_score','data_reliability_level','detection_confidence_score','detection_confidence_level','diagnosis_confidence_score','diagnosis_confidence_level']);
-    if (tblDet) tblDet.innerHTML = renderKvRows(detBlock, ['valid_period','stable_sky','anomaly','anomaly_power','residual_trigger','residual_event_score','combined_event_score','ewma_z','cusum_score','ewma_flag','cusum_flag','detection_origin','detection_origin_reason','irradiance_tier','rca_code','rca_label']);
+    if (tblDet) tblDet.innerHTML = renderKvRows(detBlock, ['detection_flow_mode','valid_period','stable_sky','anomaly_flag','residual_anomaly','direct_grid_evidence','operational_deviation_flag','anomaly','anomaly_power','residual_trigger','residual_event_score','combined_event_score','ewma_z','cusum_score','ewma_flag','cusum_flag','detection_origin','detection_origin_reason','irradiance_tier','rca_code','rca_label']);
     if (tblAC) tblAC.innerHTML = renderKvRows(acBlock, ['p_ac_w','p_ac_mppt_sum_w','p_ac_agg_w','v_ac_v','i_ac_a','freq_hz','alarm_code','alarm_sev','inv_coverage','flag_inv_missing_all','flag_inv_missing_partial']);
     renderCompareTable(tblCompare, { ...dumpPoint, chosen_total: acBlock, meteo: meteoBlock, model: modelBlock, residuals: residualBlock }, fallbackPoint, payload, idx);
 
@@ -4591,8 +4738,16 @@
       }
 
       const mmTxt = (obj.mm == null) ? "—" : `${fmtN(obj.mm,3)} (${fmtPct(obj.mm,1)})`;
-      if (tip) tip.textContent =
-        `${h.ds} ${h.ts} • classe=${translatedToken(obj.cls)} • origem=${obj.origin_label || "Sem destaque"} • operativos=${obj.has_oper ? "sim" : "não"} • razão=${translatedReasonText(obj.reason ?? "—")} • RCA=${obj.code ?? "—"} • rótulo=${translatedToken(obj.lbl ?? "—")} • mismatch=${mmTxt}`;
+      if (tip) {
+        if (payloadDetectionFlowMode(hmState.payload) === "thesis_sequential"){
+          const diag = translatedToken(seriesAt(hmState.payload, "diagnosis_label", obj.idx) ?? obj.lbl ?? "—");
+          tip.textContent =
+            `${h.ds} ${h.ts} • classe=${translatedToken(obj.cls)} • origem da detecção=${obj.origin_label || "Sem sinalização"} • diagnóstico preliminar=${diag} • operativos=${obj.has_oper ? "sim" : "não"} • mismatch=${mmTxt}`;
+        } else {
+          tip.textContent =
+            `${h.ds} ${h.ts} • classe=${translatedToken(obj.cls)} • origem=${obj.origin_label || "Sem destaque"} • operativos=${obj.has_oper ? "sim" : "não"} • razão=${translatedReasonText(obj.reason ?? "—")} • RCA=${obj.code ?? "—"} • rótulo=${translatedToken(obj.lbl ?? "—")} • mismatch=${mmTxt}`;
+        }
+      }
     });
 
     canvas.addEventListener("mouseleave", () => { if (tip) tip.textContent = ""; });
@@ -4974,16 +5129,17 @@
     });
     $("detection_flow_mode")?.addEventListener("change", () => {
       updateDetectionFlowHelp();
+      if (hmState.payload) renderHeatmapCanvas(hmState.payload);
       if (hmState.payload && hmState.selectedKey){
         const obj = hmState.cell.get(hmState.selectedKey);
         if (obj) renderDetail(hmState.payload, obj);
       }
     });
     $("showEwmaCusumSignals")?.addEventListener("change", () => {
-      if (hmState.payload) drawHeatmapCanvas();
+      if (hmState.payload) renderHeatmapCanvas(hmState.payload);
     });
     $("showOperationalRcaSignals")?.addEventListener("change", () => {
-      if (hmState.payload) drawHeatmapCanvas();
+      if (hmState.payload) renderHeatmapCanvas(hmState.payload);
     });
 
     bindDetailButtons();
