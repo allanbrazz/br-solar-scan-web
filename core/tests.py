@@ -1033,6 +1033,27 @@ class RenovigiWorkflowTests(TestCase):
         self.assertIsNone(payload["kpis"]["p_dc_pearson_r"])
         self.assertIsNone(payload["kpis"]["p_dc_spearman_rho"])
 
+    def test_pv_dashboard_timeseries_api_returns_json_for_existing_points(self):
+        self._seed_temperature_corrected_pr_fixture()
+
+        response = self.client.get(
+            reverse("pv_dashboard_api_timeseries"),
+            {
+                "plant_id": self.plant.id,
+                "start": "2026-06-12",
+                "end": "2026-06-12",
+                "source_oper": "ALL",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        payload = response.json()
+        self.assertFalse(payload["empty"])
+        self.assertEqual(payload["kpis"]["points"], 8)
+        self.assertEqual(payload["series"]["p_ac_w"][0], 3600.0)
+        self.assertEqual(payload["sources"]["source_oper_list"], ["SHINEMONITOR"])
+
     def test_mismatch_dashboard_contains_chapter_08_charts(self):
         response = self.client.get(reverse("mismatch_fdd"))
 

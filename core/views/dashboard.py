@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, date, time, timezone as dt_timezone
 from typing import Any, Dict, List, Optional
 from django.apps import apps
-from core.services.dashboard.model_fit import paired_model_metrics
+from core.services.dashboard.model_fit import _float_or_none, paired_model_metrics
 
 import logging
 import math
