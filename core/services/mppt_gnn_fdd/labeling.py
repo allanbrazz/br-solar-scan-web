@@ -17,12 +17,6 @@ def weak_label_disconnected(
     min_sun_points: int,
     min_peer_points: int,
 ) -> np.ndarray:
-    """
-    y: [N] com {0 normal, 1 disconnected} ou IGNORE.
-    Regra conservadora:
-      - precisa ter "sol" suficiente na janela
-      - disconnected se Idc_norm ~ 0 com sol, e existir peer ativo com sol
-    """
     N, T = i_norm_by_mppt.shape
     y = np.full((N,), IGNORE, dtype=np.int64)
 

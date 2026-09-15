@@ -18,10 +18,6 @@ CODE_METEO = 4
 
 @dataclass(frozen=True)
 class MismatchThresholds:
-    """
-    Limiarização simples de mismatch.
-    mismatch_rel = (Pac_real - Pac_model)/max(|Pac_model|, eps_w)
-    """
     gpoa_gate_wm2: float = 250.0
     warn_abs: float = 0.47
     fault_abs: float = 0.95
@@ -100,12 +96,6 @@ def classify_mismatch_series(
     valid: List[bool],
     thresholds: MismatchThresholds,
 ) -> Dict[str, Any]:
-    """
-    Retorna:
-      - codes/labels por ponto
-      - summary: contagens por label/code
-      - events: intervalos de anomalia (warn/fault/meteo)
-    """
     n = len(times_utc)
     if not (len(mismatch_rel) == len(g_poa_wm2) == len(valid) == n):
         raise ValueError("Listas com tamanhos diferentes (times/mismatch/g_poa/valid).")

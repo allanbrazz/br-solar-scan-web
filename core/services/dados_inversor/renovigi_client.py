@@ -20,14 +20,6 @@ def _sha1hex(s: str) -> str:
 
 
 def _unwrap_ok(payload: Dict[str, Any]) -> Any:
-    """
-    Retorna o conteúdo útil da resposta.
-
-    Importante:
-    - Alguns OEMs/versões podem não usar 'dat'/'data' como wrapper.
-      Nesse caso, fazemos fallback para retornar o payload inteiro,
-      para o gateway conseguir fazer deep-search (title/datas em qualquer nível).
-    """
     if not isinstance(payload, dict):
         raise RenovigiError(f"Resposta inválida (não dict): {type(payload)}")
 
@@ -51,9 +43,6 @@ class RenovigiSession:
 
 
 class RenovigiClient:
-    """
-    Cliente para o endpoint público do ShineMonitor (Renovigi OEM).
-    """
 
     def __init__(self):
         self.base_url = settings.RENOVIGI_BASE_URL  # ex: "https://web.shinemonitor.com/public/"
@@ -96,10 +85,6 @@ class RenovigiClient:
         return f"{self.base_url}?sign={sign}&salt={salt}&token={token}{action_str}"
 
     def _call_action(self, token: str, secret: str, action: str, params: List[Tuple[str, Any]]) -> Any:
-        """
-        Monta action_str preservando ordem dos parâmetros (importante para sign).
-        Retorna conteúdo útil via _unwrap_ok (pode ser dict, list, etc).
-        """
         action_str = f"&action={action}"
         for k, v in params:
             if v is None:

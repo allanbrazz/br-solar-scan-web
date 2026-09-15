@@ -10,10 +10,6 @@ LOCAL_TZ = ZoneInfo(getattr(settings, "TIME_ZONE", "America/Montevideo"))
 
 
 def _get_float(request: HttpRequest, key: str, default: float) -> float:
-    """
-    Lê um float de request.GET[key], aceitando vírgula como decimal.
-    Se vier vazio/ausente/ inválido -> retorna default.
-    """
     raw = request.GET.get(key, None)
     if raw is None:
         return float(default)

@@ -74,7 +74,6 @@ def _safe_base_url(base_url: str) -> str:
 
 
 class CamsADSClient:
-    """Thin REST client for the ADS OGC retrieve API used by CAMS time series."""
 
     def __init__(
         self,

@@ -14,7 +14,6 @@ from core.services.power_model.power_model import (
 
 
 def _all_nan_or_missing(arr: Any) -> bool:
-    """True quando a série é ausente, vazia ou não possui nenhum valor finito."""
     if arr is None:
         return True
     try:
@@ -37,12 +36,6 @@ def _safe_int(v: Any) -> Optional[int]:
 
 
 def _string_groups_by_mppt(details: Any) -> Dict[int, List[Tuple[int, int]]]:
-    """
-    Lê PVPlantStringConfig via related_name string_configs.
-
-    Retorna:
-        {mppt: [(strings_qty, modules_per_string), ...]}
-    """
     out: Dict[int, List[Tuple[int, int]]] = {}
 
     qs = getattr(details, "string_configs", None)
@@ -73,18 +66,6 @@ def _mppt_expected_from_module_mpp(
     details: Any,
     k_sys: float,
 ) -> Dict[int, Dict[str, np.ndarray]]:
-    """
-    Calcula Vdc/Idc/Pdc esperados por MPPT a partir das curvas por módulo
-    já calculadas por expected_and_mismatch.
-
-    Esta é a primeira opção porque preserva o mesmo G_POA, temperatura de célula
-    e eventual time-shift aplicados no modelo principal.
-
-    Funciona diretamente para MPPTs formados por grupos em paralelo com o mesmo
-    número de módulos em série. Para MPPTs com grupos de Ns diferentes no mesmo
-    MPPT, a função sinaliza fallback, pois o ponto MPP do arranjo precisa ser
-    resolvido como curva composta.
-    """
     vmp_mod = np.asarray(out_model.get("vmp_mod_v"), dtype=float).ravel()
     imp_mod = np.asarray(out_model.get("imp_mod_a"), dtype=float).ravel()
     pmp_mod = np.asarray(out_model.get("pmp_mod_w"), dtype=float).ravel()
@@ -128,17 +109,6 @@ def _mppt_expected_from_module_mpp(
 
 
 def _aggregate_mppt_expected(mppt_expected: Dict[int, Dict[str, np.ndarray]], n: int) -> Dict[str, np.ndarray]:
-    """
-    Agrega referências por MPPT para comparação com telemetria agregada de planta.
-
-    Convenção adotada:
-    - Pdc esperado agregado: soma das potências esperadas dos MPPTs.
-    - Idc esperado agregado: soma das correntes esperadas dos MPPTs.
-    - Vdc esperado agregado: média das tensões esperadas dos MPPTs disponíveis.
-
-    A média de Vdc replica a estratégia já usada em runtime_detection para
-    preencher o modelo agregado a partir de modelos por MPPT.
-    """
     p_stack: List[np.ndarray] = []
     v_stack: List[np.ndarray] = []
     i_stack: List[np.ndarray] = []
@@ -204,14 +174,6 @@ def _fill_dc_expected_from_mppt_if_needed(
     i_dc_real: Optional[np.ndarray],
     replace_pdc_expected: bool = True,
 ) -> None:
-    """
-    Preenche Vdc/Idc esperados quando a topologia agregada simples não é suficiente.
-
-    O caso que motivou esta rotina é planta com topologia heterogênea:
-    MPPT 1 com 8 módulos e MPPT 2 com 7 módulos. Nessa condição,
-    PVPlantDetails.modules_per_string fica propositalmente nulo, mas
-    PVPlantStringConfig contém a informação necessária para estimar V/I por MPPT.
-    """
     n = len(np.asarray(out.get("valid"), dtype=bool).ravel())
 
     if n == 0:

@@ -144,10 +144,6 @@ class PlantDetailsEditView(LoginRequiredMixin, View):
     FORMSET_PREFIX = "strings"
 
     def _legacy_initial_strings(self, details: PVPlantDetails):
-        """
-        Se ainda não existirem PVPlantStringConfig persistidas, converte a configuração
-        legada (strings_count/modules_per_string) em 1 linha inicial do formset.
-        """
         if not details:
             return []
         try:

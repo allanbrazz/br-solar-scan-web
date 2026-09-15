@@ -1,11 +1,3 @@
-"""
-Django settings for config project.
-
-Configuração ajustada para:
-- desenvolvimento local;
-- execução empacotada via PyInstaller/Waitress;
-- uso de variáveis de ambiente sem hardcodes sensíveis no repositório.
-"""
 
 from __future__ import annotations
 

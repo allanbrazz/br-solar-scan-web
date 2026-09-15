@@ -33,10 +33,6 @@ def _safe_zoneinfo(tz_name: str) -> ZoneInfo:
 
 
 def _local_dates_to_utc_range(start_date: date, end_date: date, tz_name: str) -> tuple[datetime, datetime]:
-    """
-    Converte [start_date, end_date] (datas locais) -> intervalo UTC [start, end).
-    end é exclusivo (end_date + 1 dia, 00:00 local).
-    """
     tz = _safe_zoneinfo(tz_name)
     start_local = datetime.combine(start_date, time.min, tzinfo=tz)
     end_local_excl = datetime.combine(end_date, time.min, tzinfo=tz) + timedelta(days=1)
@@ -48,10 +44,6 @@ def _get_merged15m_model():
 
 
 def _pick_latest_sources_for_plant(plant: PVPlant) -> tuple[Optional[str], Optional[str]]:
-    """
-    Descobre automaticamente quais sources (oper/meteo) existem na base merged para a planta,
-    usando o registro mais recente como referência.
-    """
     M = _get_merged15m_model()
 
     last = (
@@ -124,11 +116,6 @@ def _is_mppt_source(src: str) -> bool:
 
 
 def _is_agg_source(src: str) -> bool:
-    """
-    Considera AGG:
-      - sem separador "|" (ex: SHINEMONITOR)
-      - OU termina com |AGG
-    """
     s = (src or "").strip()
     if not s:
         return False
@@ -173,17 +160,6 @@ def pv_dashboard_view(request: HttpRequest) -> HttpResponse:
 @require_GET
 @login_required
 def pv_dashboard_timeseries_api(request: HttpRequest) -> JsonResponse:
-    """
-    Retorna JSON com séries e KPIs (eixo X em horário local), baseado em PVPlantMergedRecord15m.
-
-    Política anti-dupla-contagem:
-      - Se existir MPPT no timestamp -> TOTAL = Σ(MPPTs) e ignora AGG no total.
-      - Se não existir MPPT -> TOTAL = AGG (fallback).
-    Mantém:
-      - series_by_source com todas as curvas (MPPTs + AGG).
-      - series.p_ac_agg_w / p_dc_agg_w / e_ac_wh_15_agg para comparação visual.
-      - sources.available_oper para popular dropdown sem “sumir opções”.
-    """
     import inspect
     from collections import OrderedDict
 

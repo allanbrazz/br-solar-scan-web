@@ -437,12 +437,6 @@ def _residual_score_from_channels(i: int, residual_series: Optional[Dict[str, An
 
 
 def _combined_detection_signal(base_signal: List[Optional[float]], residual_series: Optional[Dict[str, Any]], base_gate: List[bool]) -> List[Optional[float]]:
-    """Build the canonical runtime detection signal from available residual channels.
-
-    Priority is given to the existing plant-level AC power mismatch so the dashboard
-    remains backward compatible, but DC residual channels participate whenever they
-    are available and sufficiently reliable.
-    """
     if not residual_series:
         return list(base_signal)
 

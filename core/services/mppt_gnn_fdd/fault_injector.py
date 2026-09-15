@@ -44,9 +44,6 @@ def inject_fault(
     rng: np.random.Generator,
     cfg: InjectConfig = InjectConfig(),
 ) -> Tuple[WindowArrays, np.ndarray]:
-    """
-    Retorna (win_injected, y_codes_per_mppt[N])
-    """
     N, T = win.mppt_vdc.shape
     y = np.zeros(N, dtype=int)
 

@@ -6,10 +6,6 @@ from core.services.mppt_gnn_fdd.config import MpptNominal
 
 
 def build_edge_attr(nom: Dict[int, MpptNominal], *, nmax: int = 4) -> np.ndarray:
-    """
-    E_attr: [Nmax,Nmax,Fe]
-    Fe=4: [dtilt, daz, dns, dnp]  (por enquanto tilt/az = 0 intra-inversor)
-    """
     Fe = 4
     E = np.zeros((nmax, nmax, Fe), dtype=np.float32)
 

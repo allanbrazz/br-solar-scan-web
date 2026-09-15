@@ -9,11 +9,11 @@ from django.conf import settings
 from growattServer import GrowattApi, OpenApiV1
 
 class GrowattReadError(RuntimeError):
-    """Falha ao consultar dados da Growatt."""
+    pass
 
 
 class GrowattAuthError(GrowattReadError):
-    """Falha de autenticacao no ShinePhone/Growatt."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -59,7 +59,6 @@ def _as_list(value: Any) -> list[dict[str, Any]]:
 
 
 class GrowattClient:
-    """Cliente de leitura para ShinePhone + Growatt Open API v1."""
 
     def __init__(
         self,
@@ -341,7 +340,6 @@ def fetch_growatt_plant_data(
     *,
     debug: bool = False,
 ) -> Dict[str, Any]:
-    """Compatibilidade com as rotas antigas de snapshot, sem expor token/login bruto."""
     client = GrowattClient(username=username, password=password)
     snapshot = client.get_simple_snapshot()
     if debug:

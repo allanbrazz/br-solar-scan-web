@@ -150,11 +150,6 @@ def compute_pac_model_and_mismatch(
     temp_air: np.ndarray,
     pac_real: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Compat shim: a modelagem/resíduos canônicos agora vivem em
-    core.services.residuals. Esta função mantém a assinatura legada
-    consumida pelo pipeline MPPT.
-    """
     n = len(times_utc)
     out = compute_residual_series_from_observations(
         plant=plant,
@@ -180,9 +175,6 @@ def load_daily_window(
     day_local: date,
     n_mppt: int = 4,
 ) -> Tuple[WindowArrays, List[datetime], Dict[str, Any]]:
-    """
-    Retorna WindowArrays (globais + mppt), lista times_utc (grid) e meta.
-    """
     plant = PVPlant.objects.filter(id=plant_id).first()
     if plant is None:
         raise ValueError("Plant not found")

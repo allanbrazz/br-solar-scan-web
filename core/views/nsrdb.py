@@ -48,11 +48,6 @@ def _nsrdb_make_datetime_index(df: pd.DataFrame, utc_flag: bool) -> pd.DataFrame
 
 
 def _nsrdb_normalize_cols(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Padroniza nomes compatíveis com o front anterior:
-      - air_temperature -> temperature_2m
-      - wind_speed -> wind_speed_10m
-    """
     out = df.copy()
     if "air_temperature" in out.columns and "temperature_2m" not in out.columns:
         out = out.rename(columns={"air_temperature": "temperature_2m"})
@@ -62,10 +57,6 @@ def _nsrdb_normalize_cols(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _slice_by_dates(df: pd.DataFrame, start: dt.date, end: dt.date) -> pd.DataFrame:
-    """
-    Recorta [start, end], incluindo todo o dia final.
-    Funciona para índice tz-naive e tz-aware.
-    """
     if df.empty:
         return df
 
@@ -91,10 +82,6 @@ def _nsrdb_fetch_year_cached(
     interval_min: int, utc_flag: bool, attributes: str,
     timeout_s: int = 120,
 ) -> tuple[dict, pd.DataFrame]:
-    """
-    Busca e faz cache de um ano do NSRDB.
-    Cache é importante porque a API devolve CSV anual (pesado).
-    """
     key = _nsrdb_cache_key(lat, lon, year, interval_min, utc_flag, attributes)
     cached = cache.get(key)
     if cached is not None:
@@ -130,10 +117,6 @@ def _nsrdb_fetch_range(
     *, lat: float, lon: float, start: dt.date, end: dt.date,
     interval_min: int, utc_flag: bool, attributes: str,
 ) -> tuple[pd.DataFrame, dict]:
-    """
-    Busca 1 ou 2 anos (se o período cruza virada de ano), concatena e recorta.
-    Retorna df_all (index datetime) e meta (dict).
-    """
     years = sorted(set([start.year, end.year]))
     frames: list[pd.DataFrame] = []
     meta_out: dict = {}
@@ -160,14 +143,6 @@ def _nsrdb_fetch_range(
 # -------------------------
 
 def nsrdb_api_json(request: HttpRequest) -> JsonResponse:
-    """
-    JSON com ghi/dni/dhi + temperature_2m + wind_speed_10m.
-    Querystring:
-      - lat, lon
-      - start, end (YYYY-MM-DD)
-      - interval (30|60), utc (0|1)
-      - attributes (default: ghi,dhi,dni,wind_speed,air_temperature)
-    """
     lat = _get_float(request, "lat", float(os.environ.get("PV_LAT", -34.9)))
     lon = _get_float(request, "lon", float(os.environ.get("PV_LON", -56.2)))
 
@@ -236,11 +211,6 @@ def nsrdb_api_json(request: HttpRequest) -> JsonResponse:
 
 @login_required
 def nsrdb_view(request: HttpRequest) -> HttpResponse:
-    """
-    View HTML que reutiliza radiation_view.html.
-    Mantive OpenMeteoForm para compatibilidade imediata com o template,
-    mas aqui tilt/azimuth NÃO são usados (NSRDB entrega GHI/DNI/DHI).
-    """
     today = dt.date.today()
     initial = dict(
         lat=float(os.environ.get("PV_LAT", -34.9)),

@@ -269,18 +269,6 @@ def detect_anomalies(
     residual_channel_confidence: Optional[Dict[str, List[Optional[float]]]] = None,
     params: Optional[DetectionParams] = None,
 ) -> Dict[str, Any]:
-    """
-    Saídas principais:
-      - valid_period: há irradiância suficiente para avaliação operacional básica
-      - coarse_period: residual pode apoiar diagnóstico grosseiro (>=320 W/m²)
-      - fine_period: residual fino permitido (>=500 W/m² + meteo ok + sem interpolação)
-      - meteo_quality_ok: estabilidade meteorológica aprovada para avaliação residual
-      - anomaly: anomalia por residual (EWMA || CUSUM) somente onde residual é elegível
-
-    Compatibilidade:
-      - se residual_channels não for fornecido, o detector permanece operando sobre mismatch_rel
-      - mismatch_rel continua sendo o canal AC principal; os demais canais entram como confirmação ponderada
-    """
     p = params or DetectionParams()
 
     mm = _to_np(mismatch_rel)

@@ -99,18 +99,6 @@ def upsert_merged_15m_df(
     interval_min: int = 15,
     batch_size: int = 2000,
 ) -> int:
-    """
-    Persiste df15 (index ts_15) em PVPlantMergedRecord15m.
-
-    NOVO:
-      - Se existirem colunas MPPT (mppt1..4_*), grava 4 linhas por timestamp:
-          source_oper = f"{source_oper}|MPPT{k}"
-        e aloca p_ac_w / e_ac_wh_15 por share DC (Pdc_mppt / sum Pdc_mppt).
-      - Remove rows antigos "TOTAL" (source_oper puro) no intervalo gravado
-        para evitar dupla contagem no dashboard.
-
-    df15 precisa estar indexado por DatetimeIndex tz-aware (UTC recomendado).
-    """
     if df15 is None or df15.empty:
         return 0
 

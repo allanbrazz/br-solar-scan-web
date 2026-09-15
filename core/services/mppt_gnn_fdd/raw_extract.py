@@ -53,9 +53,6 @@ def _bucket_15m_utc(tsu: datetime) -> datetime:
 
 
 def best_device_key_for_source(source_oper: str, device_keys: list[str]) -> Optional[str]:
-    """
-    Heurística para mapear source_oper -> device_key quando não batem exatamente.
-    """
     if not source_oper or not device_keys:
         return None
 
@@ -138,9 +135,6 @@ class RawMPPTAgg:
 
 
 def _device_key_from_opdata(r: Dict[str, Any]) -> str:
-    """
-    Device key estável a partir dos campos do InverterOperationalData.
-    """
     prov = str(r.get("provedor") or "RENOVIGI")
     pn = str(r.get("pn") or "")
     devcode = str(r.get("devcode") or "")
@@ -150,11 +144,6 @@ def _device_key_from_opdata(r: Dict[str, Any]) -> str:
 
 
 def list_raw_device_keys(*, plant_id: int, start_utc: datetime, end_utc: datetime) -> list[tuple[str, int]]:
-    """
-    Retorna [(device_key, count)] no range.
-    1) tenta InverterSample; se vazio
-    2) cai para InverterOperationalData agrupado por device.
-    """
     if start_utc.tzinfo is None:
         start_utc = start_utc.replace(tzinfo=dt_tz.utc)
     if end_utc.tzinfo is None:
@@ -191,12 +180,6 @@ def aggregate_raw_mppt_15m_all_devices(
     start_utc: datetime,
     end_utc: datetime,
 ) -> Dict[str, Dict[datetime, Dict[str, Any]]]:
-    """
-    Agrega MPPT em buckets 15min UTC para TODOS os devices disponíveis.
-    Fonte:
-      - InverterSample se existir no range
-      - senão InverterOperationalData.payload (usando extrator existente do projeto)
-    """
     if start_utc.tzinfo is None:
         start_utc = start_utc.replace(tzinfo=dt_tz.utc)
     if end_utc.tzinfo is None:

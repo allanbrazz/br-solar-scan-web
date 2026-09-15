@@ -356,12 +356,6 @@ def _load_model_health_payload(trained_model_version: Optional[str]) -> Optional
 
 
 def _has_useful_oper_data_from_diag_row(r: Dict[str, Any]) -> bool:
-    """
-    Coverage-first:
-    considera o bin "operativo" quando existe algum dado útil do inversor
-    persistido na linha diagnóstica, mesmo que o ponto não seja elegível
-    para diagnóstico fino (`valid=False`).
-    """
     candidates = [
         "pac_real_w", "p_ac_real_w",
         "v_ac_v", "vac_v",
@@ -377,17 +371,6 @@ def _has_useful_oper_data_from_diag_row(r: Dict[str, Any]) -> bool:
 
 
 def _has_useful_oper_data_from_merged_row(r: Dict[str, Any]) -> bool:
-    """
-    Coverage-first usando a merged 15 min.
-
-    Regras:
-    - se a linha explicita que faltou inversor -> sem cobertura
-    - se houver inv_coverage > 0 -> com cobertura
-    - se houver ao menos uma variável operativa do inversor preenchida -> com cobertura
-
-    Campos meramente estruturais/default (ex.: inv_n=0, alarm_sev=0)
-    não devem, sozinhos, pintar o bin de verde.
-    """
     flag_inv_missing = r.get("flag_inv_missing", None)
     if flag_inv_missing is True:
         return False
@@ -844,12 +827,6 @@ def _build_canonical_mppt_from_sources(
     *,
     max_mppt: int = 8,
 ) -> Dict[str, Any]:
-    """
-    Bloco canônico por MPPT:
-      - mantém somente grandezas coerentes por MPPT:
-        Pac, Pdc, Vdc, Idc e metadados/warning/alarm/status
-      - NÃO replica Vac/Iac/cobertura/flag do inversor em cada MPPT
-    """
     out: Dict[str, Any] = {}
 
     for i in range(1, max_mppt + 1):
@@ -895,11 +872,6 @@ def _best_pred_rows_for_events(
     event_classifier_version: Optional[str],
     mppt: int,
 ) -> Dict[int, Dict[str, Any]]:
-    """
-    Retorna o melhor prediction row por event_id.
-    Se mppt == 0 => considera todos os MPPTs e escolhe o melhor por score.
-    Se mppt > 0 => filtra naquele MPPT.
-    """
     out: Dict[int, Dict[str, Any]] = {}
     if FaultEventMPPT is None or not event_ids:
         return out
@@ -938,12 +910,6 @@ def _best_pred_rows_for_events(
 
 
 def _build_merged_snapshot_for_ts(*, plant_id: int, ts_utc: datetime) -> Dict[str, Any]:
-    """
-    Snapshot do merged_15m num timestamp:
-      - raw_operational_records: dump bruto completo por source_oper
-      - chosen_total: agregado limpo/consistente
-      - canonical_mppt: somente grandezas coerentes por MPPT
-    """
     if PVPlantMergedRecord15m is None:
         return {
             "source_oper_list": [],

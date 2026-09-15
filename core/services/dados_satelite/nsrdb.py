@@ -41,11 +41,6 @@ def fetch_nsrdb_goes_full_disc_csv(
     mailing_list: bool = False,
     timeout_s: int = 120,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Baixa 1 ano (single site) do NSRDB GOES Full Disc v4 via CSV e retorna:
-      - info: DataFrame (1 linha) com metadados (linha 2 do CSV)
-      - df: DataFrame com colunas (Year/Month/Day/Hour/Minute + atributos)
-    """
     if year not in GOES_FULL_DISC_SUPPORTED_YEARS:
         raise ValueError(
             f"Ano {year} não suportado pelo NSRDB GOES Full Disc v4. "
@@ -104,10 +99,6 @@ def _get_required_setting(name: str) -> str:
 
 
 def _normalize_cols(df: pd.DataFrame) -> Dict[str, str]:
-    """
-    Cria um mapa: nome_normalizado -> nome_original.
-    Ex.: "air_temperature" -> "air_temperature" (ou "Air Temperature", etc.)
-    """
     m = {}
     for c in df.columns:
         key = str(c).strip().lower().replace(" ", "_")
@@ -116,10 +107,6 @@ def _normalize_cols(df: pd.DataFrame) -> Dict[str, str]:
 
 
 def _build_ts_utc(df: pd.DataFrame) -> pd.Series:
-    """
-    Constrói ts_utc timezone-aware a partir de Year/Month/Day/Hour/Minute.
-    Assumimos que o request foi feito com utc=true.
-    """
     required = ["Year", "Month", "Day", "Hour", "Minute"]
     missing = [c for c in required if c not in df.columns]
     if missing:
@@ -152,13 +139,6 @@ def ingest_nsrdb_range(
     attributes: str = "ghi,dhi,dni,wind_speed,air_temperature",
     timeout_s: int = 120,
 ) -> Dict[str, Any]:
-    """
-    Faz ingestão do NSRDB GOES Full Disc v4 para o intervalo [start_utc, end_utc] (UTC),
-    baixando por ano (pois o endpoint é anual).
-
-    Salva em core.models.MeteoRecord com ts_utc canônico (UTC).
-    Retorna estatísticas: inserted/updated/total_rows.
-    """
     # garantir UTC aware
     if start_utc.tzinfo is None or end_utc.tzinfo is None:
         raise ValueError("start_utc e end_utc devem ser timezone-aware (UTC).")

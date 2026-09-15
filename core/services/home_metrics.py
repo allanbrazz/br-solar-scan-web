@@ -92,10 +92,6 @@ def _safe_zoneinfo(tz_name: str | None) -> ZoneInfo:
 
 
 def _month_range_utc_for_plant(latest_ts_utc: datetime, tz_name: str | None) -> tuple[datetime, datetime, str]:
-    """
-    Retorna o mês local da planta correspondente ao timestamp de referência.
-    O filtro no banco segue em UTC, mas o recorte mensal respeita o timezone da planta.
-    """
     tz = _safe_zoneinfo(tz_name)
     if timezone.is_naive(latest_ts_utc):
         latest_ts_utc = timezone.make_aware(latest_ts_utc, UTC)
@@ -145,10 +141,6 @@ def _format_source_label(source_oper: str | None, source_meteo: str | None, suff
 
 
 def _merged_row_energy_wh(row: dict[str, Any]) -> Optional[float]:
-    """
-    Energia do bucket consolidado.
-    Usa e_ac_wh_15 quando existir; caso contrário, integra p_ac_w pelo intervalo do bucket.
-    """
     e_wh = _to_float(row.get("e_ac_wh_15"))
     if e_wh is None:
         p_ac = _to_float(row.get("p_ac_w"))
@@ -166,13 +158,6 @@ def _actual_energy_from_merged(
     start_utc: datetime,
     end_utc: datetime,
 ) -> dict[str, Any]:
-    """
-    Soma a energia mensal a partir da tabela consolidada, sem depender da fonte do último registro.
-
-    A lógica evita dupla contagem quando há mais de uma fonte meteorológica ou mais de uma versão
-    do mesmo bucket: para cada timestamp, usa um bucket agregado com energia/potência válida; se
-    não houver agregado, soma os buckets por MPPT da mesma família operacional.
-    """
     qs = (
         PVPlantMergedRecord15m.objects
         .filter(
@@ -330,10 +315,6 @@ def _actual_energy_from_raw_oper(
     start_utc: datetime,
     end_utc: datetime,
 ) -> dict[str, Any]:
-    """
-    Fallback para quando o merge existe, mas p_ac_w/e_ac_wh_15 ficou vazio.
-    Integra a potência AC extraída do payload bruto por dispositivo.
-    """
     qs = (
         InverterOperationalData.objects
         .filter(plant_id=plant_id, ts_utc__gte=start_utc, ts_utc__lt=end_utc)
@@ -418,12 +399,6 @@ def _model_energy_kwh(
     start_utc: datetime,
     end_utc: datetime,
 ) -> dict[str, Any]:
-    """
-    Energia AC prevista pelo modelo a partir de PlantDiagnostic15m.pac_model_w.
-
-    A soma é feita por timestamp para evitar dupla contagem quando houver mais de uma versão,
-    fonte ou execução diagnóstica persistida para o mesmo bucket.
-    """
     base_qs = PlantDiagnostic15m.objects.filter(
         plant_id=plant_id,
         ts_utc__gte=start_utc,

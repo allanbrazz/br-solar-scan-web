@@ -29,10 +29,6 @@ def load_model(name: str) -> tuple[MPPTGNNFDD, list[str], dict]:
 
 @torch.no_grad()
 def _predict_batch(model: MPPTGNNFDD, X: np.ndarray, E: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    X: [B,N,T,F], E:[B,N,N,Fe]
-    returns: pred[B,N], pmax[B,N], proba[B,N,C]
-    """
     xb = torch.from_numpy(X).float()
     eb = torch.from_numpy(E).float()
     logits = model(xb, eb)
@@ -47,9 +43,6 @@ def bulk_upsert_mppt_preds(
     plant: PVPlant,
     rows: list[dict],
 ) -> dict:
-    """
-    rows: [{source_oper, mppt, ts_utc, model_version, pred_code, pred_label, pred_pmax, proba}, ...]
-    """
     if not rows:
         return {"created": 0, "updated": 0}
 

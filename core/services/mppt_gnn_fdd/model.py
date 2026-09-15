@@ -13,10 +13,6 @@ class GRUBlock(nn.Module):
         self.drop = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        x: [B,N,T,F]
-        return: [B,N,H]
-        """
         B, N, T, F = x.shape
         x2 = x.reshape(B * N, T, F)
         y1, _ = self.gru1(x2)
@@ -46,10 +42,6 @@ class EdgeNodeLayer(nn.Module):
         )
 
     def forward(self, v: torch.Tensor, e_attr: torch.Tensor) -> torch.Tensor:
-        """
-        v: [B,N,D]
-        e_attr: [B,N,N,Fe]
-        """
         B, N, D = v.shape
         vi = v[:, :, None, :].expand(B, N, N, D)
         vj = v[:, None, :, :].expand(B, N, N, D)
@@ -74,11 +66,6 @@ class MPPTGNNFDD(nn.Module):
         self.head = nn.Linear(d, n_classes)
 
     def forward(self, X_ts: torch.Tensor, E_attr: torch.Tensor) -> torch.Tensor:
-        """
-        X_ts: [B,N,T,F]
-        E_attr: [B,N,N,Fe]
-        logits: [B,N,C]
-        """
         v = self.enc(X_ts)
         v = self.gnn1(v, E_attr)
         v = self.gnn2(v, E_attr)

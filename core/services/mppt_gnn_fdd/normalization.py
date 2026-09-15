@@ -19,11 +19,6 @@ def _p99(x: np.ndarray) -> float:
 
 @dataclass
 class PlantScaler:
-    """
-    Escalas robustas por planta (p99) para invariância por potência/tensão.
-    - globais: pac, vdc_total, iac, pac_model, G, T
-    - por MPPT: vdc_mppt, idc_mppt, pdc_mppt_est (opcional)
-    """
     pac_p99: float = 1.0
     vdc_total_p99: float = 1.0
     iac_p99: float = 1.0

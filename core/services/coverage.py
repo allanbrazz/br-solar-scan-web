@@ -24,9 +24,6 @@ class CoverageResult:
 
 
 def _floor_to_interval_utc(dt: datetime, interval_min: int) -> datetime:
-    """
-    Arredonda dt (UTC aware) para baixo para múltiplos de interval_min.
-    """
     if dt.tzinfo is None:
         raise ValueError("dt precisa ser timezone-aware (UTC).")
     seconds = interval_min * 60
@@ -36,9 +33,6 @@ def _floor_to_interval_utc(dt: datetime, interval_min: int) -> datetime:
 
 
 def _expected_timestamps_utc(start_utc: datetime, end_utc: datetime, interval_min: int) -> List[datetime]:
-    """
-    Gera timestamps esperados inclusivos: [start_aligned, ..., end_aligned]
-    """
     start_aligned = _floor_to_interval_utc(start_utc, interval_min)
     end_aligned = _floor_to_interval_utc(end_utc, interval_min)
 
@@ -63,16 +57,6 @@ def compute_time_coverage(
     ts_field: str = "ts_utc",
     max_missing_ranges: int = 200,
 ) -> CoverageResult:
-    """
-    Calcula cobertura de uma série temporal armazenada em DB.
-
-    - queryset: já filtrado para plant/source e período (ou apenas plant).
-    - start_utc/end_utc: timezone-aware em UTC.
-    - interval_min: resolução de referência.
-    - ts_field: nome do campo datetime (padrão: 'ts_utc').
-
-    Retorna missing_ranges comprimidos em blocos contíguos.
-    """
     if start_utc.tzinfo is None or end_utc.tzinfo is None:
         raise ValueError("start_utc e end_utc devem ser timezone-aware.")
     if start_utc.tzinfo != UTC or end_utc.tzinfo != UTC:

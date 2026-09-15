@@ -8,10 +8,6 @@ from django.db.models import Q, F
 
 #[Modelos cadastrais fotovoltaicos]
 class PVModule(models.Model):
-    """
-    Modelo para armazenar especificações de um módulo fotovoltaico.
-    Unicidade: (nome, fabricante)
-    """
     nome = models.CharField("Nome", max_length=120)
     fabricante = models.CharField("Fabricante", max_length=120)
 
@@ -191,12 +187,6 @@ class PVPlantDetails(models.Model):
     # ------------ DERIVAÇÕES ------------
 
     def recompute_totals_from_configs(self, commit: bool = True) -> None:
-        """
-        Se existirem configs (PVPlantStringConfig), deriva:
-        - strings_count = soma(strings_qty)
-        - modules_total = soma(strings_qty * modules_per_string)
-        - modules_per_string = valor único se todas configs tiverem mesmo modules_per_string (senão None)
-        """
         cfgs = list(self.string_configs.all())
         if not cfgs:
             return
@@ -243,12 +233,6 @@ class PVPlantDetails(models.Model):
         # se o usuário preencher modules_total sozinho sem os outros, não dá p/ validar
 
     def save(self, *args, **kwargs):
-        """
-        Regras:
-        - Se existirem configs: NÃO tenta recalcular aqui (deixa para recompute_totals_from_configs
-          ser chamado por você após salvar configs, ou por signals/admin).
-        - Se não existirem configs: mantém comportamento atual (strings_count × modules_per_string).
-        """
         has_cfg = bool(self.pk) and getattr(self, "string_configs", None) and self.string_configs.exists()
 
         if not has_cfg:
@@ -259,12 +243,6 @@ class PVPlantDetails(models.Model):
 
 
 class PVPlantStringConfig(models.Model):
-    """
-    Linha configurável: permite “agregar quantas strings quiser”.
-    Cada linha pode representar 1 ou várias strings com mesmo modules_per_string.
-
-    mppt é opcional (planejamento futuro).
-    """
     details = models.ForeignKey(PVPlantDetails, on_delete=models.CASCADE, related_name="string_configs")
 
     name = models.CharField("Nome", max_length=60, blank=True, default="")
@@ -419,10 +397,6 @@ class PlantMonitoringCredential(models.Model):
 #---------------------------
 
 class ShineCredential(models.Model):
-    """
-    Guarda token/secret do ShineMonitor.
-    Credenciais mantidas no banco local da aplicação.
-    """
     name = models.CharField(max_length=100, unique=True)
 
     token = models.TextField()
@@ -442,10 +416,6 @@ class ShineCredential(models.Model):
 
 
 class ShineDevice(models.Model):
-    """
-    Identificadores do dispositivo, conforme o seu request:
-    pn, devcode, devaddr, sn (+ i18n/lang) e oddEvenRow=null se necessário.
-    """
     name = models.CharField(max_length=120)
     credential = models.ForeignKey(ShineCredential, on_delete=models.PROTECT)
 
@@ -473,9 +443,6 @@ class ShineDevice(models.Model):
 
 
 class ShineProtocolSchema(models.Model):
-    """
-    Guarda o 'title' retornado pela API para mapear field_0..field_n -> nomes.
-    """
     device = models.OneToOneField(ShineDevice, on_delete=models.CASCADE)
     titles = models.JSONField(default=list)  # lista de dicts (ex.: {"title": "...", "unit": "..."})
     updated_at = models.DateTimeField(auto_now=True)
@@ -485,9 +452,6 @@ class ShineProtocolSchema(models.Model):
 
 
 class ShineReading(models.Model):
-    """
-    Leitura “linha” do dia. Idempotência: unique(device, ts_utc).
-    """
     device = models.ForeignKey(ShineDevice, on_delete=models.CASCADE)
     ts_utc = models.DateTimeField()
 
@@ -527,10 +491,6 @@ class MeteoDataTypology(models.TextChoices):
 
 
 class MeteoImportBatch(models.Model):
-    """
-    Lote de importação meteorológica.
-    Guarda a proveniência da requisição feita ao provedor.
-    """
     plant = models.ForeignKey(
         "core.PVPlant",
         on_delete=models.CASCADE,
@@ -717,12 +677,6 @@ class InverterOperationalData(models.Model):
         return f"{self.plant_id} {self.provedor} {self.pn}/{self.sn} @ {self.ts_utc}"
 
 class InverterSample(models.Model):
-    """
-    Amostra bruta (raw) do inversor, em timestamp.
-    O payload do ShineMonitor vem com headers + rows (matriz).
-    Guardamos como JSON (raw) para não travar no mapeamento de colunas agora.
-    Depois você pode normalizar em colunas (p_ac, v_dc, etc.) conforme quiser.
-    """
     plant = models.ForeignKey(PVPlant, on_delete=models.CASCADE, related_name="inverter_samples")
 
     #[Identificador único do dispositivo na fonte]
@@ -747,9 +701,6 @@ class InverterSample(models.Model):
         return f"{self.plant_id} {self.device_key} {self.ts.isoformat()}"
     
 class DataIngestState(models.Model):
-    """
-    Guarda o watermark da ingestão por planta + fonte + série (device_key).
-    """
     plant = models.ForeignKey(PVPlant, on_delete=models.CASCADE, related_name="ingest_states")
 
     source = models.CharField(max_length=40)
@@ -798,10 +749,6 @@ class MergedSourceMeteo(models.TextChoices):
 
 
 class PVPlantMergedRecord15m(models.Model):
-    """
-    Base casada em 15 minutos: inversor (5->15) + meteo (15) alinhados.
-    Armazenar em UTC.
-    """
 
     plant = models.ForeignKey(
         "core.PVPlant",
@@ -999,10 +946,6 @@ class PlantPerformanceRatio(models.Model):
 
 #[Falhas e diagnósticos]
 class PlantDiagnostic15m(models.Model):
-    """
-    Diagnóstico plant-level por timestamp com suporte a tiers de irradiância,
-    estado operativo, domínio provável da falha e confiança do diagnóstico.
-    """
 
     plant = models.ForeignKey(
         "core.PVPlant",
@@ -1103,11 +1046,6 @@ class PlantDiagnostic15m(models.Model):
 #[Predições de diagnóstico por MPPT]
 
 class MPPTDiagnostic15m(models.Model):
-    """
-    Um registro por (planta, inversor/source_oper, mppt, timestamp_utc).
-
-    Guarda predição por MPPT (nó do grafo) para ser consumida no drawer/heatmap.
-    """
     plant = models.ForeignKey(
         "core.PVPlant",
         on_delete=models.CASCADE,
@@ -1156,9 +1094,6 @@ class MPPTDiagnostic15m(models.Model):
 
 #[Eventos persistidos de falha]
 class FaultEvent(models.Model):
-    """
-    Evento anômalo persistido (plant-level), derivado dos bins de PlantDiagnostic15m.
-    """
     STATUS_OPEN = "open"
     STATUS_CLOSED = "closed"
     STATUS_REVIEWED = "reviewed"
@@ -1238,13 +1173,6 @@ class FaultEvent(models.Model):
 
 
 class GroundTruthEvent(models.Model):
-    """
-    Verdade de referência mínima para a campanha de validação do FDD mismatch.
-
-    A anotação nasce em nível de evento e é posteriormente discretizada para bins
-    de 15 minutos pelo serviço de validação. O objeto pode representar tanto um
-    evento de falha confirmado quanto uma janela normal revisada manualmente.
-    """
 
     STATE_CONFIRMED = "confirmed"
     STATE_NORMAL = "normal"
@@ -1313,9 +1241,6 @@ class GroundTruthEvent(models.Model):
 
 
 class FaultEventMPPT(models.Model):
-    """
-    Diagnóstico por MPPT associado a um FaultEvent.
-    """
     event = models.ForeignKey(
         "core.FaultEvent",
         on_delete=models.CASCADE,
@@ -1360,7 +1285,6 @@ class FaultEventMPPT(models.Model):
 
 
 class PlantDetectorConfiguration(models.Model):
-    """Configuracao reutilizavel do detector vinculada a uma planta."""
 
     plant = models.ForeignKey(
         "core.PVPlant",

@@ -61,14 +61,6 @@ class RenovigiConsoleView(LoginRequiredMixin, View):
         return f"{d.get('pn','')}|{d.get('devcode','')}|{d.get('devaddr','')}|{d.get('sn','')}"
 
     def _normalize_result_rows(self, obj):
-        """
-        Normaliza retornos para um formato consistente, evitando:
-          - 'list' object has no attribute 'get'
-
-        Retorna: (result_dict, rows_list)
-          - se vier dict e tiver 'rows'/'datas', usa isso
-          - se vier list, assume que é a lista de linhas
-        """
         if isinstance(obj, dict):
             rows = obj.get("rows")
             if rows is None:
@@ -87,10 +79,6 @@ class RenovigiConsoleView(LoginRequiredMixin, View):
         return {"rows": []}, []
 
     def _coerce_device_fields(self, d: dict) -> tuple[str, str, int | None, str, list[str]]:
-        """
-        Extrai e normaliza (pn, devcode, devaddr_int, sn) de um dict.
-        Retorna também lista de campos faltantes para mensagem de erro.
-        """
         if not isinstance(d, dict):
             return "", "", None, "", ["pn", "devcode", "devaddr", "sn"]
 
@@ -118,12 +106,6 @@ class RenovigiConsoleView(LoginRequiredMixin, View):
         return pn, devcode, devaddr, sn, missing
 
     def _parse_device_key(self, s: str) -> tuple[str, str, int, str] | None:
-        """
-        Aceita:
-        A) "pn|devcode|devaddr|sn"
-        B) "pn=XXX | devcode=YYY | devaddr=1 | sn=ZZZ"
-        Retorna (pn, devcode, devaddr_int, sn)
-        """
         s = (s or "").strip()
         if not s:
             return None

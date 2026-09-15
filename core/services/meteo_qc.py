@@ -144,18 +144,6 @@ def apply_meteo_qc(
     lon: Any,
     cfg: Optional[MeteoQCConfig] = None,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-    """
-    Aplica uma camada explícita de QC para séries meteo usadas no FDD.
-
-    Estratégia:
-      1) validação física dura (bounds);
-      2) limpeza robusta por Hampel/MAD para spikes;
-      3) detecção de artefato de interpolação em 15 min do Open-Meteo;
-      4) score consolidado de confiança por linha.
-
-    A função preserva os campos físicos originais, mas substitui por NaN os pontos
-    claramente espúrios. Flags de QC são adicionadas ao dataframe de saída.
-    """
     if df is None or df.empty:
         out = pd.DataFrame() if df is None else df.copy()
         for col in METEO_QC_COLS:

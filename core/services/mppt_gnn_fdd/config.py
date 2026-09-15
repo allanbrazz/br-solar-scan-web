@@ -17,10 +17,6 @@ class MpptNominal:
 
 
 def load_mppt_nominals(plant: PVPlant, *, nmax: int = 4) -> Dict[int, MpptNominal]:
-    """
-    Deriva (n_series, n_parallel) por MPPT a partir de PVPlantStringConfig(mppt=...).
-    Usa Voc/Isc do módulo associado em PVPlantDetails.module.
-    """
     details = getattr(plant, "details", None)
     module = getattr(details, "module", None) if details else None
     if module is None:

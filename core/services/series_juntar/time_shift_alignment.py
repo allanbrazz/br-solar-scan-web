@@ -21,35 +21,6 @@ ConfidenceLevel = Literal["none", "low", "moderate", "high"]
 
 @dataclass(frozen=True)
 class TimeShiftAlignmentConfig:
-    """Configuration for physical time-shift calibration between inverter and meteo/model data.
-
-    The automatic calibration estimates a *relative* shift between the measured
-    operational DC power and the physical DC power expected from the PV model.
-    For each candidate shift, the routine:
-
-      1. shifts the operational timestamps by the candidate value;
-      2. aggregates the inverter data to the 15-minute mesh;
-      3. prepares the meteorological 15-minute reference;
-      4. computes ``P_DC_model`` from the configured PV module/plant model;
-      5. compares ``P_DC_measured`` against ``P_DC_model``.
-
-    Candidate selection criterion:
-      - primary: lowest RMSE between measured P_DC and modelled P_DC;
-      - tie-breaker: highest Pearson correlation between measured P_DC and
-        modelled P_DC;
-      - final tie-breaker: lowest absolute shift.
-
-    Positive ``selected_shift_minutes`` means that the operational timestamp must
-    be moved forward in time to align with the meteorological/model reference.
-    Applying the same relative correction to meteo instead requires the opposite
-    sign.
-
-    Modes:
-      - none: do not estimate/apply shift.
-      - manual: apply ``manual_shift_minutes`` according to ``apply_target``.
-      - auto: estimate shift and apply it only if confidence is acceptable.
-      - suggest_only: estimate shift, report it, but do not apply it.
-    """
 
     mode: TimeShiftMode = "none"
     apply_target: TimeShiftTarget = "operational"
@@ -226,7 +197,6 @@ def _empty_score(shift_minutes: int, *, measured_pdc_col: str = "", model_pdc_co
 
 
 def _build_model_plant_with_coordinates(plant: Any, details: Any) -> Tuple[Any, Any]:
-    """Return (module, plant_model) for the physical DC model."""
     from dataclasses import asdict, is_dataclass
     from core.services.power_model.power_model import module_from_pvmodule, plant_from_details
 
@@ -275,12 +245,6 @@ def _compute_pdc_model_15min(
     met15: pd.DataFrame,
     cfg: TimeShiftAlignmentConfig,
 ) -> Tuple[pd.DataFrame, Dict[str, str]]:
-    """Compute physical ``pdc_model_w`` on the meteorological 15-minute grid.
-
-    The function first tries explicit G_POA/GTI columns. If none exists, it passes
-    GHI/DHI/DNI and timestamps to ``expected_and_mismatch`` so that the existing
-    physical model performs the transposition using the plant geometry.
-    """
     if met15 is None or met15.empty:
         return pd.DataFrame(), {}
 
@@ -364,7 +328,6 @@ def _score_measured_pdc_vs_model(
     g_poa_col: str = "",
     temp_air_col: str = "",
 ) -> TimeShiftScore:
-    """Score a candidate shift through measured P_DC versus physical P_DC_model."""
     if df.empty or pdc_col not in df.columns or model_pdc_col not in df.columns:
         return _empty_score(
             shift_minutes,
@@ -678,13 +641,6 @@ def estimate_time_shift_alignment(
     dt_start_utc: Optional[Any] = None,
     dt_end_utc: Optional[Any] = None,
 ) -> TimeShiftAlignmentResult:
-    """Estimate and decide whether to apply a relative operational/meteo time shift.
-
-    The returned ``selected_shift_minutes`` is always the relative correction in the
-    operational-reference convention: positive means operational timestamps should be
-    moved forward. If ``apply_target='meteo'``, the same relative alignment is applied
-    as an opposite meteo shift.
-    """
     mode = str(cfg.mode or "none").lower()
     apply_target = str(cfg.apply_target or "operational").lower()
     if apply_target not in ("operational", "meteo"):

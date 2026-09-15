@@ -91,10 +91,6 @@ def meteorological_reliability_from_gcv(
     thr_high: float = 0.10,
     thr_low: float = 0.40,
 ) -> Dict[str, Any]:
-    """
-    score: 0..100 (quanto maior, mais confiável)
-    gcv_stat: estatística robusta (mediana) para representar o período
-    """
     gcv = np.asarray(g_cv_60m, dtype=float)
     gcv = gcv[np.isfinite(gcv)]
     if gcv.size == 0:
@@ -195,18 +191,6 @@ def sankey_energy_payload(
     dt_minutes: float = 15.0,
     g_ref_stc: float = 1000.0,
 ) -> Dict[str, Any]:
-    """
-    Fluxo:
-    P_STC -> (escala por G) -> (efeito temperatura) -> (k_sys) -> (eta_inv) -> P_AC_exp
-
-    Observação: aqui a decomposição é "contábil" e coerente com seu pipeline:
-    - P_stc_total_w (constante)
-    - irradiance scaling: P_stc * (G/1000)
-    - DC esperado do 1-diodo (já tem G e T): pdc_expected_w
-      => temperatura efetiva = P_dc / P_G  (onde fizer sentido)
-    - k_sys aplicado antes do inversor
-    - eta_inv aplicado no inversor (já está em pac_expected_w)
-    """
     G = np.asarray(out_model.get("g_poa_used", out_model.get("g_poa", [])), dtype=float)
     p_stc = np.asarray(out_model.get("p_stc_w", []), dtype=float)
     p_dc = np.asarray(out_model.get("pdc_expected_w", []), dtype=float)
@@ -321,10 +305,6 @@ def apply_hysteresis(
     normal_code: int = DiagnosticCodes.NORMAL,
     keep_invalid: bool = True,
 ) -> np.ndarray:
-    """
-    Remove flickering: só mantém estados de falha que persistem >= min_persist_minutes.
-    O resto vira NORMAL.
-    """
     c = np.asarray(codes, dtype=int).copy()
     n = c.size
     if n == 0:

@@ -39,12 +39,6 @@ def _safe_zoneinfo(tzname: str | None) -> ZoneInfo:
 
 
 def _local_dates_to_utc_range(*, plant_tz: str | None, start_date, end_date):
-    """
-    Converte datas (date) em intervalo UTC semiaberto:
-      [start_local 00:00, (end_date+1) 00:00) em tz local
-      -> retorna (start_utc, end_utc_exclusive, tz_local)
-    Isso evita off-by-one e funciona bem com __gte / __lt e com grades (15min/5min).
-    """
     tz_local = _safe_zoneinfo(plant_tz)
 
     start_local = make_aware(datetime.combine(start_date, time.min), timezone=tz_local)
@@ -59,11 +53,6 @@ def _local_dates_to_utc_range(*, plant_tz: str | None, start_date, end_date):
 
 
 def _align_utc_range_to_interval(*, start_utc, end_utc, interval_min: int):
-    """
-    Opcional: alinha start/end para a grade do intervalo.
-    - start: floor
-    - end: ceil (mantém end exclusivo)
-    """
     import pandas as pd
 
     freq = f"{int(interval_min)}min"
@@ -87,10 +76,6 @@ def _align_utc_range_to_interval(*, start_utc, end_utc, interval_min: int):
 @require_http_methods(["GET", "POST"])
 @login_required
 def _open_meteo_view_legacy(request):
-    """
-    Mantive o nome da view/URL para não quebrar a rota.
-    Opera com Open-Meteo (ingest).
-    """
     form = MeteoRequestForm(request.POST or None, user=request.user)
 
     if request.method == "POST" and form.is_valid():
@@ -339,10 +324,6 @@ def open_meteo_view(request):
 @require_GET
 @login_required
 def open_meteo_view_api_json(request):
-    """
-    Endpoint reutilizável para cobertura/consistência no banco.
-    GET params via MeteoRequestForm: plant, start_date, end_date, interval_min
-    """
     form = MeteoRequestForm(request.GET, user=request.user)
     if not form.is_valid():
         return JsonResponse({"ok": False, "errors": form.errors}, status=400)

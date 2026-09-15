@@ -16,21 +16,6 @@ from core.models import PVPlant, MeteoRecord, MeteoSource
 # -----------------------------
 @dataclass(frozen=True)
 class FetchConfig:
-    """
-    Extração do banco -> DataFrames canônicos.
-
-    Meteo:
-      - sai com colunas conforme MeteoRecord
-
-    Inversor:
-      - lê InverterOperationalData (ts_utc + payload)
-      - extrai métricas canônicas do payload
-      - opcional: corrige possível ts_utc errado comparando com Data E Hora do payload
-
-    IMPORTANTE (Renovigi/ShineMonitor):
-      - payload["Data E Hora"] costuma vir UTC-naive em muitos cenários (sem offset).
-      - Portanto, o modo correto geralmente é "utc" (ou "auto" para detectar).
-    """
 
     # ---- MeteoRecord -> DataFrame
     meteo_cols: Sequence[str] = (
@@ -79,10 +64,6 @@ def _get_plant_tz(plant: PVPlant) -> str:
 
 
 def _parse_float(v: Any) -> float:
-    """
-    Converte strings numéricas pt/en para float.
-    Aceita: "1.234,56" / "1234.56" / "  20 " / 20 / None.
-    """
     if v is None:
         return float("nan")
     if isinstance(v, (int, float)) and not isinstance(v, bool):
@@ -151,11 +132,6 @@ def _mean_nonzero(vals: List[float], min_abs: float = 1e-6) -> float:
 
 
 def _weighted_vdc(mppt_v: List[float], mppt_i: List[float]) -> Tuple[float, float]:
-    """
-    Retorna (v_dc_v, i_dc_a) a partir de MPPTs:
-      - i_dc_a = soma correntes positivas
-      - v_dc_v = média ponderada por corrente (ΣViIi / ΣIi)
-    """
     pairs = []
     for v, i in zip(mppt_v, mppt_i):
         if v is None or i is None:
@@ -183,10 +159,6 @@ def _weighted_vdc(mppt_v: List[float], mppt_i: List[float]) -> Tuple[float, floa
 # Extratores por provedor (payload)
 # -----------------------------
 def _extract_renovigi(payload: Dict[str, Any]) -> Dict[str, float]:
-    """
-    Extrai métricas canônicas do payload RENOVIGI (chaves PT-BR).
-    Inclui MPPT1..MPPT4: V/I e Pdc estimado (V*I) por MPPT.
-    """
     pac = _parse_float(payload.get("potência ativa total") or payload.get("Potência ativa total"))
     pdc_total = _parse_float(payload.get("Potência de saída CC") or payload.get("Potência de saída CC "))
 
@@ -272,7 +244,6 @@ def _extract_renovigi(payload: Dict[str, Any]) -> Dict[str, float]:
 
 
 def _extract_growatt(payload: Dict[str, Any]) -> Dict[str, float]:
-    """Normaliza o historico Growatt Open API v1 para o contrato do merge/FDD."""
     pac = _parse_float(_payload_value(payload, ("power", "pac", "p_ac_w")))
     pdc_total = _parse_float(_payload_value(payload, ("ppv", "pdc", "p_dc_w")))
 
@@ -393,18 +364,6 @@ def _localize_payload_time_to_utc(
     plant_tz: str,
     mode: Literal["auto", "utc", "plant_local"],
 ) -> tuple[pd.Series, str]:
-    """
-    Recebe série datetime (pandas) possivelmente naive e devolve:
-      - série tz-aware em UTC (Timestamp UTC)
-      - modo efetivo usado ("utc" | "plant_local" | "tzaware")
-
-    Regras:
-      - se vier tz-aware: converte direto pra UTC e retorna "tzaware"
-      - se naive:
-          * mode="utc": localiza como UTC
-          * mode="plant_local": localiza como plant_tz e converte pra UTC
-          * mode="auto": retorna naive; a escolha será feita no fetch (comparando shifts)
-    """
     dt = pd.to_datetime(s_payload, errors="coerce")
 
     # tz-aware?

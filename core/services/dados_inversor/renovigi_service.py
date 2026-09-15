@@ -42,12 +42,6 @@ def _daterange(start: date, end: date):
 
 
 def _parse_ts_utc(row: Dict[str, Any]) -> Optional[datetime]:
-    """
-    Ajuste fino quando você souber a chave real do timestamp.
-    Tentativas comuns:
-      - epoch ms/s
-      - strings ISO / 'YYYY-MM-DD HH:MM:SS'
-    """
     # epoch ms/s
     for k in ("ts", "timestamp", "time", "collectTime", "collect_time", "dataTime", "dateTime", "datetime"):
         v = row.get(k)
@@ -98,11 +92,6 @@ def _fetch_one_day_rows(
     pagesize: int,
     odd_even: str = "auto",
 ) -> List[Dict[str, Any]]:
-    """
-    Usa queryDeviceDataOneDayPaging e pagina até esgotar.
-    - odd_even="auto" tenta ["odd","even"] e agrega.
-    - Não aborta em dia vazio (ERR_NO_RECORD) -> retorna [].
-    """
     if odd_even and odd_even.lower() != "auto":
         candidates = [odd_even]
     else:
@@ -208,10 +197,6 @@ def fetch_range_table(
     lang: str = "pt_BR",
     pagesize: int = 50,
 ) -> Dict[str, Any]:
-    """
-    Retorna SEMPRE dict:
-      {"rows":[...], "meta":{...}}
-    """
     start_dt = date.fromisoformat(start_day)
     end_dt = date.fromisoformat(end_day)
     if end_dt < start_dt:

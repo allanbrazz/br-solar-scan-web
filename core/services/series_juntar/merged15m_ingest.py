@@ -73,10 +73,6 @@ def _model_field_names(model) -> set:
 
 
 def _ensure_aware_utc(dt: datetime) -> datetime:
-    """
-    Garante datetime timezone-aware em UTC.
-    Compatível com Django 5+ (não usa django.utils.timezone.utc).
-    """
     if dt.tzinfo is None:
         return dj_timezone.make_aware(dt, timezone=UTC)
     return dt.astimezone(UTC)
@@ -105,10 +101,6 @@ def _json_rows_to_df(
     out_ts_col: str = "ts_utc",
     key_candidates: Optional[Dict[str, Sequence[str]]] = None,
 ) -> pd.DataFrame:
-    """
-    Converte lista de dicts (com coluna timestamp + coluna json dict) em DataFrame
-    com colunas normalizadas + ts_utc.
-    """
     if not rows:
         return pd.DataFrame()
 
@@ -157,10 +149,6 @@ def load_inverter_samples_df(
     json_field: str = "data",
     key_candidates: Dict[str, Sequence[str]] = DEFAULT_INV_JSON_KEY_CANDIDATES,
 ) -> pd.DataFrame:
-    """
-    Lê InverterSample (raw) e devolve df com:
-      ts_utc, p_dc_w, p_ac_w, v_dc_v, i_dc_a, v_ac_v, i_ac_a
-    """
     s, e = _as_utc_range(start_utc, end_utc)
 
     label = inverter_sample_model_label or getattr(settings, "INVERTER_SAMPLE_MODEL", DEFAULT_INVERTER_SAMPLE_MODEL)
@@ -195,10 +183,6 @@ def load_meteo_15m_df(
     json_field_candidates: Sequence[str] = ("payload", "data"),
     key_candidates: Dict[str, Sequence[str]] = DEFAULT_METEO_JSON_KEY_CANDIDATES,
 ) -> pd.DataFrame:
-    """
-    Lê meteo 15min e devolve df com:
-      ts_utc + DEFAULT_METEO_COLS (se existirem)
-    """
     s, e = _as_utc_range(start_utc, end_utc)
 
     label = meteo_model_label or getattr(settings, "PV_METEO_15M_MODEL", DEFAULT_METEO_15M_MODEL)
@@ -261,10 +245,6 @@ def persist_merged_15m(
     source_meteo: str,
     cfg: Merged15mPersistConfig = Merged15mPersistConfig(),
 ) -> Dict[str, Any]:
-    """
-    Upsert do dataframe 15min no model PVPlantMergedRecord15m.
-    Espera df indexado por ts_15 (DatetimeIndex UTC) OU coluna ts_utc.
-    """
     if df_15m is None or df_15m.empty:
         return {"ok": True, "created": 0, "updated": 0, "model": cfg.merged_model_label}
 
@@ -472,9 +452,6 @@ def build_and_persist_merged15m_by_day(
     inv_cfg: InverterAggregationConfig = InverterAggregationConfig(),
     met_cfg: MeteoPreparationConfig = MeteoPreparationConfig(),
 ) -> Dict[str, Any]:
-    """
-    Processa dia-a-dia em UTC [00:00, 00:00).
-    """
     if end_day < start_day:
         raise ValueError("end_day < start_day")
 

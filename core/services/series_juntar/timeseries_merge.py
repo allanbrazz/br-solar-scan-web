@@ -108,9 +108,6 @@ def _floor_bucket(dt: pd.Series, freq: str) -> pd.Series:
 
 
 def _shift_meteo_label(dt: pd.Series, freq: str, label: str) -> pd.Series:
-    """
-    Ajusta timestamp meteo para representar o início do bucket ("period_start").
-    """
     delta = pd.Timedelta(freq)
     if label == "period_end":
         return dt - delta
@@ -135,15 +132,6 @@ def aggregate_inverter_to_15min(
     tz_work: str = DEFAULT_TZ,
     assume_tz_if_naive: str = DEFAULT_TZ,
 ) -> pd.DataFrame:
-    """
-    Agrega amostras do inversor (tipicamente 5 min) para buckets de 15 min:
-      - mean_cols: média por bucket (inclui MPPTs se presentes)
-      - e_ac_wh_15: soma da energia por amostra no bucket
-      - inv_n: número de amostras no bucket
-      - inv_coverage: inv_n/expected (clamp 1.0)
-      - flags: flag_inv_missing (False aqui),
-               flag_low_coverage (inv_n>0 e coverage<threshold)
-    """
     if df_inv is None or df_inv.empty:
         return pd.DataFrame()
 

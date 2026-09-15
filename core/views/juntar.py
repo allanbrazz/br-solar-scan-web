@@ -18,13 +18,6 @@ from core.forms import MergeRunForm
 # ---------------------------
 
 def _local_dates_to_utc_range(start_date, end_date, tz_name: str) -> tuple[datetime, datetime]:
-    """
-    Converte [start_date, end_date] (datas locais da planta) em intervalo UTC [start, end).
-
-    Exemplo (America/Maceio, UTC-03):
-      start_date=2025-12-31 -> start_utc=2025-12-31T03:00Z
-      end_date=2025-12-31   -> end_utc  =2026-01-01T03:00Z
-    """
     tz = ZoneInfo(tz_name or "UTC")
 
     # Crie datetimes locais tz-aware corretamente
@@ -39,17 +32,6 @@ def _local_dates_to_utc_range(start_date, end_date, tz_name: str) -> tuple[datet
 
 
 def _df_preview(df: pd.DataFrame, tz_name: str, n: int = 60) -> tuple[list[str], list[list]]:
-    """
-    Converte o índice (assumindo que o índice representa UTC) para o timezone da planta
-    e retorna:
-      - cols: lista de nomes de colunas
-      - rows: lista de listas (valores alinhados com cols)
-
-    Regras:
-    - Se o índice for tz-naive: assume UTC e tz_localize("UTC")
-    - Se for tz-aware: tz_convert("UTC") antes, e depois tz_convert(tz da planta)
-    - Formata ts_local como string para a UI (evita exibir offset -03:00)
-    """
     if df is None or df.empty:
         return [], []
 
@@ -109,9 +91,6 @@ def _df_preview(df: pd.DataFrame, tz_name: str, n: int = 60) -> tuple[list[str],
 
 @login_required
 def merge_run_view(request: HttpRequest) -> HttpResponse:
-    """
-    Tela para executar merge e (opcionalmente) persistir base casada 15 min.
-    """
     stats = None
     cols15, rows15 = [], []
     colsh, rowsh = [], []

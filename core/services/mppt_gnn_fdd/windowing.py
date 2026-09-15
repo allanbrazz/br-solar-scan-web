@@ -78,11 +78,6 @@ def iter_graph_windows_from_db(
     stride_steps: int | None = None,
     mode: str = "train",  # "train" ou "infer"
 ) -> Iterable[GraphWindow]:
-    """
-    Cria janelas [T=96] diretamente do DB (sem export).
-    - train: stride default cfg.stride_steps (ex 4)
-    - infer: tipicamente stride 1 (15 min)
-    """
     plant = PVPlant.objects.filter(id=plant_id).select_related("details", "details__module").first()
     if plant is None:
         raise ValueError("Plant not found")

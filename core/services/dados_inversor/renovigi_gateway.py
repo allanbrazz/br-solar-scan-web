@@ -53,10 +53,6 @@ def _safe_int(x: Any, default: int = 0) -> int:
 
 
 def _is_no_record_error(exc: Exception) -> bool:
-    """
-    ShineMonitor/Renovigi: err=12 / ERR_NO_RECORD = "sem registro" para o dia consultado.
-    Isso NÃO é falha do sistema; é dia vazio e deve ser tratado como rows=[].
-    """
     err = getattr(exc, "err", None)
     if err is not None:
         try:
@@ -107,12 +103,6 @@ def _normalize_headers(dat: Dict[str, Any]) -> List[str]:
 
 
 def _extract_row_values(row_item: Any) -> List[Any]:
-    """
-    Row pode vir como:
-      - list de valores
-      - dict com 'filed' (comum) ou 'field'
-      - dict colunar
-    """
     if row_item is None:
         return []
 
@@ -151,12 +141,6 @@ def _normalize_rows(dat: Dict[str, Any]) -> List[List[Any]]:
 # Flatten: Plants / Devices
 # ----------------------------
 def _flatten_plants(obj: Any) -> List[Dict[str, Any]]:
-    """
-    Retornos variam por OEM/versão:
-      - list direto
-      - dict com chaves: plants/plant/list/rows/row/data/datas/items/result
-      - listas aninhadas
-    """
     out: List[Dict[str, Any]] = []
 
     def walk(x: Any):
@@ -182,12 +166,6 @@ def _flatten_plants(obj: Any) -> List[Dict[str, Any]]:
 
 
 def _flatten_devices(obj: Any) -> List[Dict[str, Any]]:
-    """
-    Retornos variam por OEM/versão:
-      - list direto
-      - dict com chaves: device/devices/list/rows/row/data/datas/items/result
-      - listas aninhadas
-    """
     out: List[Dict[str, Any]] = []
 
     def walk(x: Any):
@@ -321,10 +299,6 @@ def _query_device_data_one_day_paging_safe(
     i18n: str,
     lang: str,
 ) -> Optional[Dict[str, Any]]:
-    """
-    Wrapper: se err=12/ERR_NO_RECORD -> retorna None (dia sem dados).
-    Qualquer outro erro -> propaga.
-    """
     try:
         return cli.query_device_data_one_day_paging(
             token=sess.token,
@@ -595,10 +569,6 @@ def fetch_range_table(
 # ----------------------------
 @dataclass
 class RenovigiGateway:
-    """
-    Compatibilidade com imports antigos:
-      from core.services.renovigi_gateway import RenovigiGateway
-    """
 
     @staticmethod
     def discover_plants(username: str, password: str) -> List[Dict[str, Any]]:

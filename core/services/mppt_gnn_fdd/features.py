@@ -46,15 +46,6 @@ def build_node_features(
     win: WindowArrays,
     scaler: PlantScaler,
 ) -> Tuple[np.ndarray, Dict[str, int]]:
-    """
-    Retorna:
-      X_node: [N,T,F]
-      fmap: nome_feature -> idx
-
-    NAN-SAFE:
-      - nanmedian/nansum
-      - nan_to_num antes de divisões e stack final
-    """
     pac = np.asarray(win.pac, float)
     vdc_total = np.asarray(win.vdc_total, float)
     iac = np.asarray(win.iac, float)

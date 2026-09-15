@@ -88,27 +88,23 @@ def _clip_exp_arg(a: np.ndarray, max_arg: float = 80.0) -> np.ndarray:
 
 
 def _vt_cell(Tk: np.ndarray) -> np.ndarray:
-    """Tensão térmica por célula: Vt = kT/q."""
     return (K_B * Tk) / Q_E
 
 
 @lru_cache(maxsize=64)
 def _vhat01(n_points: int) -> np.ndarray:
-    """Grade normalizada [0..1]."""
     n = int(max(30, n_points))
     return np.linspace(0.0, 1.0, n, dtype=float)
 
 
 @lru_cache(maxsize=64)
 def _vhat_eps(n_points: int) -> np.ndarray:
-    """Grade (0..1) evitando endpoints exatos."""
     n = int(max(30, n_points))
     e = 1e-4
     return np.linspace(e, 1.0 - e, n, dtype=float)
 
 
 def _rolling_nanmean(x: np.ndarray, w: int) -> np.ndarray:
-    """Média móvel trailing ignorando NaN (NumPy puro)."""
     x = np.asarray(x, dtype=float)
     n = x.size
     out = np.full(n, np.nan, dtype=float)
@@ -142,7 +138,6 @@ def _rolling_nanmean(x: np.ndarray, w: int) -> np.ndarray:
 
 
 def _rolling_nanstd(x: np.ndarray, w: int) -> np.ndarray:
-    """Std móvel trailing ignorando NaN (ddof=0)."""
     x = np.asarray(x, dtype=float)
     n = x.size
     out = np.full(n, np.nan, dtype=float)
@@ -189,7 +184,6 @@ def irradiance_stability(
     window_minutes: float = 60.0,
     eps_mean: float = 50.0,
 ) -> Dict[str, np.ndarray]:
-    """Estatísticas móveis da irradiância (sempre retorna g_mean/g_std/g_cv)."""
     G = _to_np(g)
     n = G.size
 
@@ -215,7 +209,6 @@ def irradiance_stability(
 
 
 def clear_sky_index(g: np.ndarray, g_clear: Optional[np.ndarray], *, eps: float = 1.0) -> np.ndarray:
-    """CSI = G / G_clear (opcional)."""
     g = np.asarray(g, dtype=float)
     if g_clear is None:
         return np.full_like(g, np.nan, dtype=float)
@@ -314,7 +307,6 @@ def tcell_noct(g_poa: ArrayLike, tamb_c: ArrayLike, noct_c: float = 45.0) -> np.
 # Datetime handling robusto
 # =========================
 def _unwrap_singleton(x: Any) -> Any:
-    """Desembrulha casos como [DatetimeIndex] ou array size=1 contendo um Index."""
     try:
         while True:
             if isinstance(x, (list, tuple)) and len(x) == 1:
@@ -330,10 +322,6 @@ def _unwrap_singleton(x: Any) -> Any:
 
 
 def _to_datetime64ns(times: Any) -> np.ndarray:
-    """
-    Retorna np.datetime64[ns] (UTC implícito). Se houver NaT, lança ValueError.
-    Corrige casos com pandas.DatetimeIndex / Timestamp e listas embrulhadas.
-    """
     times = _unwrap_singleton(times)
 
     if times is None:
@@ -442,7 +430,6 @@ def _shift_times_minutes(t: np.ndarray, shift_minutes: float) -> np.ndarray:
 
 
 def _infer_dt_minutes_from_times(t: np.ndarray, fallback: float = 15.0) -> float:
-    """Estimativa de dt em minutos a partir de times_utc (mediana das diffs)."""
     if t.size < 2:
         return float(fallback)
     dt_s = np.diff(t.astype("datetime64[s]").astype("int64")).astype(float)
@@ -453,12 +440,6 @@ def _infer_dt_minutes_from_times(t: np.ndarray, fallback: float = 15.0) -> float
 
 
 def _shift_series_by_minutes(values: np.ndarray, times_utc: np.ndarray, shift_minutes: float) -> np.ndarray:
-    """
-    Shifta a série no eixo do tempo preservando timestamps.
-    Convenção: shift_minutes > 0 => ATRASA a curva (move para a direita).
-      new(t) = old(t - shift)
-    Interp linear no tempo (apenas pontos finitos).
-    """
     y = np.asarray(values, dtype=float)
     t = np.asarray(times_utc, dtype="datetime64[ns]")
     if y.size == 0 or t.size == 0 or y.size != t.size:
@@ -499,10 +480,6 @@ def _best_lag_steps_xcorr(
     max_lag_steps: int,
     min_samples: int = 40,
 ) -> int:
-    """
-    Retorna lag_steps que maximiza correlação entre x e y shiftado.
-    Convenção: lag_steps > 0 => ATRASA y (move y para a direita).
-    """
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     n = min(x.size, y.size)
@@ -562,7 +539,6 @@ def solar_position_noaa_utc(
     lat_deg: float,
     lon_deg: float,
 ) -> Dict[str, np.ndarray]:
-    """Retorna zenith_deg e azimuth_deg (0=N, 90=E) para timestamps UTC."""
     t = _to_datetime64ns(times_utc)
     n = t.size
     if n == 0:
@@ -659,7 +635,6 @@ def transpose_ghi_to_poa_isotropic(
     dni: Optional[ArrayLike] = None,
     times_shift_minutes: float = 0.0,
 ) -> Dict[str, np.ndarray]:
-    """Transposição isotrópica (Liu-Jordan): POA = B_poa + D_poa + G_ref"""
     GHI = _to_np(ghi)
     t0 = _to_datetime64ns(times_utc)
     if t0.size == 0 and GHI.size == 0:
@@ -748,7 +723,6 @@ class RefParams:
 
 @lru_cache(maxsize=256)
 def ref_params_stc(module: ModuleOneDiode) -> RefParams:
-    """Fecha (I0_n, Iph_n) em STC com Isc e Voc."""
     TnK = module.tn_c + 273.15
     Vt_mod = float(_vt_cell(np.array([TnK]))[0]) * float(module.ns)
     aVt = float(module.a) * Vt_mod
@@ -774,7 +748,6 @@ def ref_params_stc(module: ModuleOneDiode) -> RefParams:
 
 
 def i0_temp(module: ModuleOneDiode, tc_c: np.ndarray) -> np.ndarray:
-    """Ajuste térmico de I0."""
     T = tc_c + 273.15
     Tn = module.tn_c + 273.15
     EgJ = float(module.eg_ev) * Q_E
@@ -785,7 +758,6 @@ def i0_temp(module: ModuleOneDiode, tc_c: np.ndarray) -> np.ndarray:
 
 
 def iph_irr_temp(module: ModuleOneDiode, g: np.ndarray, tc_c: np.ndarray) -> np.ndarray:
-    """Iph(G,T) ≈ (Iph_n + Ki*(T-Tn))*(G/Gn)"""
     iph_n = ref_params_stc(module).iph_n
     g = np.asarray(g, dtype=float)
     g = np.clip(g, 0.0, None)
@@ -797,14 +769,12 @@ def iph_irr_temp(module: ModuleOneDiode, g: np.ndarray, tc_c: np.ndarray) -> np.
 
 
 def rp_irr(module: ModuleOneDiode, g: np.ndarray) -> np.ndarray:
-    """Rp cresce em baixa irradiância (aprox.)."""
     g = np.asarray(g, dtype=float)
     g = np.clip(g, 0.0, None)
     return np.clip(float(module.rp_ohm) * (float(module.gn) / np.maximum(g, 50.0)), 0.1, 1e8)
 
 
 def voc_guess(module: ModuleOneDiode, tc_c: np.ndarray, g: np.ndarray) -> np.ndarray:
-    """Chute Vetorizado de Voc."""
     tc_c = np.asarray(tc_c, dtype=float)
     g = np.asarray(g, dtype=float)
     Tk = tc_c + 273.15
@@ -817,7 +787,6 @@ def voc_guess(module: ModuleOneDiode, tc_c: np.ndarray, g: np.ndarray) -> np.nda
 
 
 def voc_newton_vec(iph: np.ndarray, i0: np.ndarray, rp: np.ndarray, aVt: np.ndarray, guess: np.ndarray) -> np.ndarray:
-    """Resolve Voc (I=0) vetorizado."""
     V = np.asarray(guess, dtype=float).copy()
     iph = np.asarray(iph, dtype=float)
     i0 = np.asarray(i0, dtype=float)
@@ -863,7 +832,6 @@ def iv_current_mat(
     *,
     max_iter: int = 30,
 ) -> np.ndarray:
-    """Resolve I(V) para uma matriz Vmat (n,m)."""
     Vmat = np.asarray(Vmat, dtype=float)
     iph = np.asarray(iph, dtype=float)
     i0 = np.asarray(i0, dtype=float)
@@ -909,7 +877,6 @@ def pmp_module_vec(
     *,
     n_points: int = 60,
 ) -> Dict[str, np.ndarray]:
-    """Retorna Potência, Tensão e Corrente no MPP (por módulo)."""
     voc = np.maximum(voc_newton_vec(iph, i0, rp, aVt, voc_g), 0.1)
 
     vhat = _vhat01(int(n_points))
@@ -931,12 +898,6 @@ def pmp_module_vec(
 # Inversor - eficiência variável
 # =========================
 def inverter_efficiency(pdc_w: np.ndarray, plant: PlantModel) -> np.ndarray:
-    """
-    Retorna eta_inv(t) (0..1).
-
-    - Trata pdc NaN como 0 para não propagar NaN para eta.
-    - Zera eta quando pdc_net == 0 (inversor "off").
-    """
     pdc = np.asarray(pdc_w, dtype=float)
     pdc0 = np.where(np.isfinite(pdc), pdc, 0.0)
 
@@ -990,7 +951,6 @@ def classify_root_cause_vec(
     thr_drop_i: float = 0.90,
     thr_drop_v: float = 0.90,
 ) -> np.ndarray:
-    """Heurística simples. Retorna array de strings (labels)."""
     n = valid.size
     out = np.full(n, "invalid", dtype=object)
 
@@ -1046,7 +1006,6 @@ def feature_extraction(
     *,
     v_ac_real_v: Optional[ArrayLike] = None,
 ) -> Dict[str, np.ndarray]:
-    """Padroniza o vetor de features p/ ML."""
     g = out_model.get("g_poa_used", None)
     if g is None:
         g = out_model.get("g_poa", None)
@@ -1125,14 +1084,6 @@ def expected_and_mismatch(
     max_auto_shift_minutes: float = 90.0,
     auto_shift_smooth_minutes: float = 30.0,
 ) -> Dict[str, np.ndarray]:
-    """
-    Correções relevantes para desencontro das curvas:
-      - _to_datetime64ns robusto (corrige AttributeError com DatetimeIndex).
-      - meteo_time_shift_minutes: shift manual aplicado (irradiância e tamb).
-      - auto_time_shift: estima lag por correlação (pac_real vs G) e aplica shift.
-        Isso corrige o caso típico de séries 15-min rotuladas no início/fim da janela
-        vs potência do inversor em timestamps diferentes.
-    """
     if g_clear is None and g_clear_sky is not None:
         g_clear = g_clear_sky
 
@@ -1557,7 +1508,6 @@ def expected_and_mismatch(
 # Helpers: mapear Django models -> dataclasses
 # =========================
 def module_from_pvmodule(pv_module: Any) -> ModuleOneDiode:
-    """Converte PVModule (Django) -> ModuleOneDiode."""
     voc = float(pv_module.voc_v)
     isc = float(pv_module.isc_a)
 
@@ -1589,7 +1539,6 @@ def plant_from_details(
     inverter: Optional[Any] = None,
     use_inverter_eff: bool = False,
 ) -> PlantModel:
-    """Converte PVPlantDetails (Django) -> PlantModel."""
     sc = _safe_int(getattr(details, "strings_count", None) or getattr(details, "num_strings", None))
     mps = _safe_int(getattr(details, "modules_per_string", None) or getattr(details, "modulos_por_string", None))
 
@@ -1815,7 +1764,6 @@ def pmp_array_groups_vec(
     max_iter: int = 28,
     chunk_size: int = 4000,
 ) -> Dict[str, np.ndarray]:
-    """Retorna (Pmp, Vmp, Imp) do arranjo, considerando grupos em paralelo com diferentes Ns."""
     groups_ = _as_groups(groups)
     maxNs = max(g.modules_per_string for g in groups_)
 
@@ -1882,7 +1830,6 @@ def voc_isc_array_groups_vec(
     max_iter: int = 28,
     chunk_size: int = 4000,
 ) -> Dict[str, np.ndarray]:
-    """Voc_array ~ max(Ns)*Voc_mod; Isc_array ~ sum(strings_qty)*Isc_mod."""
     groups_ = _as_groups(groups)
     maxNs = max(g.modules_per_string for g in groups_)
     sumNp = sum(g.strings_qty for g in groups_)
@@ -1932,7 +1879,6 @@ def signature_features_from_operating_point(
     ff_mpp: Optional[np.ndarray] = None,
     eps: float = 1e-9,
 ) -> Dict[str, np.ndarray]:
-    """Features básicos para assinaturas elétricas."""
     v_dc_meas = np.asarray(v_dc_meas, dtype=float)
     i_dc_meas = np.asarray(i_dc_meas, dtype=float)
     v_dc_exp = np.asarray(v_dc_exp, dtype=float)

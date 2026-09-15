@@ -43,10 +43,6 @@ def _get_opdata_model():
 
 
 def _is_no_record_error(exc: Exception) -> bool:
-    """
-    ShineMonitor/Renovigi: err=12 / ERR_NO_RECORD significa "não há registro para o dia consultado".
-    Isso NÃO deve abortar o range; deve ser tratado como "dia vazio".
-    """
     err = getattr(exc, "err", None)
     if err is not None:
         try:
@@ -60,15 +56,6 @@ def _is_no_record_error(exc: Exception) -> bool:
 
 
 def _parse_ts(value: Any, plant_tz: str) -> Optional[datetime]:
-    """
-    Converte o campo de timestamp em datetime timezone-aware (UTC).
-
-    Regra chave:
-      - Qualquer timestamp "naive" vindo como string (ex.: '2025-12-29 08:17:29')
-        é interpretado como HORA LOCAL da planta e convertido para UTC.
-      - Epoch (s/ms) é absoluto -> UTC.
-      - Strings com TZ -> convertidas para UTC.
-    """
     if value is None:
         return None
 
@@ -154,10 +141,6 @@ def _iter_days(start: date, end: date) -> Iterable[date]:
 
 
 def _day_bounds_utc(d: date, plant_tz: str) -> tuple[datetime, datetime]:
-    """
-    Limites do DIA LOCAL 'd' convertidos para UTC [start, end).
-    Isso é essencial para 'skip_days_if_exists' e para deduplicação por dia.
-    """
     tz = ZoneInfo(plant_tz or "UTC")
     start_local = datetime(d.year, d.month, d.day, 0, 0, 0, tzinfo=tz)
     end_local = start_local + timedelta(days=1)
@@ -180,10 +163,6 @@ def _query_one_day_page(
     i18n: str,
     lang: str,
 ) -> Optional[Dict[str, Any]]:
-    """
-    Wrapper com tratamento de ERR_NO_RECORD (err=12).
-    Retorna dict do payload ou None se o dia não tem registro.
-    """
     try:
         return client.query_device_data_one_day_paging(
             token=token,
@@ -219,13 +198,6 @@ def _detect_oddevenrow_for_day(
     i18n: str,
     lang: str,
 ) -> Tuple[Optional[str], List[str], List[List[Any]]]:
-    """
-    Tenta múltiplos valores de oddEvenRow e retorna o primeiro que produz rows.
-    Retorna: (chosen_oddEvenRow, headers, first_rows_page0)
-
-    Observação:
-      - Se o dia não tiver registro (err=12), retorna (None, [], []) sem levantar exceção.
-    """
     candidates = getattr(
         settings,
         "RENOVIGI_ODDEVENROW_CANDIDATES",
@@ -283,15 +255,6 @@ def _fetch_one_day_rows(
     i18n: str,
     lang: str,
 ) -> Tuple[List[str], List[List[Any]]]:
-    """
-    Retorna (headers, rows) para o dia.
-    Estratégia:
-      1) detecta oddEvenRow (page=0) que produz dados
-      2) pagina usando esse oddEvenRow
-
-    Correção:
-      - ERR_NO_RECORD (err=12) => retorna ([], []) para o dia e segue range.
-    """
     chosen, headers, rows0 = _detect_oddevenrow_for_day(
         client,
         token,
@@ -370,23 +333,6 @@ def sync_operational_data_for_device(
     skip_days_if_exists: bool = True,
     incremental_from_last: bool = True,
 ) -> Dict[str, Any]:
-    """
-    Sincroniza dados operativos no banco.
-
-    Correções principais:
-      1) Backfill:
-         - Só aplica "incremental from last(ts_utc)" se last_date <= end_day.
-           Se o banco já tem dados mais novos (last_date > end_day),
-           preserva start_day e permite sincronizar históricos antigos.
-      2) ERR_NO_RECORD (err=12):
-         - Dia sem dados não aborta o range; apenas resulta em 0 rows naquele dia.
-      3) inserted real (determinístico):
-         - Filtra timestamps já existentes no dia e conta inserts efetivos como len(objs).
-      4) TIMEZONE CANÔNICO:
-         - Timestamps "naive" vindos da API são tratados como HORA LOCAL DA PLANTA e convertidos para UTC
-           antes de salvar em ts_utc.
-         - Os "day bounds" para skip/dedup por dia são calculados como limites do DIA LOCAL convertidos para UTC.
-    """
     OpData = _get_opdata_model()
 
     plant_tz = getattr(plant, "timezone", None) or "UTC"
