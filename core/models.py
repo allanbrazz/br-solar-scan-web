@@ -1,4 +1,3 @@
-#core/models.py
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.conf import settings
@@ -7,11 +6,7 @@ from django.utils import timezone
 from decimal import Decimal
 from django.db.models import Q, F
 
-#---------------------------
-#--------------------------- P     M
-#---------------------------   V     O
-#---------------------------
-
+#[Modelos cadastrais fotovoltaicos]
 class PVModule(models.Model):
     """
     Modelo para armazenar especificações de um módulo fotovoltaico.
@@ -20,40 +15,40 @@ class PVModule(models.Model):
     nome = models.CharField("Nome", max_length=120)
     fabricante = models.CharField("Fabricante", max_length=120)
 
-    # Potência nominal no MPP (W)
+    #[Potência nominal no ponto de máxima potência]
     pmp_w = models.DecimalField("Pmp (W)", max_digits=10, decimal_places=2,
                                 validators=[MinValueValidator(0)])
 
-    # Ponto de máxima potência (V, A)
+    #[Tensão e corrente no ponto de máxima potência]
     vmp_v = models.DecimalField("Vmp (V)", max_digits=8, decimal_places=3,
                                 validators=[MinValueValidator(0)])
     imp_a = models.DecimalField("Imp (A)", max_digits=8, decimal_places=3,
                                 validators=[MinValueValidator(0)])
 
-    # Circuito aberto / curto-circuito (V, A)
+    #[Tensão de circuito aberto e corrente de curto-circuito]
     voc_v = models.DecimalField("Voc (V)", max_digits=8, decimal_places=3,
                                 validators=[MinValueValidator(0)])
     isc_a = models.DecimalField("Isc (A)", max_digits=8, decimal_places=3,
                                 validators=[MinValueValidator(0)])
 
-    # Eficiência em % (0–100)
+    #[Eficiência do módulo]
     eficiencia_pct = models.DecimalField("Eficiência (%)", max_digits=5, decimal_places=2,
                                          validators=[MinValueValidator(0), MaxValueValidator(100)])
 
-    # Tolerância de potência – texto livre para suportar “±3%”, “-0/+5W” etc.
+    #[Tolerância de potência informada pelo fabricante]
     power_tolerance = models.CharField("Power Tolerance", max_length=32, blank=True, default="")
 
-    # Número de células
+    #[Número de células do módulo]
     num_celulas = models.PositiveSmallIntegerField("Número de células",
                                                    validators=[MinValueValidator(1)])
 
-    # Coeficientes de temperatura em %/°C (Voc tende a negativo; Isc tende a positivo)
+    #[Coeficientes térmicos de Voc e Isc]
     temp_coeff_voc_pct_c = models.DecimalField(
         "Temperature Coefficient (Voc) (%/°C)", max_digits=6, decimal_places=3)
     temp_coeff_isc_pct_c = models.DecimalField(
         "Temperature Coefficient (Isc) (%/°C)", max_digits=6, decimal_places=3)
 
-    # Parâmetros do modelo elétrico
+    #[Parâmetros do modelo elétrico equivalente]
     rs_ohm = models.DecimalField("Resistência série Rs (Ω)", max_digits=8, decimal_places=4,
                                  validators=[MinValueValidator(0)])
     rp_ohm = models.DecimalField("Resistência paralelo Rp (Ω)", max_digits=10, decimal_places=3,
@@ -74,10 +69,7 @@ class PVModule(models.Model):
         return f"{self.fabricante} — {self.nome}"
 
 
-#---------------------------
-#--------------------------- I N V E R T E R
-#---------------------------
-
+#[Modelo cadastral de inversor]
 class PVInverter(models.Model):
     fabricante = models.CharField("Fabricante", max_length=120)
     modelo = models.CharField("Modelo", max_length=120)
@@ -109,11 +101,7 @@ class PVInverter(models.Model):
         return f"{self.fabricante} {self.modelo}"
 
 
-#---------------------------
-#--------------------------- P     P
-#---------------------------   V     L
-#---------------------------
-
+#[Modelo cadastral de planta fotovoltaica]
 class PVPlant(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                               null=True, blank=True, related_name="pvplants")
@@ -123,10 +111,9 @@ class PVPlant(models.Model):
     longitude = models.DecimalField("Longitude", max_digits=9, decimal_places=6,
                                     validators=[MinValueValidator(-180), MaxValueValidator(180)])
     timezone = models.CharField("Fuso horário", max_length=64, default=settings.TIME_ZONE)
-    # (sem module/inverter/strings/tilt/azimuth aqui!)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    ...
+
     def __str__(self):
         return self.nome
 
@@ -237,16 +224,10 @@ class PVPlantDetails(models.Model):
         has_cfg = bool(self.pk) and self.string_configs.exists()
 
         if has_cfg:
-            # configs são fonte de verdade: derive e valide apenas consistências
+            #[Configuração elétrica como fonte de verdade cadastral]
             self.recompute_totals_from_configs(commit=False)
 
-            # ✅ ACEITA heterogêneo: modules_per_string pode ser None.
-            # O que ainda precisa bater sempre:
-            # modules_total == soma(strings_qty * modules_per_string) (já derivado)
-            # strings_count == soma(strings_qty) (já derivado)
-            #
-            # Aqui só validamos coerência caso o usuário tenha preenchido manualmente
-            # algo que conflite — mas, como derivamos, normalmente não conflita.
+            #[Validação de coerência para arranjos heterogêneos]
             if self.strings_count is not None and int(self.strings_count) < 1:
                 raise ValidationError({"strings_count": "Deve ser >= 1."})
             if self.modules_total is not None and int(self.modules_total) < 1:
@@ -440,14 +421,14 @@ class PlantMonitoringCredential(models.Model):
 class ShineCredential(models.Model):
     """
     Guarda token/secret do ShineMonitor.
-    Recomendo criptografar em produção (ex.: django-fernet-fields), mas aqui deixo simples.
+    Credenciais mantidas no banco local da aplicação.
     """
     name = models.CharField(max_length=100, unique=True)
 
     token = models.TextField()
     secret = models.TextField()
 
-    # opcional (se você quiser controlar expiração)
+    #[Expiração opcional das credenciais]
     expires_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -530,23 +511,7 @@ class ShineReading(models.Model):
         return f"{self.device_id} @ {self.ts_utc.isoformat()}"
     
 
-#---------------------------
-#--------------------------- M E T E O
-#---------------------------
-
-# core/models.py
-
-from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
-from django.conf import settings
-from django.core.exceptions import ValidationError
-from django.utils import timezone
-from decimal import Decimal
-from django.db.models import Q, F
-
-# ... resto do arquivo permanece igual ...
-
-
+#[Dados meteorológicos]
 class MeteoSource(models.TextChoices):
     OPENMETEO = "OPENMETEO", "Open-Meteo"
     CAMS = "CAMS", "CAMS Solar Radiation Service"
@@ -659,25 +624,25 @@ class MeteoRecord(models.Model):
         default=MeteoDataTypology.REANALYSIS_MODELED,
     )
 
-    # CANÔNICO: timestamp em UTC
+    #[Timestamp canônico em UTC]
     ts_utc = models.DateTimeField(db_index=True)
     interval_min = models.PositiveSmallIntegerField(default=60, validators=[MinValueValidator(1)])
 
-    # Radiação (W/m²)
+    #[Irradiâncias em plano horizontal]
     ghi = models.FloatField(null=True, blank=True)
     dni = models.FloatField(null=True, blank=True)
     dhi = models.FloatField(null=True, blank=True)
 
-    # Opcional
+    #[Irradiância no plano do arranjo quando disponível]
     gti = models.FloatField(null=True, blank=True)
 
-    # Meteorologia
+    #[Variáveis meteorológicas auxiliares]
     temp_air = models.FloatField(null=True, blank=True)
     wind_speed = models.FloatField(null=True, blank=True)
     rh = models.FloatField(null=True, blank=True)
     pressure = models.FloatField(null=True, blank=True)
 
-    # Qualidade meteo / audit trail para FDD
+    #[Qualidade e rastreabilidade meteorológica para FDD]
     meteo_qc_score = models.FloatField(null=True, blank=True)
     flag_meteo_low_confidence = models.BooleanField(default=False)
     flag_meteo_interpolated = models.BooleanField(default=False)
@@ -700,11 +665,7 @@ class MeteoRecord(models.Model):
 
     def __str__(self):
         return f"{self.plant.nome} {self.source} {self.ts_utc.isoformat()}"
-#---------------------------
-#--------------------------- S I N C R O N I Z A Ç Ã O
-#---------------------------
-
-
+#[Dados operacionais sincronizados]
 class InverterOperationalData(models.Model):
     plant = models.ForeignKey(
         "core.PVPlant",
@@ -714,20 +675,20 @@ class InverterOperationalData(models.Model):
 
     provedor = models.CharField(max_length=60, default="RENOVIGI")
 
-    # Identidade do device (ShineMonitor/Renovigi)
+    #[Identidade do dispositivo de monitoramento]
     pn = models.CharField(max_length=80)
     devcode = models.CharField(max_length=80)
     devaddr = models.IntegerField()
     sn = models.CharField(max_length=120)
 
-    # Timestamp canônico (UTC) – use sempre timezone-aware
+    #[Timestamp canônico em UTC]
     ts_utc = models.DateTimeField(db_index=True)
 
-    # Payload cru da API (linhas/medidas)
+    #[Payload bruto da API de monitoramento]
     payload = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)  # útil p/ auditoria/reprocessamento
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
@@ -737,20 +698,19 @@ class InverterOperationalData(models.Model):
             )
         ]
         indexes = [
-            # Para consultas do tipo: "me dê a série da planta no período"
+            #[Consulta por planta e período]
             models.Index(fields=["plant", "ts_utc"], name="idx_opdata_plant_ts"),
 
-            # Para consultas do tipo: "último ponto do device" / "série de um device"
+            #[Consulta por dispositivo e período]
             models.Index(
                 fields=["plant", "provedor", "pn", "devcode", "devaddr", "sn", "ts_utc"],
                 name="idx_opdata_device_ts",
             ),
 
-            # Útil quando você filtra por provedor e planta (ex.: múltiplos provedores no futuro)
+            #[Consulta por provedor operativo]
             models.Index(fields=["plant", "provedor"], name="idx_opdata_plant_provider"),
         ]
 
-        # opcional, mas costuma ajudar
         ordering = ["ts_utc"]
 
     def __str__(self) -> str:
@@ -765,12 +725,12 @@ class InverterSample(models.Model):
     """
     plant = models.ForeignKey(PVPlant, on_delete=models.CASCADE, related_name="inverter_samples")
 
-    # Identificador do dispositivo (completo o suficiente para não colidir)
+    #[Identificador único do dispositivo na fonte]
     device_key = models.CharField(max_length=255)
 
     ts = models.DateTimeField(db_index=True)
 
-    # Linha bruta em dict: {"header1": value1, ...}
+    #[Linha bruta normalizada em dicionário]
     data = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(default=timezone.now, editable=False)
@@ -792,12 +752,12 @@ class DataIngestState(models.Model):
     """
     plant = models.ForeignKey(PVPlant, on_delete=models.CASCADE, related_name="ingest_states")
 
-    source = models.CharField(max_length=40)  # ex: "RENOVIGI"
-    series_key = models.CharField(max_length=255)  # ex: device_key
+    source = models.CharField(max_length=40)
+    series_key = models.CharField(max_length=255)
 
-    last_ok_day = models.DateField(null=True, blank=True)  # sincronização por dia
+    last_ok_day = models.DateField(null=True, blank=True)
     last_run_at = models.DateTimeField(null=True, blank=True)
-    last_status = models.CharField(max_length=20, default="never")  # never|ok|error
+    last_status = models.CharField(max_length=20, default="never")
     last_error = models.TextField(blank=True, default="")
 
     updated_at = models.DateTimeField(default=timezone.now)
@@ -823,10 +783,7 @@ class DataIngestState(models.Model):
 
 
 
-# ---------------------------
-# C A S A R - B D
-# ---------------------------
-
+#[Base casada em quinze minutos]
 class MergedSourceOper(models.TextChoices):
     SHINEMONITOR = "SHINEMONITOR", "ShineMonitor/Renovigi"
     GROWATT = "GROWATT", "Growatt"
@@ -852,7 +809,7 @@ class PVPlantMergedRecord15m(models.Model):
         related_name="merged_15m",
     )
 
-    # rastreio de proveniência
+    #[Proveniência operacional]
     source_oper = models.CharField(
         max_length=30,
         choices=MergedSourceOper.choices,
@@ -867,7 +824,7 @@ class PVPlantMergedRecord15m(models.Model):
         db_index=True,
     )
 
-    # Canônico
+    #[Timestamp canônico em UTC]
     ts_utc = models.DateTimeField(db_index=True)
     interval_min = models.PositiveSmallIntegerField(
         default=15,
@@ -875,7 +832,7 @@ class PVPlantMergedRecord15m(models.Model):
         help_text="Intervalo do bucket (min). Para esta tabela, deve ser 15.",
     )
 
-    # -------- Operativo agregado (bucket 15 min) --------
+    #[Grandezas operacionais agregadas]
     p_dc_w = models.FloatField(null=True, blank=True)
     p_ac_w = models.FloatField(null=True, blank=True)
     v_dc_v = models.FloatField(null=True, blank=True)
@@ -884,7 +841,7 @@ class PVPlantMergedRecord15m(models.Model):
     i_ac_a = models.FloatField(null=True, blank=True)
     freq_hz = models.FloatField(null=True, blank=True)
 
-    # -------- MPPT-level (para features internas / GNN) --------
+    #[Grandezas por MPPT]
     mppt1_vdc_v = models.FloatField(null=True, blank=True)
     mppt2_vdc_v = models.FloatField(null=True, blank=True)
     mppt3_vdc_v = models.FloatField(null=True, blank=True)
@@ -895,7 +852,7 @@ class PVPlantMergedRecord15m(models.Model):
     mppt3_idc_a = models.FloatField(null=True, blank=True)
     mppt4_idc_a = models.FloatField(null=True, blank=True)
 
-    # -------- Alarmes (weak labels / features) --------
+    #[Alarmes operacionais do inversor]
     alarm_code = models.IntegerField(null=True, blank=True, help_text="Código do alarme/falha (se disponível).")
     alarm_sev = models.PositiveSmallIntegerField(
         null=True, blank=True,
@@ -903,7 +860,7 @@ class PVPlantMergedRecord15m(models.Model):
         help_text="Severidade agregada no bucket (MVP: 0 OK, 2 fault).",
     )
 
-    # Energia do inversor no bucket (Wh/15min)
+    #[Energia do inversor no intervalo]
     e_ac_wh_15 = models.FloatField(null=True, blank=True)
 
     # Qualidade do inversor
@@ -1040,10 +997,7 @@ class PlantPerformanceRatio(models.Model):
         pr = "n/a" if self.performance_ratio is None else f"{self.performance_ratio:.3f}"
         return f"{label} {self.period} {self.period_start}: PR_T={pr}"
 
-# ---------------------------
-# F A L H A S
-# ---------------------------
-
+#[Falhas e diagnósticos]
 class PlantDiagnostic15m(models.Model):
     """
     Diagnóstico plant-level por timestamp com suporte a tiers de irradiância,
@@ -1146,9 +1100,7 @@ class PlantDiagnostic15m(models.Model):
         return f"{self.plant_id} {ts} {src} {self.diagnosis_label or self.rca_label}"
 
 
-# ---------------------------
-# MPPT-level FDD predictions (GNN/GRU)
-# ---------------------------
+#[Predições de diagnóstico por MPPT]
 
 class MPPTDiagnostic15m(models.Model):
     """
@@ -1170,11 +1122,13 @@ class MPPTDiagnostic15m(models.Model):
 
     model_version = models.CharField(max_length=64, default="mppt_gnn_v1", blank=True)
 
-    pred_code = models.SmallIntegerField(default=0)   # 0 normal, 1 disconnected (por enquanto)
+    #[Classe predita pelo modelo de diagnóstico por MPPT]
+    pred_code = models.SmallIntegerField(default=0)
     pred_label = models.CharField(max_length=40, default="normal", blank=True)
     pred_pmax = models.FloatField(null=True, blank=True, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
 
-    proba = models.JSONField(null=True, blank=True)   # opcional: {"normal":0.9,"disconnected":0.1}
+    #[Probabilidades associadas às classes diagnósticas]
+    proba = models.JSONField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1200,10 +1154,7 @@ class MPPTDiagnostic15m(models.Model):
         return f"{self.plant_id} {self.source_oper} mppt{self.mppt} {ts} {self.pred_label}"
     
 
-# ---------------------------
-# Event-level FDD
-# ---------------------------
-
+#[Eventos persistidos de falha]
 class FaultEvent(models.Model):
     """
     Evento anômalo persistido (plant-level), derivado dos bins de PlantDiagnostic15m.

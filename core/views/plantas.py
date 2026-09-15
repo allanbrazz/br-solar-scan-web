@@ -89,7 +89,7 @@ class PlantDetailView(LoginRequiredMixin, DetailView):
     context_object_name = "p"
 
     def get_queryset(self):
-        # melhora performance e já traz configs
+        #[Consulta otimizada da planta e configurações associadas]
         return (
             plants_accessible_to(self.request.user)
             .select_related("details")
@@ -103,11 +103,10 @@ class PlantDetailView(LoginRequiredMixin, DetailView):
         d = getattr(p, "details", None)
         ctx["d"] = d
 
-        # Se existem configs (linhas), recomputa totais em memória para exibir corretamente
+        #[Recomputação em memória da configuração elétrica derivada]
         string_configs = []
         if d is not None:
             try:
-                # só recalcula em memória (não grava)
                 d.recompute_totals_from_configs(commit=False)
             except Exception:
                 pass
@@ -119,7 +118,7 @@ class PlantDetailView(LoginRequiredMixin, DetailView):
         ctx["string_configs"] = string_configs
         ctx["has_string_configs"] = bool(string_configs)
 
-        # Form em branco para NOVA credencial
+        #[Formulário de credencial operacional da planta]
         credentials = list(p.credentials.all())
         preferred_cred = next(
             (cred for cred in credentials if cred.provedor == "RENOVIGI"),
@@ -127,7 +126,6 @@ class PlantDetailView(LoginRequiredMixin, DetailView):
         ) or next(iter(credentials), None)
         ctx["cred_form"] = PlantMonitoringCredentialForm(instance=preferred_cred)
 
-        # ======= botão Renovigi =======
         ctx["has_renovigi_cred"] = PlantMonitoringCredential.objects.filter(
             plant=p,
             provedor="RENOVIGI",
@@ -242,9 +240,7 @@ class PlantCablesEditView(LoginRequiredMixin, View):
         plant = self._get_plant(request, pk)
         formset = PlantCableFormSet(request.POST, instance=plant, prefix="cables")
 
-        # (Opcional) botão “Adicionar linha”
         if "_addrow" in request.POST:
-            # re-renderiza com um extra a mais (sem salvar ainda)
             from django.forms import inlineformset_factory
             ExtraFormSet = inlineformset_factory(
                 PVPlant, PlantCableSegment, form=PlantCableSegmentForm,
@@ -360,7 +356,7 @@ class PlantCredSaveView(LoginRequiredMixin, View):
             obj = form.save(commit=False)
             obj.plant = plant
 
-            # defaults i18n/lang para Renovigi (se quiser)
+            #[Valores padrão para integração Renovigi]
             if obj.provedor == "RENOVIGI":
                 if not obj.shinemonitor_i18n:
                     obj.shinemonitor_i18n = "pt_BR"

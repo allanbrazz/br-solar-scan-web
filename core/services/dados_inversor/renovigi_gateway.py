@@ -302,10 +302,7 @@ def discover_devices(username: str, password: str, plantid: int) -> List[Dict[st
     return norm
 
 
-# ----------------------------
-# Fetch 1 day (robusto)
-# ----------------------------
-# CORREÇÃO: incluir "null" (muitos endpoints aceitam) e tratar err=12 como dia vazio.
+#[Aquisição diária robusta]
 _ODDEVEN_CANDIDATES = ["odd", "even", "ODD", "EVEN", "0", "1", "", "null"]
 
 

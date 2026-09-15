@@ -258,19 +258,19 @@ def build_plant_merged_dataset(
         else:
             stats["inv_missing_frac"] = 0.0
 
-        # cobertura média apenas onde há inversor (inv_n>0), pois inv_coverage é NA quando missing
+        #[Cobertura média apenas em registros com inversor presente]
         if "inv_coverage" in df15.columns:
             stats["inv_coverage_mean_present"] = _safe_float(pd.to_numeric(df15["inv_coverage"], errors="coerce").mean(), 0.0)
         else:
             stats["inv_coverage_mean_present"] = 0.0
 
-        # low coverage apenas onde há inversor (por construção, missing => False)
+        #[Baixa cobertura operacional apenas em registros com inversor presente]
         if "flag_low_coverage" in df15.columns:
             stats["inv_lowcov_frac_present"] = _safe_float(df15["flag_low_coverage"].mean(), 0.0)
         else:
             stats["inv_lowcov_frac_present"] = 0.0
 
-        # buckets bons: tem inversor, tem meteo e não é low coverage
+        #[Registros aptos para análise conjunta]
         good = pd.Series(True, index=df15.index)
         if "flag_inv_missing" in df15.columns:
             good &= ~df15["flag_inv_missing"].fillna(True)

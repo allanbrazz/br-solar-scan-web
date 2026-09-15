@@ -30,7 +30,7 @@ def home(request: HttpRequest) -> HttpResponse:
     if not request.user.is_superuser:
         qs = qs.filter(owner=request.user)
 
-    # Agora inclui latitude/longitude para o mapa
+    #[Dados cadastrais usados no mapa inicial]
     plants = list(qs.values("id", "nome", "latitude", "longitude"))
 
     if request.method == "POST":

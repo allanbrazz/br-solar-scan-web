@@ -344,13 +344,13 @@ class RenovigiConsoleView(LoginRequiredMixin, View):
                 requested_rows = int(stats.get("requested_rows") or 0)
                 bad_ts = int(stats.get("bad_ts") or 0)
 
-                # Pequeno resumo “por dia”
+                #[Síntese diária da aquisição operacional]
                 per_day = stats.get("per_day") or []
                 days_with_insert = sum(1 for d in per_day if (d.get("inserted") or 0) > 0)
                 days_skipped = sum(1 for d in per_day if d.get("skipped"))
                 days_total = len(per_day)
 
-                # Range efetivo (para debug de backfill)
+                #[Período efetivo utilizado no backfill]
                 rng = stats.get("range") or {}
                 eff_start = rng.get("effective_start") or ""
                 eff_reason = rng.get("effective_reason") or ""

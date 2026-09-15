@@ -136,7 +136,7 @@ class PVModuleForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # garantia extra: qualquer campo sem 'form-control' recebe
+        #[Padronização visual dos campos do formulário]
         for f in self.fields.values():
             f.widget.attrs.setdefault("class", "form-control")
 
@@ -532,13 +532,13 @@ class MeteoRequestForm(forms.Form):
         return cleaned
 
 
-# ---------- RENOVIGI ----------
+#[Formulário de console Renovigi]
 class ShineMonitorConsoleForm(forms.Form):
-    # Credenciais (não vamos persistir por padrão)
+    #[Credenciais temporárias de consulta]
     token = forms.CharField(label="Token", widget=forms.PasswordInput(render_value=False))
     secret = forms.CharField(label="Secret", widget=forms.PasswordInput(render_value=False))
 
-    # Identificadores do dispositivo
+    #[Identificadores do dispositivo de monitoramento]
     pn = forms.CharField(label="pn", max_length=40)
     devcode = forms.CharField(label="devcode", max_length=40)
     devaddr = forms.CharField(label="devaddr", max_length=16)
@@ -680,7 +680,6 @@ class MergeRunForm(forms.Form):
 
         qs = PVPlant.objects.all().order_by("nome")
         if user and user.is_authenticated and not user.is_superuser:
-            # se você usa owner, filtra; caso contrário, remove esse filtro
             qs = qs.filter(owner=user)
         self.fields["plant"].queryset = qs
 
@@ -709,7 +708,7 @@ class MergeRunForm(forms.Form):
             for value in source_values
         ]
 
-        # defaults (últimos 7 dias no fuso do servidor; serve para teste)
+        #[Intervalo inicial de referência]
         if not self.initial.get("start_date") and not self.initial.get("end_date"):
             today = timezone.now().date()
             self.initial["end_date"] = today
@@ -741,8 +740,7 @@ class MergeRunForm(forms.Form):
         return cleaned
 
 
-#----------- DASHBOARD -------------
-
+#[Formulário do dashboard de séries temporais]
 class TimeseriesDashboardForm(forms.Form):
     plant = forms.ModelChoiceField(queryset=PVPlant.objects.none(), label="Planta")
     start_date = forms.DateField(label="Data inicial (local da planta)")
@@ -757,7 +755,7 @@ class TimeseriesDashboardForm(forms.Form):
             qs = qs.filter(owner=user)
         self.fields["plant"].queryset = qs.order_by("nome")
 
-        # defaults úteis
+        #[Intervalo inicial do dashboard]
         today = date.today()
         self.fields["start_date"].initial = today - timedelta(days=2)
         self.fields["end_date"].initial = today

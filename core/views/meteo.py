@@ -359,12 +359,12 @@ def open_meteo_view_api_json(request):
         end_date=end_date,
     )
 
-    # Opcional, mas ajuda muito a bater contagens com “expected_count”
+    #[Alinhamento da janela solicitada à malha temporal]
     start_utc, end_utc = _align_utc_range_to_interval(
         start_utc=start_utc, end_utc=end_utc, interval_min=interval_min
     )
 
-    # >>> CORREÇÃO PRINCIPAL AQUI: source do Open-Meteo <<<
+    #[Consulta dos registros meteorológicos pela fonte selecionada]
     qs = MeteoRecord.objects.filter(plant=plant, source=source)
 
     cov = compute_time_coverage(

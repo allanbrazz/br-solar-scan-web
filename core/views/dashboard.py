@@ -176,7 +176,7 @@ def pv_dashboard_timeseries_api(request: HttpRequest) -> JsonResponse:
     """
     Retorna JSON com séries e KPIs (eixo X em horário local), baseado em PVPlantMergedRecord15m.
 
-    ✅ Política anti-dupla-contagem:
+    Política anti-dupla-contagem:
       - Se existir MPPT no timestamp -> TOTAL = Σ(MPPTs) e ignora AGG no total.
       - Se não existir MPPT -> TOTAL = AGG (fallback).
     Mantém:

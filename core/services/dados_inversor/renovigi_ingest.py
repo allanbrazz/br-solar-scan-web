@@ -409,8 +409,7 @@ def sync_operational_data_for_device(
 
     if incremental_from_last and isinstance(last, datetime):
         last_date = last.astimezone(timezone.utc).date()
-        # CORREÇÃO DO BACKFILL:
-        # Só “puxa” effective_start se o último registro está dentro do range solicitado.
+        #[Preservação do intervalo solicitado no backfill incremental]
         if last_date <= end_day:
             effective_start = max(start_day, last_date - timedelta(days=safety_days))
             effective_reason = f"incremental_from_last({last_date.isoformat()})"

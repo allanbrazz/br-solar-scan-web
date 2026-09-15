@@ -3713,8 +3713,6 @@
     return `${hh}:${mm}`;
   }
 
-  /* ✅ CORREÇÃO 1: pointSnapshot agora devolve as CHAVES mesmo sem idx válido.
-     Isso garante que os nomes das variáveis apareçam mesmo sem registros no bin. */
   function pointSnapshot(payload, idx){
     const s = payload?.series || {};
     const out = {};
@@ -3723,7 +3721,7 @@
       const arr = s[k];
       if (!Array.isArray(arr)) continue;
       if (idx < 0 || idx >= arr.length){
-        out[k] = null; // mantém o nome com valor "—"
+        out[k] = null;
       } else {
         out[k] = arr[idx];
       }
@@ -3740,8 +3738,6 @@
     return out;
   }
 
-  /* ✅ CORREÇÃO 2: MPPT por source só mostra DC (Vdc/Idc/Pdc).
-     Vac/Iac são AC e NÃO podem aparecer “por MPPT”. */
   function isMpptSourceName(src){
     return String(src || "").toUpperCase().includes("|MPPT");
   }
@@ -3768,8 +3764,6 @@
     return [];
   }
 
-  /* ✅ CORREÇÃO 3: mostrar os NOMES mesmo sem registros/None/0.
-     Portanto: NÃO filtra por isNullishValue; sempre cria as linhas. */
   function collectMpptItems(payload, idx){
     const sbs = payload?.series_by_source;
     if (!sbs || typeof sbs !== "object") return [];

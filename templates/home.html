@@ -106,9 +106,8 @@
     padding:.9rem;
   }
 
-  /* ✅ MAPA MAIOR: preenche mais o card */
   .map-frame{
-    height: 220px;               /* antes: 120px */
+    height: 220px;
     border-radius: 14px;
     overflow:hidden;
     border:1px solid rgba(255,255,255,.10);
@@ -791,7 +790,6 @@
 
 </section>
 
-<!-- ✅ Dados das plantas como JSON (sem “bagunçar” o JS do editor) -->
 {{ plants|json_script:"plants-data" }}
 
 <!-- Leaflet JS -->
@@ -870,7 +868,6 @@
     if (bounds.length === 1) map.setView(bounds[0], 12);
     else map.fitBounds(bounds, { padding: [10, 10] });
 
-    // ✅ evita mapa “cortado” dentro de cards com blur/transform
     setTimeout(() => map.invalidateSize(), 250);
   })();
 </script>

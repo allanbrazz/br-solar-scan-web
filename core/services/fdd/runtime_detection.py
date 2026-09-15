@@ -189,10 +189,7 @@ def compute_power_model(plant: PVPlant, details: Any, times_utc: List[datetime],
         if "window_minutes" in sig.parameters:
             kwargs["window_minutes"] = 60.0
 
-        # A correção temporal canônica deve ocorrer no merge 15 min
-        # (core.services.series_juntar), antes do cálculo de resíduos.
-        # Mantemos o power_model sem auto-shift no fluxo FDD para evitar
-        # dupla correção ou deslocamentos implícitos não auditáveis.
+        #[Alinhamento temporal canônico realizado antes do cálculo residual]
         if "auto_time_shift" in sig.parameters:
             kwargs["auto_time_shift"] = False
         if "meteo_time_shift_minutes" in sig.parameters:

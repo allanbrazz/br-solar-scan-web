@@ -227,7 +227,7 @@ def fetch_range_table(
     first_day_with_data: Optional[str] = None
     last_day_with_data: Optional[str] = None
 
-    # ✅ NÃO ABORTA no primeiro dia vazio
+    #[Aquisição resiliente a dias sem registros]
     for d in _daterange(start_dt, end_dt):
         days_total += 1
         day_s = d.isoformat()

@@ -223,7 +223,7 @@ def aggregate_raw_mppt_15m_all_devices(
             d_aggs = aggs.setdefault(str(dk), {})
             agg = d_aggs.setdefault(b, RawMPPTAgg.new())
 
-            # aqui só tenta ler chaves já normalizadas; se você usa InverterSample, provavelmente já gravou normalizado
+            #[Leitura de chaves operacionais normalizadas]
             pdc = _finite_or_none(payload.get("p_dc_w") or payload.get("pdc"))
             for mp in (1, 2, 3, 4):
                 v = _finite_or_none(payload.get(f"mppt{mp}_vdc_v"))

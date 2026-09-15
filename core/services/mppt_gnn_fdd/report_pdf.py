@@ -327,7 +327,7 @@ def build_mppt_gnn_pdf_report(*, plant_name: str, filters: Dict[str, Any], paylo
         topMargin=14 * mm,
         bottomMargin=16 * mm,
         title=f"Síntese operativa - {plant_name}",
-        author="OpenAI / ChatGPT",
+        author="Braz Solar Scan",
         subject="MPPT GNN FDD",
     )
 

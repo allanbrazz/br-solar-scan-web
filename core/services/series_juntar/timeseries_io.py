@@ -56,22 +56,17 @@ class FetchConfig:
     # Chave de tempo dentro do payload
     inv_payload_time_key: str = "Data E Hora"
 
-    # Como interpretar "Data E Hora" quando vier SEM TZ no payload:
-    # - "utc": tratar como UTC-naive
-    # - "plant_local": tratar como local-naive da planta
-    # - "auto": tenta ambos e escolhe o que minimiza |shift| mediano
+    #[Interpretação temporal do payload operativo sem fuso explícito]
     inv_payload_time_mode: Literal["auto", "utc", "plant_local"] = "auto"
 
-    # Buffer para busca no banco antes de corrigir timestamp (em horas)
+    #[Janela auxiliar para busca operacional antes do alinhamento temporal]
     inv_query_buffer_hours: int = 6
 
-    # Se a diferença mediana for maior que isso, aplicamos correção (minutos)
+    #[Limiar mínimo para ajuste de deslocamento temporal]
     inv_min_shift_to_apply_minutes: int = 30
 
 
-# -----------------------------
-# Helpers gerais
-# -----------------------------
+#[Funções auxiliares gerais]
 def _to_utc_series(s: pd.Series) -> pd.Series:
     return pd.to_datetime(s, errors="coerce", utc=True)
 
@@ -543,7 +538,7 @@ def fetch_inverter_df(
 
     df = pd.concat([df_raw[["ts_utc"]], df_m], axis=1)
 
-    # 2) tentativa de correção de timestamp comparando com payload["Data E Hora"]
+    #[Alinhamento temporal pelo campo operacional Data E Hora]
     payload_time = []
     for pl in payloads:
         if isinstance(pl, dict):
